@@ -75,13 +75,10 @@
           // Unregister any existing service worker first
           const existingRegistration = await navigator.serviceWorker.getRegistration();
           if (existingRegistration) {
-            console.log('Unregistering existing service worker');
             await existingRegistration.unregister();
           }
 
           const registration = await navigator.serviceWorker.register('./sw.js');
-          console.log('Service Worker registered with scope:', registration.scope);
-
           // Check for updates every 30 seconds
           setInterval(async () => {
             try {
@@ -93,7 +90,6 @@
 
           // Listen for updates
           registration.addEventListener('updatefound', () => {
-            console.log('Service Worker update found');
             if (registration.installing) {
               registration.installing.addEventListener('statechange', () => {
                 if (registration.waiting) {
@@ -106,12 +102,10 @@
 
           // // Listen for controller change to refresh the page
           // navigator.serviceWorker.addEventListener('controllerchange', () => {
-          //   console.log('New service worker activated, refreshing page');
-          //   window.location.reload();
+          //   //   window.location.reload();
           // });
 
           navigator.serviceWorker.addEventListener('activate', function(event) {
-            console.log('Service Worker activated');
             event.waitUntil(
               caches.keys().then((cacheNames) => {
                 return Promise.all(

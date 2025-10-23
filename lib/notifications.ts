@@ -31,7 +31,6 @@ async function getNotificationsModule(): Promise<any | null> {
     const mod = await import('expo-notifications');
     return mod;
   } catch (e) {
-    console.log('expo-notifications dynamic import failed', e);
     return null;
   }
 }
@@ -54,8 +53,7 @@ export async function configureAndroidChannel() {
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   } catch (e) {
-    console.log('configureAndroidChannel error', e);
-  }
+    }
 }
 // Ask for permissions (gracefully) and return granted boolean
 export async function ensurePermissions(): Promise<boolean> {
@@ -71,7 +69,6 @@ export async function ensurePermissions(): Promise<boolean> {
     const { status } = await Notifications.requestPermissionsAsync();
     return status === 'granted';
   } catch (e) {
-    console.log('ensurePermissions error', e);
     return false;
   }
 }
@@ -84,8 +81,7 @@ export async function cancelScheduled(ids: string[]) {
     try {
       await Notifications.cancelScheduledNotificationAsync(id);
     } catch (e) {
-      console.log('cancelScheduled error for', id, e);
-    }
+      }
   }
 }
 // Parse "HH:mm" to { hour, minute }
@@ -166,8 +162,7 @@ export async function scheduleWeeklyReminders(settings: GoalsSettings): Promise<
       });
       ids.push(id);
     } catch (e) {
-      console.log('scheduleNotification error', e);
-    }
+      }
   }
 
   return ids;

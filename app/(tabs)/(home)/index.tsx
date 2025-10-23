@@ -113,8 +113,7 @@ export default function HomeScreen() {
         setCustomWorkoutPlans(JSON.parse(customPlansData));
       }
     } catch (error) {
-      console.log('Error loading data:', error);
-    }
+      }
   };
 
   const getDateString = (date: Date) => {
@@ -160,9 +159,7 @@ export default function HomeScreen() {
     const weekTotal = getTotalExercisesCompleted(weekDates);
     const monthTotal = getTotalExercisesCompleted(monthDates);
     
-    console.log('Week total exercises:', weekTotal);
-    console.log('Month total exercises:', monthTotal);
-  };
+    };
 
   const getTotalExercisesCompleted = (dates: Date[]) => {
     const dateStrings = dates.map(d => getDateString(d));

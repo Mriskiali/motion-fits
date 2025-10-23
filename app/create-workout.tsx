@@ -99,11 +99,9 @@ export default function CreateWorkoutScreen() {
 
     if (editingExerciseId) {
       setExercises(exercises.map(ex => ex.id === editingExerciseId ? newExercise : ex));
-      console.log('Exercise updated:', newExercise.name);
-    } else {
+      } else {
       setExercises([...exercises, newExercise]);
-      console.log('Exercise added:', newExercise.name);
-    }
+      }
 
     resetExerciseForm();
     setShowExerciseForm(false);
@@ -125,7 +123,6 @@ export default function CreateWorkoutScreen() {
 
   const handleDeleteExercise = (exerciseId: string) => {
     setExercises(exercises.filter(ex => ex.id !== exerciseId));
-    console.log('Exercise deleted:', exerciseId);
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
@@ -172,8 +169,6 @@ export default function CreateWorkoutScreen() {
       const updatedPlans = [...existingPlans, newWorkout];
       await AsyncStorage.setItem('customWorkoutPlans', JSON.stringify(updatedPlans));
       
-      console.log('Custom workout saved:', newWorkout.name);
-      
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
@@ -189,7 +184,6 @@ export default function CreateWorkoutScreen() {
         ]
       );
     } catch (error) {
-      console.log('Error saving workout:', error);
       Alert.alert('Error', 'Failed to save workout. Please try again.');
     }
   };

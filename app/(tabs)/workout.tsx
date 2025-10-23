@@ -247,7 +247,7 @@ export default function WorkoutScreen() {
       });
       setBest1RMByExercise(map);
     } catch (e) {
-      console.log('loadBest1RMMap error', e);
+      
     }
   };
 
@@ -268,32 +268,32 @@ export default function WorkoutScreen() {
       
       if (completedData) {
         setCompletedExercises(JSON.parse(completedData));
-        console.log('Loaded completed exercises from storage');
+        
       }
       
       if (assignmentsData) {
         setWorkoutAssignments(JSON.parse(assignmentsData));
-        console.log('Loaded workout assignments from storage');
+        
       }
 
       if (customPlansData) {
         setCustomWorkoutPlans(JSON.parse(customPlansData));
-        console.log('Loaded custom workout plans from storage');
+        
       }
 
       if (setCountsData) {
         setExerciseSetCounts(JSON.parse(setCountsData));
-        console.log('Loaded exercise set counts from storage');
+        
       }
 
       if (restTimersData) {
         setRestTimers(JSON.parse(restTimersData));
-        console.log('Loaded rest timers from storage');
+        
       }
 
       if (setLogsData) {
         setSetLogs(JSON.parse(setLogsData));
-        console.log('Loaded set logs from storage');
+        
       }
 
       // Has any session ever been saved? (for onboarding context)
@@ -306,14 +306,14 @@ export default function WorkoutScreen() {
       const restDefaultSecData = await AsyncStorage.getItem('restDefaultSec');
       if (restDefaultSecData) {
         setRestDefaultSec(JSON.parse(restDefaultSecData));
-        console.log('Loaded rest default sec from storage');
+        
       }
 
       const autoRestStr = await AsyncStorage.getItem('autoRestOnIncrement_v1');
       if (autoRestStr !== null) {
         try {
           setAutoRestOnIncrement(JSON.parse(autoRestStr));
-          console.log('Loaded autoRestOnIncrement from storage');
+          
         } catch {}
       }
 
@@ -325,7 +325,7 @@ export default function WorkoutScreen() {
         }
       } catch {}
     } catch (error) {
-      console.log('Error loading data:', error);
+      
     }
   };
 
@@ -337,9 +337,9 @@ export default function WorkoutScreen() {
       await AsyncStorage.setItem('exerciseSetCounts', JSON.stringify(exerciseSetCounts));
       await AsyncStorage.setItem('restTimers', JSON.stringify(restTimers));
       await AsyncStorage.setItem('setLogs', JSON.stringify(setLogs));
-      console.log('Data saved to storage');
+      
     } catch (error) {
-      console.log('Error saving data:', error);
+      
     }
   };
 
@@ -398,7 +398,7 @@ export default function WorkoutScreen() {
       setWorkoutAssignments([...workoutAssignments, { date: dateStr, planId }]);
     }
     
-    console.log('Workout assigned to', dateStr, ':', planId);
+    
   };
 
   const deleteWorkoutPlan = async (planId: string) => {
@@ -421,10 +421,10 @@ export default function WorkoutScreen() {
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      console.log('Workout plan deleted:', planId);
+      
       Alert.alert('Deleted', 'Workout plan has been removed.');
     } catch (error) {
-      console.log('Error deleting workout plan:', error);
+      
       Alert.alert('Error', 'Failed to delete workout plan.');
     }
   };
@@ -448,10 +448,10 @@ export default function WorkoutScreen() {
       setCompletedExercises(prev =>
         prev.filter(ce => !(ce.planId === planId && ce.exerciseId === exerciseId && ce.date === dateStr))
       );
-      console.log('Exercise unchecked:', exerciseId);
+      
     } else {
       setCompletedExercises(prev => [...prev, { planId, exerciseId, date: dateStr }]);
-      console.log('Exercise completed:', exerciseId);
+      
     }
   };
 
@@ -635,7 +635,7 @@ export default function WorkoutScreen() {
         });
       });
     } catch (e) {
-      console.log('PB precompute error', e);
+      
     }
 
     // Compute new PBs for this session
@@ -683,9 +683,9 @@ export default function WorkoutScreen() {
       const arr: WorkoutSession[] = existing ? JSON.parse(existing) : [];
       arr.push(session);
       await AsyncStorage.setItem('workoutSessions', JSON.stringify(arr));
-      console.log('Workout session saved:', session.id);
+      
     } catch (e) {
-      console.log('Error saving workout session:', e);
+      
     } finally {
       setCurrentSessionStart(null);
       setShowPlanModal(false);
@@ -754,7 +754,7 @@ export default function WorkoutScreen() {
   };
 
   const handleDayPress = (date: Date) => {
-    console.log('Day selected:', getDateString(date));
+    
     setSelectedDate(date);
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -762,7 +762,7 @@ export default function WorkoutScreen() {
   };
 
   const handlePlanPress = (plan: WorkoutPlan) => {
-    console.log('Workout plan selected:', plan.name);
+    
     setSelectedPlan(plan);
     // mark session start when opening the plan modal
     setCurrentSessionStart(Date.now());
@@ -770,7 +770,7 @@ export default function WorkoutScreen() {
   };
 
   const handleExercisePress = (exercise: Exercise) => {
-    console.log('Exercise details opened:', exercise.name);
+    
     setSelectedExercise(exercise);
     setShowExerciseDetail(true);
   };
