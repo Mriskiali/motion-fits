@@ -4,28 +4,28 @@
     "slug": "motion-fit",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/Motion-fit-logo.png",
+    "icon": "./assets/images/motion-fit-logo.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/natively-dark.png",
+      "image": "./assets/images/motion-fit-logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.anonymous.MotionFit",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/natively-dark.png",
+        "foregroundImage": "./assets/images/motion-fit-logo.png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.anonymous.MotionFit"
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -37,7 +37,7 @@
       "expo-web-browser",
       "expo-notifications"
     ],
-    "scheme": "natively",
+    "scheme": "motion-fit",
     "experiments": {
       "typedRoutes": true
     },
