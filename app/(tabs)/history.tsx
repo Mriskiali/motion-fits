@@ -100,6 +100,7 @@ export default function HistoryScreen() {
         setGoalSettings(DEFAULT_GOALS_SETTINGS);
       }
     } catch(e) {
+      console.log('load sessions/settings error', e);
       if (!goalSettings) setGoalSettings(DEFAULT_GOALS_SETTINGS);
     } finally {
       setLoading(false);

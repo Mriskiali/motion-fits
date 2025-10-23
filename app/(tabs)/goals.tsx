@@ -39,6 +39,7 @@ export default function GoalsScreen() {
         setSettings(DEFAULT_GOALS_SETTINGS);
       }
     } catch (e) {
+      console.log('goals load error', e);
       setSettings(DEFAULT_GOALS_SETTINGS);
     } finally {
       setLoading(false);
@@ -49,6 +50,7 @@ export default function GoalsScreen() {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch (e) {
+      console.log('goals save error', e);
       Alert.alert('Error', 'Failed to save settings.');
     }
   };
@@ -151,6 +153,7 @@ export default function GoalsScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (e) {
+      console.log('apply schedule error', e);
       Alert.alert('Error', 'Failed to schedule reminders.');
     }
   };
