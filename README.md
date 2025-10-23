@@ -50,9 +50,9 @@ This project is configured to produce an APK via EAS.
 
 Environment configuration
 
-- Remote environment variables can be configured per profile in EAS. This app expects EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_KEY when present.
-- In Expo, variables prefixed EXPO_PUBLIC_ are embedded at build time and available in the app.
-- For local development, you can run without these variables; features depending on them should degrade gracefully.
+- This app uses local on-device storage (AsyncStorage). No backend or environment variables are required to run or build the app.
+- Notifications and reminders do not require secrets. They are gated for Expo Go and work in a Development Build.
+- If you later add a backend or analytics, prefer EXPO_PUBLIC_ variables for non-sensitive config and keep secrets off the client.
 
 App usage walkthrough
 
