@@ -30,10 +30,10 @@ export default function ListItem({ listId }: { listId: string }) {
     return (
       <Pressable
         onPress={() => {
-          if (process.env.EXPO_OS === "ios") {
+          if (process.env.EXPO_OS === "ios" && Haptics?.NotificationFeedbackType?.Error) {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           }
-          console.log("delete");
+          // Removed debug log
         }}
       >
         <Reanimated.View style={[styleAnimation, styles.rightAction]}>

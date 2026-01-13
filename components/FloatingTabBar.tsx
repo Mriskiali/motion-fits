@@ -26,6 +26,7 @@ export interface TabBarItem {
   route: string;
   icon: string;
   label: string;
+  hasBadge?: boolean;
 }
 
 interface FloatingTabBarProps {
@@ -105,8 +106,8 @@ export default function FloatingTabBar({
         {
           translateX: interpolate(
             animatedValue.value,
-            [0, tabs.length - 1],
-            [0, tabWidth * (tabs.length - 1)]
+            tabs.map((_, i) => i), // [0, 1, 2, 3...] for all tabs
+            tabs.map((_, i) => i * tabWidth) // [0, tabWidth, tabWidth*2, tabWidth*3...]
           ),
         },
       ],
@@ -182,11 +183,19 @@ export default function FloatingTabBar({
                   activeOpacity={0.7}
                 >
                   <View style={styles.tabContent}>
-                    <IconSymbol
-                      name={tab.icon}
-                      size={24}
-                      color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#8E8E93')}
-                    />
+                    <View style={styles.iconContainer}>
+                      <IconSymbol
+                        name={tab.icon}
+                        size={24}
+                        color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#8E8E93')}
+                      />
+                      {/* Add badge indicator for notifications */}
+                      {tab.hasBadge && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>!</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text
                       style={[
                         styles.tabLabel,
@@ -260,5 +269,28 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 2,
     // Dynamic styling applied in component
+  },
+  iconContainer: {
+    position: 'relative',
+    alignItems: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

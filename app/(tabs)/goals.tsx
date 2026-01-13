@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, TextInput, Alert, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dataStore } from '@/lib/dataStore';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/styles/commonStyles';
@@ -13,6 +14,7 @@ import {
   cancelScheduled,
   getNextReminderSummary,
 } from '@/lib/notifications';
+import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast, scheduleDailyReminder } from '@/utils/notifications';
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const STORAGE_KEY = 'goalsSettings_v1';
@@ -25,21 +27,22 @@ export default function GoalsScreen() {
   const [loading, setLoading] = useState(true);
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [dirty, setDirty] = useState(false); // track unsaved changes
+  const [showWeeklyGoalModal, setShowWeeklyGoalModal] = useState(false);
+  const [tempWeeklyGoal, setTempWeeklyGoal] = useState(settings.weeklyTarget.toString());
 
   const preferredSet = useMemo(() => new Set(settings.preferredDays || []), [settings.preferredDays]);
 
   const load = async () => {
     try {
-      const str = await AsyncStorage.getItem(STORAGE_KEY);
-      if (str) {
-        const parsed = JSON.parse(str);
+      const settings = await dataStore.getGoalsSettings();
+      if (settings) {
         // merge defaults to be safe on future expansions
-        setSettings((prev) => ({ ...DEFAULT_GOALS_SETTINGS, ...parsed }));
+        setSettings((prev) => ({ ...DEFAULT_GOALS_SETTINGS, ...settings }));
       } else {
         setSettings(DEFAULT_GOALS_SETTINGS);
       }
     } catch (e) {
-      console.log('goals load error', e);
+      console.error('goals load error', e);
       setSettings(DEFAULT_GOALS_SETTINGS);
     } finally {
       setLoading(false);
@@ -48,10 +51,10 @@ export default function GoalsScreen() {
 
   const saveOnly = async (next: GoalsSettings) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      await dataStore.setGoalsSettings(next);
     } catch (e) {
-      console.log('goals save error', e);
-      Alert.alert('Error', 'Failed to save settings.');
+      console.error('goals save error', e);
+      showErrorToast('Save Failed', 'Unable to save your settings. Please try again.');
     }
   };
 
@@ -77,7 +80,9 @@ export default function GoalsScreen() {
   const bumpWeekly = (delta: number) => {
     const next = Math.max(0, Math.min(7, (settings.weeklyTarget || 0) + delta));
     if (next !== settings.weeklyTarget) {
-      if (Platform.OS !== 'web') Haptics.selectionAsync();
+      if (Platform.OS !== 'web' && typeof Haptics.selectionAsync === 'function') {
+        Haptics.selectionAsync();
+      }
       update({ weeklyTarget: next });
     }
   };
@@ -89,13 +94,17 @@ export default function GoalsScreen() {
     } else {
       set.add(idx);
     }
-    if (Platform.OS !== 'web') Haptics.selectionAsync();
+    if (Platform.OS !== 'web' && typeof Haptics.selectionAsync === 'function') {
+      Haptics.selectionAsync();
+    }
     update({ preferredDays: Array.from(set).sort((a, b) => a - b) });
   };
 
   const toggleReminders = async () => {
     const nextValue = !settings.remindersEnabled;
-    if (Platform.OS !== 'web') Haptics.selectionAsync();
+    if (Platform.OS !== 'web' && typeof Haptics.selectionAsync === 'function') {
+      Haptics.selectionAsync();
+    }
 
     if (nextValue) {
       // Check permission now
@@ -119,11 +128,11 @@ export default function GoalsScreen() {
     // Validate time
     if (settings.remindersEnabled) {
       if (!isValidTime(settings.reminderTime || '')) {
-        Alert.alert('Invalid time', 'Please enter a valid time in HH:mm (24-hour) format.');
+        showErrorToast('Invalid Time', 'Please enter a valid time in HH:mm (24-hour) format.');
         return;
       }
       if (!settings.preferredDays || settings.preferredDays.length === 0) {
-        Alert.alert('No days selected', 'Select at least one preferred training day to schedule reminders.');
+        showErrorToast('No Days Selected', 'Select at least one preferred training day to schedule reminders.');
         return;
       }
     }
@@ -149,12 +158,14 @@ export default function GoalsScreen() {
       setSettings(finalSettings);
       setDirty(false);
 
-      if (Platform.OS !== 'web') {
+      if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+
+      showSuccessToast('Settings Saved', 'Your goals and reminders have been updated.');
     } catch (e) {
-      console.log('apply schedule error', e);
-      Alert.alert('Error', 'Failed to schedule reminders.');
+      console.error('apply schedule error', e);
+      showErrorToast('Save Failed', 'Failed to schedule reminders. Please try again.');
     }
   };
 
@@ -202,7 +213,15 @@ export default function GoalsScreen() {
             <TouchableOpacity style={styles.counterBtn} onPress={() => bumpWeekly(-1)}>
               <IconSymbol name="minus.circle.fill" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
-            <Text style={styles.counterValue}>{settings.weeklyTarget}</Text>
+            <TouchableOpacity
+              style={styles.counterValueContainer}
+              onPress={() => {
+                setTempWeeklyGoal(settings.weeklyTarget.toString());
+                setShowWeeklyGoalModal(true);
+              }}
+            >
+              <Text style={styles.counterValue}>{settings.weeklyTarget}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.counterBtn} onPress={() => bumpWeekly(1)}>
               <IconSymbol name="plus.circle.fill" size={24} color={colors.primary} />
             </TouchableOpacity>
@@ -279,6 +298,55 @@ export default function GoalsScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      {/* Modal for setting weekly goal */}
+      <Modal
+        visible={showWeeklyGoalModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowWeeklyGoalModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Set Weekly Goal</Text>
+            <Text style={styles.modalSubtitle}>Enter number of workouts per week (0-7):</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={tempWeeklyGoal}
+              onChangeText={setTempWeeklyGoal}
+              keyboardType="numeric"
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setShowWeeklyGoalModal(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalSaveButton]}
+                onPress={() => {
+                  const num = parseInt(tempWeeklyGoal);
+                  if (!isNaN(num) && num >= 0 && num <= 7) {
+                    if (num !== settings.weeklyTarget) {
+                      if (Platform.OS !== 'web' && typeof Haptics.selectionAsync === 'function') {
+                        Haptics.selectionAsync();
+                      }
+                      update({ weeklyTarget: num });
+                    }
+                    setShowWeeklyGoalModal(false);
+                  } else {
+                    Alert.alert("Invalid Input", "Please enter a number between 0 and 7.");
+                  }
+                }}
+              >
+                <Text style={styles.modalButtonText}>Set</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -338,6 +406,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: colors.text,
+  },
+  counterValueContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   helpText: {
     marginTop: 8,
@@ -414,6 +487,28 @@ const styles = StyleSheet.create({
   timeInputInvalid: {
     borderColor: '#ef5350',
   },
+  directInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+  },
+  directInputLabel: {
+    color: colors.text,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  directInput: {
+    flex: 1,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.background,
+    paddingHorizontal: 10,
+    color: colors.text,
+    backgroundColor: colors.card,
+    fontSize: 16,
+  },
   statusRow: {
     marginTop: 8,
     flexDirection: 'row',
@@ -432,5 +527,67 @@ const styles = StyleSheet.create({
   noticeText: {
     color: colors.textSecondary,
     fontSize: 12,
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+    maxWidth: 300,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  modalInput: {
+    width: '100%',
+    height: 40,
+    borderWidth: 1,
+    borderColor: colors.background,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    color: colors.text,
+    backgroundColor: colors.card,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 10,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: colors.background,
+  },
+  modalSaveButton: {
+    backgroundColor: colors.primary,
+  },
+  modalButtonText: {
+    color: colors.card,
+    fontWeight: '700',
   },
 });

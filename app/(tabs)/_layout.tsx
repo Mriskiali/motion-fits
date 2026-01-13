@@ -13,24 +13,28 @@ export default function TabLayout() {
       route: '/(tabs)/(home)/',
       icon: 'house.fill',
       label: 'Home',
+      hasBadge: false,
     },
     {
       name: 'workout',
       route: '/(tabs)/workout',
       icon: 'figure.run',
       label: 'Workout',
+      hasBadge: false,
     },
     {
       name: 'history',
       route: '/(tabs)/history',
       icon: 'chart.bar.fill',
       label: 'History',
+      hasBadge: true, // Show badge for history tab
     },
     {
       name: 'goals',
       route: '/(tabs)/goals',
       icon: 'calendar.badge.clock',
       label: 'Goals',
+      hasBadge: false,
     },
   ];
 

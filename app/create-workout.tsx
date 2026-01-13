@@ -1,20 +1,11 @@
-
-import React, { useState } from "react";
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  Platform, 
-  ScrollView, 
-  TouchableOpacity,
-  TextInput,
-  Alert
-} from "react-native";
-import { Stack, router } from "expo-router";
-import { IconSymbol } from "@/components/IconSymbol";
-import { colors } from "@/styles/commonStyles";
-import * as Haptics from "expo-haptics";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
+import { Stack, router } from 'expo-router';
+import { useTheme } from '@react-navigation/native';
+import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
+import * as Haptics from 'expo-haptics';
+import { dataStore } from '@/lib/dataStore';
 
 interface Exercise {
   id: string;
@@ -25,465 +16,274 @@ interface Exercise {
   notes?: string;
 }
 
-interface WorkoutPlan {
-  id: string;
-  name: string;
-  subtitle: string;
-  exercises: Exercise[];
-  icon: string;
-  color: string;
-  isCustom: boolean;
+export default function CreateWorkoutScreen() {
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <CreateWorkoutContent />
+    </>
+  );
 }
 
-const WORKOUT_COLORS = [
-  { name: 'Blue', value: '#64b5f6' },
-  { name: 'Green', value: '#aed581' },
-  { name: 'Orange', value: '#ffb74d' },
-  { name: 'Purple', value: '#ba68c8' },
-  { name: 'Red', value: '#ef5350' },
-  { name: 'Teal', value: '#4db6ac' },
-  { name: 'Pink', value: '#f06292' },
-  { name: 'Indigo', value: '#7986cb' },
-];
-
-const WORKOUT_ICONS = [
-  'figure.strengthtraining.traditional',
-  'figure.strengthtraining.functional',
-  'figure.core.training',
-  'figure.run',
-  'figure.walk',
-  'figure.yoga',
-  'figure.flexibility',
-  'figure.cooldown',
-];
-
-export default function CreateWorkoutScreen() {
+function CreateWorkoutContent() {
+  const theme = useTheme();
   const [workoutName, setWorkoutName] = useState('');
   const [workoutSubtitle, setWorkoutSubtitle] = useState('');
-  const [selectedColor, setSelectedColor] = useState(WORKOUT_COLORS[0].value);
-  const [selectedIcon, setSelectedIcon] = useState(WORKOUT_ICONS[0]);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [showExerciseForm, setShowExerciseForm] = useState(false);
-  
-  // Exercise form fields
-  const [exerciseName, setExerciseName] = useState('');
-  const [exerciseSets, setExerciseSets] = useState('');
-  const [exerciseReps, setExerciseReps] = useState('');
-  const [exerciseDuration, setExerciseDuration] = useState('');
-  const [exerciseType, setExerciseType] = useState<'reps' | 'duration'>('reps');
-  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
+  const [workoutIcon, setWorkoutIcon] = useState('figure.strengthtraining.traditional');
+  const [workoutColor, setWorkoutColor] = useState('#64b5f6');
+  const [exercises, setExercises] = useState<Exercise[]>([
+    { id: Date.now().toString(), name: '', sets: '3', reps: '10' }
+  ]);
 
-  const handleAddExercise = () => {
-    if (!exerciseName.trim() || !exerciseSets.trim()) {
-      Alert.alert('Missing Information', 'Please enter exercise name and sets.');
-      return;
-    }
-
-    if (exerciseType === 'reps' && !exerciseReps.trim()) {
-      Alert.alert('Missing Information', 'Please enter reps for this exercise.');
-      return;
-    }
-
-    if (exerciseType === 'duration' && !exerciseDuration.trim()) {
-      Alert.alert('Missing Information', 'Please enter duration for this exercise.');
-      return;
-    }
-
+  const addExercise = () => {
     const newExercise: Exercise = {
-      id: editingExerciseId || `ex-${Date.now()}`,
-      name: exerciseName.trim(),
-      sets: exerciseSets.trim(),
-      reps: exerciseType === 'reps' ? exerciseReps.trim() : undefined,
-      duration: exerciseType === 'duration' ? exerciseDuration.trim() : undefined,
+      id: Date.now().toString(),
+      name: '',
+      sets: '3',
+      reps: '10'
     };
-
-    if (editingExerciseId) {
-      setExercises(exercises.map(ex => ex.id === editingExerciseId ? newExercise : ex));
-      console.log('Exercise updated:', newExercise.name);
-    } else {
-      setExercises([...exercises, newExercise]);
-      console.log('Exercise added:', newExercise.name);
+    setExercises([...exercises, newExercise]);
+    if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+  };
 
-    resetExerciseForm();
-    setShowExerciseForm(false);
+  const updateExercise = (id: string, field: keyof Exercise, value: string) => {
+    setExercises(exercises.map(ex => 
+      ex.id === id ? { ...ex, [field]: value } : ex
+    ));
+  };
 
+  const removeExercise = (id: string) => {
+    if (exercises.length <= 1) {
+      Alert.alert('Cannot remove', 'A workout must have at least one exercise');
+      return;
+    }
+    
+    setExercises(exercises.filter(ex => ex.id !== id));
     if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (Haptics?.ImpactFeedbackStyle?.Medium) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
     }
   };
 
-  const handleEditExercise = (exercise: Exercise) => {
-    setExerciseName(exercise.name);
-    setExerciseSets(exercise.sets);
-    setExerciseReps(exercise.reps || '');
-    setExerciseDuration(exercise.duration || '');
-    setExerciseType(exercise.reps ? 'reps' : 'duration');
-    setEditingExerciseId(exercise.id);
-    setShowExerciseForm(true);
-  };
-
-  const handleDeleteExercise = (exerciseId: string) => {
-    setExercises(exercises.filter(ex => ex.id !== exerciseId));
-    console.log('Exercise deleted:', exerciseId);
-    if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    }
-  };
-
-  const resetExerciseForm = () => {
-    setExerciseName('');
-    setExerciseSets('');
-    setExerciseReps('');
-    setExerciseDuration('');
-    setExerciseType('reps');
-    setEditingExerciseId(null);
-  };
-
-  const handleSaveWorkout = async () => {
+  const saveWorkout = async () => {
     if (!workoutName.trim()) {
-      Alert.alert('Missing Information', 'Please enter a workout name.');
+      Alert.alert('Missing Name', 'Please enter a name for your workout');
       return;
     }
 
-    if (!workoutSubtitle.trim()) {
-      Alert.alert('Missing Information', 'Please enter a workout description.');
+    if (exercises.some(ex => !ex.name.trim())) {
+      Alert.alert('Incomplete Exercise', 'Please fill in all exercise names');
       return;
     }
-
-    if (exercises.length === 0) {
-      Alert.alert('No Exercises', 'Please add at least one exercise to your workout.');
-      return;
-    }
-
-    const newWorkout: WorkoutPlan = {
-      id: `custom-${Date.now()}`,
-      name: workoutName.trim(),
-      subtitle: workoutSubtitle.trim(),
-      exercises: exercises,
-      icon: selectedIcon,
-      color: selectedColor,
-      isCustom: true,
-    };
 
     try {
-      const existingPlansData = await AsyncStorage.getItem('customWorkoutPlans');
-      const existingPlans = existingPlansData ? JSON.parse(existingPlansData) : [];
-      const updatedPlans = [...existingPlans, newWorkout];
-      await AsyncStorage.setItem('customWorkoutPlans', JSON.stringify(updatedPlans));
+      // Get existing custom workouts
+      const existingWorkouts = await dataStore.getCustomWorkoutPlans();
       
-      console.log('Custom workout saved:', newWorkout.name);
-      
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
+      // Create new workout
+      const newWorkout = {
+        id: `custom_${Date.now()}`,
+        name: workoutName.trim(),
+        subtitle: workoutSubtitle.trim() || 'Custom workout',
+        exercises: exercises.map(ex => ({
+          ...ex,
+          id: `ex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        })),
+        icon: workoutIcon,
+        color: workoutColor,
+        isCustom: true
+      };
 
+      // Save the new workout
+      const updatedWorkouts = [...existingWorkouts, newWorkout];
+      await dataStore.setCustomWorkoutPlans(updatedWorkouts);
+
+      if (Platform.OS !== 'web') {
+        if (Haptics?.NotificationFeedbackType?.Success) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      }
+      
       Alert.alert(
-        'Success!',
-        'Your custom workout has been created.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
+        'Success', 
+        'Workout created successfully!', 
+        [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (error) {
-      console.log('Error saving workout:', error);
+      console.error('Error saving workout:', error);
       Alert.alert('Error', 'Failed to save workout. Please try again.');
     }
   };
+
+  // Icon options
+  const iconOptions = [
+    { name: 'figure.strengthtraining.traditional', label: 'Strength' },
+    { name: 'figure.strengthtraining.functional', label: 'Functional' },
+    { name: 'figure.core.training', label: 'Core' },
+    { name: 'figure.dance', label: 'Cardio' },
+    { name: 'figure.yoga', label: 'Yoga' },
+    { name: 'figure.flexibility', label: 'Flexibility' },
+  ];
+
+  // Color options
+  const colorOptions = [
+    { value: '#64b5f6', label: 'Blue' },
+    { value: '#aed581', label: 'Green' },
+    { value: '#ffb74d', label: 'Orange' },
+    { value: '#ff8a65', label: 'Red' },
+    { value: '#ba68c8', label: 'Purple' },
+    { value: '#4db6ac', label: 'Teal' },
+  ];
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: "Create Workout",
-          headerBackTitle: "Back",
+          headerShown: false,
         }}
       />
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Header */}
           <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <IconSymbol name="chevron.left" size={24} color={colors.text} />
+            </TouchableOpacity>
             <Text style={styles.title}>Create Custom Workout</Text>
-            <Text style={styles.subtitle}>Design your own workout plan</Text>
+            <TouchableOpacity onPress={saveWorkout}>
+              <IconSymbol name="checkmark.circle.fill" size={24} color={colors.primary} />
+            </TouchableOpacity>
           </View>
 
-          {/* Workout Name */}
-          <View style={styles.section}>
-            <Text style={styles.label}>Workout Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Full Body Workout"
-              placeholderTextColor={colors.textSecondary}
-              value={workoutName}
-              onChangeText={setWorkoutName}
-            />
-          </View>
+          {/* Workout Info */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Workout Details</Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Workout Name</Text>
+              <TextInput
+                style={styles.input}
+                value={workoutName}
+                onChangeText={setWorkoutName}
+                placeholder="e.g. My Upper Body Routine"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
 
-          {/* Workout Description */}
-          <View style={styles.section}>
-            <Text style={styles.label}>Description</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Chest, Back, Legs"
-              placeholderTextColor={colors.textSecondary}
-              value={workoutSubtitle}
-              onChangeText={setWorkoutSubtitle}
-            />
-          </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Subtitle (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={workoutSubtitle}
+                onChangeText={setWorkoutSubtitle}
+                placeholder="e.g. Chest, Shoulders, Triceps"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
 
-          {/* Color Selection */}
-          <View style={styles.section}>
-            <Text style={styles.label}>Color Theme</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.colorScrollContent}
-            >
-              {WORKOUT_COLORS.map((color) => (
-                <TouchableOpacity
-                  key={color.value}
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: color.value },
-                    selectedColor === color.value && styles.colorOptionSelected,
-                  ]}
-                  onPress={() => {
-                    setSelectedColor(color.value);
-                    if (Platform.OS !== 'web') {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }
-                  }}
-                >
-                  {selectedColor === color.value && (
-                    <IconSymbol name="checkmark" size={20} color={colors.card} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+            <View style={styles.optionGroup}>
+              <Text style={styles.label}>Icon</Text>
+              <View style={styles.iconOptions}>
+                {iconOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.name}
+                    style={[
+                      styles.iconOption,
+                      workoutIcon === option.name && styles.iconOptionSelected
+                    ]}
+                    onPress={() => setWorkoutIcon(option.name)}
+                  >
+                    <IconSymbol 
+                      name={option.name as any} 
+                      size={24} 
+                      color={workoutIcon === option.name ? colors.card : colors.text} 
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-          {/* Icon Selection */}
-          <View style={styles.section}>
-            <Text style={styles.label}>Icon</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.iconScrollContent}
-            >
-              {WORKOUT_ICONS.map((icon) => (
-                <TouchableOpacity
-                  key={icon}
-                  style={[
-                    styles.iconOption,
-                    selectedIcon === icon && styles.iconOptionSelected,
-                    { borderColor: selectedColor },
-                  ]}
-                  onPress={() => {
-                    setSelectedIcon(icon);
-                    if (Platform.OS !== 'web') {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }
-                  }}
-                >
-                  <IconSymbol 
-                    name={icon as any} 
-                    size={28} 
-                    color={selectedIcon === icon ? selectedColor : colors.textSecondary} 
+            <View style={styles.optionGroup}>
+              <Text style={styles.label}>Color</Text>
+              <View style={styles.colorOptions}>
+                {colorOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.colorOption,
+                      { backgroundColor: option.value },
+                      workoutColor === option.value && styles.colorOptionSelected
+                    ]}
+                    onPress={() => setWorkoutColor(option.value)}
                   />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                ))}
+              </View>
+            </View>
           </View>
 
-          {/* Exercises List */}
-          <View style={styles.section}>
-            <View style={styles.exercisesHeader}>
-              <Text style={styles.label}>Exercises ({exercises.length})</Text>
-              <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: selectedColor }]}
-                onPress={() => {
-                  resetExerciseForm();
-                  setShowExerciseForm(true);
-                }}
-              >
-                <IconSymbol name="plus" size={20} color={colors.card} />
+          {/* Exercises */}
+          <View style={styles.card}>
+            <View style={styles.exerciseHeader}>
+              <Text style={styles.sectionTitle}>Exercises</Text>
+              <TouchableOpacity style={styles.addButton} onPress={addExercise}>
+                <IconSymbol name="plus.circle.fill" size={20} color={colors.primary} />
                 <Text style={styles.addButtonText}>Add Exercise</Text>
               </TouchableOpacity>
             </View>
 
-            {exercises.length === 0 ? (
-              <View style={styles.emptyExercises}>
-                <IconSymbol name="figure.walk" size={48} color={colors.textSecondary} />
-                <Text style={styles.emptyExercisesText}>No exercises yet</Text>
-                <Text style={styles.emptyExercisesSubtext}>Tap &quot;Add Exercise&quot; to get started</Text>
-              </View>
-            ) : (
-              <View style={styles.exercisesList}>
-                {exercises.map((exercise, index) => (
-                  <View key={exercise.id} style={styles.exerciseCard}>
-                    <View style={styles.exerciseCardLeft}>
-                      <View style={[styles.exerciseNumber, { backgroundColor: selectedColor + '20' }]}>
-                        <Text style={[styles.exerciseNumberText, { color: selectedColor }]}>
-                          {index + 1}
-                        </Text>
+            {exercises.map((exercise, index) => (
+              <View key={exercise.id} style={styles.exerciseCard}>
+                <View style={styles.exerciseRow}>
+                  <Text style={styles.exerciseNumber}>{index + 1}.</Text>
+                  <View style={styles.exerciseInputs}>
+                    <TextInput
+                      style={[styles.input, styles.exerciseNameInput]}
+                      value={exercise.name}
+                      onChangeText={(value) => updateExercise(exercise.id, 'name', value)}
+                      placeholder="Exercise name"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                    
+                    <View style={styles.exerciseDetailsRow}>
+                      <View style={styles.detailInput}>
+                        <Text style={styles.detailLabel}>Sets</Text>
+                        <TextInput
+                          style={styles.smallInput}
+                          value={exercise.sets}
+                          onChangeText={(value) => updateExercise(exercise.id, 'sets', value)}
+                          placeholder="3"
+                          keyboardType="numeric"
+                          placeholderTextColor={colors.textSecondary}
+                        />
                       </View>
-                      <View style={styles.exerciseInfo}>
-                        <Text style={styles.exerciseName}>{exercise.name}</Text>
-                        <Text style={styles.exerciseDetails}>
-                          {exercise.sets} sets × {exercise.reps || exercise.duration}
-                        </Text>
+                      
+                      <View style={styles.detailInput}>
+                        <Text style={styles.detailLabel}>Reps</Text>
+                        <TextInput
+                          style={styles.smallInput}
+                          value={exercise.reps || ''}
+                          onChangeText={(value) => updateExercise(exercise.id, 'reps', value)}
+                          placeholder="10"
+                          keyboardType="numeric"
+                          placeholderTextColor={colors.textSecondary}
+                        />
                       </View>
-                    </View>
-                    <View style={styles.exerciseActions}>
-                      <TouchableOpacity
-                        style={styles.exerciseActionButton}
-                        onPress={() => handleEditExercise(exercise)}
-                      >
-                        <IconSymbol name="pencil" size={18} color={colors.primary} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.exerciseActionButton}
-                        onPress={() => handleDeleteExercise(exercise.id)}
-                      >
-                        <IconSymbol name="trash" size={18} color="#ef5350" />
-                      </TouchableOpacity>
                     </View>
                   </View>
-                ))}
+                  
+                  <TouchableOpacity 
+                    style={styles.removeButton} 
+                    onPress={() => removeExercise(exercise.id)}
+                  >
+                    <IconSymbol name="trash" size={20} color="#ef5350" />
+                  </TouchableOpacity>
+                </View>
               </View>
-            )}
+            ))}
           </View>
-
-          {/* Exercise Form */}
-          {showExerciseForm && (
-            <View style={styles.exerciseForm}>
-              <View style={styles.exerciseFormHeader}>
-                <Text style={styles.exerciseFormTitle}>
-                  {editingExerciseId ? 'Edit Exercise' : 'Add Exercise'}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    resetExerciseForm();
-                    setShowExerciseForm(false);
-                  }}
-                >
-                  <IconSymbol name="xmark.circle.fill" size={24} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.formField}>
-                <Text style={styles.formLabel}>Exercise Name</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g., Push-ups"
-                  placeholderTextColor={colors.textSecondary}
-                  value={exerciseName}
-                  onChangeText={setExerciseName}
-                />
-              </View>
-
-              <View style={styles.formField}>
-                <Text style={styles.formLabel}>Sets</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g., 3"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                  value={exerciseSets}
-                  onChangeText={setExerciseSets}
-                />
-              </View>
-
-              <View style={styles.formField}>
-                <Text style={styles.formLabel}>Type</Text>
-                <View style={styles.typeSelector}>
-                  <TouchableOpacity
-                    style={[
-                      styles.typeOption,
-                      exerciseType === 'reps' && styles.typeOptionSelected,
-                      exerciseType === 'reps' && { backgroundColor: selectedColor },
-                    ]}
-                    onPress={() => setExerciseType('reps')}
-                  >
-                    <Text style={[
-                      styles.typeOptionText,
-                      exerciseType === 'reps' && styles.typeOptionTextSelected,
-                    ]}>
-                      Reps
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.typeOption,
-                      exerciseType === 'duration' && styles.typeOptionSelected,
-                      exerciseType === 'duration' && { backgroundColor: selectedColor },
-                    ]}
-                    onPress={() => setExerciseType('duration')}
-                  >
-                    <Text style={[
-                      styles.typeOptionText,
-                      exerciseType === 'duration' && styles.typeOptionTextSelected,
-                    ]}>
-                      Duration
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {exerciseType === 'reps' ? (
-                <View style={styles.formField}>
-                  <Text style={styles.formLabel}>Reps</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g., 12"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                    value={exerciseReps}
-                    onChangeText={setExerciseReps}
-                  />
-                </View>
-              ) : (
-                <View style={styles.formField}>
-                  <Text style={styles.formLabel}>Duration</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g., 30 seconds"
-                    placeholderTextColor={colors.textSecondary}
-                    value={exerciseDuration}
-                    onChangeText={setExerciseDuration}
-                  />
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={[styles.saveExerciseButton, { backgroundColor: selectedColor }]}
-                onPress={handleAddExercise}
-              >
-                <IconSymbol 
-                  name={editingExerciseId ? "checkmark.circle.fill" : "plus.circle.fill"} 
-                  size={20} 
-                  color={colors.card} 
-                />
-                <Text style={styles.saveExerciseButtonText}>
-                  {editingExerciseId ? 'Update Exercise' : 'Add Exercise'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Save Workout Button */}
-          <TouchableOpacity
-            style={[styles.saveWorkoutButton, { backgroundColor: selectedColor }]}
-            onPress={handleSaveWorkout}
-          >
-            <IconSymbol name="checkmark.circle.fill" size={24} color={colors.card} />
-            <Text style={styles.saveWorkoutButtonText}>Save Workout</Text>
-          </TouchableOpacity>
         </ScrollView>
       </View>
     </>
@@ -494,80 +294,92 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
+  content: {
     paddingVertical: 20,
     paddingHorizontal: 16,
-    paddingBottom: 40,
   },
   header: {
-    marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   title: {
-    fontSize: 32,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 6,
   },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    fontWeight: '400',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  input: {
+  card: {
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
-    fontSize: 16,
-    color: colors.text,
-    boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.06)',
+    marginBottom: 16,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
     elevation: 2,
   },
-  colorScrollContent: {
-    paddingRight: 16,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
   },
-  colorOption: {
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 6,
+  },
+  input: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: colors.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    color: colors.text,
+    backgroundColor: colors.card,
+    fontSize: 16,
+  },
+  optionGroup: {
+    marginBottom: 16,
+  },
+  iconOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  iconOption: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    marginRight: 12,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
-  },
-  colorOptionSelected: {
-    borderWidth: 3,
-    borderColor: colors.card,
-  },
-  iconScrollContent: {
-    paddingRight: 16,
-  },
-  iconOption: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.card,
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-    boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
   },
   iconOptionSelected: {
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  colorOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  colorOption: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  colorOptionSelected: {
+    borderColor: colors.card,
     borderWidth: 3,
   },
-  exercisesHeader: {
+  exerciseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -576,174 +388,67 @@ const styles = StyleSheet.create({
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.background,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 20,
-    boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
   },
   addButtonText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: colors.card,
-    marginLeft: 6,
-  },
-  emptyExercises: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
-  },
-  emptyExercisesText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 12,
-  },
-  emptyExercisesSubtext: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  exercisesList: {
-    gap: 12,
+    fontWeight: '600',
+    color: colors.primary,
+    marginLeft: 4,
   },
   exerciseCard: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.background,
     borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    padding: 12,
+    marginBottom: 12,
   },
-  exerciseCardLeft: {
+  exerciseRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    alignItems: 'flex-start',
   },
   exerciseNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  exerciseNumberText: {
     fontSize: 16,
     fontWeight: '700',
+    color: colors.text,
+    marginRight: 12,
+    marginTop: 8,
   },
-  exerciseInfo: {
+  exerciseInputs: {
     flex: 1,
   },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  exerciseDetails: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  exerciseActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  exerciseActionButton: {
-    padding: 8,
-  },
-  exerciseForm: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 3,
-  },
-  exerciseFormHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  exerciseFormTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  formField: {
-    marginBottom: 16,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+  exerciseNameInput: {
     marginBottom: 8,
   },
-  formInput: {
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
-    color: colors.text,
-  },
-  typeSelector: {
+  exerciseDetailsRow: {
     flexDirection: 'row',
     gap: 12,
   },
-  typeOption: {
+  detailInput: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: colors.background,
-    alignItems: 'center',
   },
-  typeOptionSelected: {
-    backgroundColor: colors.primary,
-  },
-  typeOptionText: {
-    fontSize: 15,
+  detailLabel: {
+    fontSize: 12,
     fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  smallInput: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: colors.background,
+    borderRadius: 8,
+    paddingHorizontal: 10,
     color: colors.text,
-  },
-  typeOptionTextSelected: {
-    color: colors.card,
-  },
-  saveExerciseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  saveExerciseButtonText: {
+    backgroundColor: colors.card,
     fontSize: 16,
-    fontWeight: '700',
-    color: colors.card,
-    marginLeft: 8,
+    textAlign: 'center',
   },
-  saveWorkoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginTop: 8,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
-    elevation: 4,
-  },
-  saveWorkoutButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.card,
+  removeButton: {
+    padding: 8,
     marginLeft: 8,
+    marginTop: 4,
   },
 });

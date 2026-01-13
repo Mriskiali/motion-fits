@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dataStore, WorkoutSession } from '@/lib/dataStore';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { GoalsSettings, DEFAULT_GOALS_SETTINGS, getNextReminderSummary } from '@/lib/notifications';
 import { router } from 'expo-router';
+import { showSuccessToast, showErrorToast } from '@/utils/notifications';
 
 type SessionExercise = {
   exerciseId: string;
@@ -58,7 +60,7 @@ const getWeekStart = (d: Date) => {
   return x;
 };
 
-const getDateString = (d: Date) => d.toISOString().split('T')[0];
+const getDateString = (d: Date) => d.toLocaleDateString('sv-SE');
 const isSameDay = (a: Date, b: Date) => getDateString(a) === getDateString(b);
 
 const formatDuration = (sec: number) => {
@@ -82,25 +84,25 @@ export default function HistoryScreen() {
 
   const load = async () => {
     try {
-      const [str, gsStr] = await Promise.all([
-        AsyncStorage.getItem('workoutSessions'),
-        AsyncStorage.getItem('goalsSettings_v1'),
+      const [sessionData, goalsData] = await Promise.all([
+        dataStore.getWorkoutSessions(),
+        dataStore.getGoalsSettings(),
       ]);
-      const arr: WorkoutSession[] = str ? JSON.parse(str) : [];
+
       // Basic validation
-      const cleaned = Array.isArray(arr) ? arr.filter(s => s && s.id && typeof s.durationSec === 'number') : [];
+      const cleaned = Array.isArray(sessionData) ?
+        sessionData.filter(s => s && s.id && typeof s.durationSec === 'number') : [];
       // Sort by endedAt desc
       cleaned.sort((a,b)=> b.endedAt - a.endedAt);
       setSessions(cleaned);
 
-      if (gsStr) {
-        const parsed = JSON.parse(gsStr);
-        setGoalSettings({ ...DEFAULT_GOALS_SETTINGS, ...parsed });
+      if (goalsData) {
+        setGoalSettings({ ...DEFAULT_GOALS_SETTINGS, ...goalsData });
       } else {
         setGoalSettings(DEFAULT_GOALS_SETTINGS);
       }
     } catch(e) {
-      console.log('load sessions/settings error', e);
+      console.error('load sessions/settings error', e);
       if (!goalSettings) setGoalSettings(DEFAULT_GOALS_SETTINGS);
     } finally {
       setLoading(false);
@@ -237,13 +239,22 @@ export default function HistoryScreen() {
   const clearHistory = () => {
     Alert.alert('Clear History', 'Delete all workout sessions?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-          await AsyncStorage.removeItem('workoutSessions');
-          if (Platform.OS !== 'web') {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await dataStore.setWorkoutSessions([]);
+            if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Warning) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            }
+            load();
+            showSuccessToast('History Cleared', 'All workout sessions have been deleted.');
+          } catch (error) {
+            console.error('Error clearing history:', error);
+            showErrorToast('Clear Failed', 'Unable to clear history. Please try again.');
           }
-          load();
-        } 
+        }
       },
     ]);
   };
@@ -465,6 +476,28 @@ export default function HistoryScreen() {
             ))}
           </View>
         ) : null}
+
+        {/* Weekly Trends */}
+        <View style={{ marginTop: 8 }}>
+          <Text style={styles.sectionTitle}>Weekly Trends</Text>
+          <View style={styles.weeklyTrends}>
+            <View style={styles.weeklyTrendCard}>
+              <Text style={styles.weeklyTrendTitle}>Workouts</Text>
+              <Text style={styles.weeklyTrendValue}>{weekly.count}</Text>
+              <Text style={styles.weeklyTrendLabel}>This week</Text>
+            </View>
+            <View style={styles.weeklyTrendCard}>
+              <Text style={styles.weeklyTrendTitle}>Sets</Text>
+              <Text style={styles.weeklyTrendValue}>{weekly.sets}</Text>
+              <Text style={styles.weeklyTrendLabel}>This week</Text>
+            </View>
+            <View style={styles.weeklyTrendCard}>
+              <Text style={styles.weeklyTrendTitle}>Duration</Text>
+              <Text style={styles.weeklyTrendValue}>{formatDuration(weekly.durationSec)}</Text>
+              <Text style={styles.weeklyTrendLabel}>This week</Text>
+            </View>
+          </View>
+        </View>
 
         {/* Recent Sessions */}
         <View style={{ marginTop: 8 }}>
@@ -727,6 +760,37 @@ const styles = StyleSheet.create({
   },
   pbSub: {
     fontSize: 12,
+    color: colors.textSecondary,
+  },
+
+  // Weekly trends styles
+  weeklyTrends: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  weeklyTrendCard: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
+  },
+  weeklyTrendTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  weeklyTrendValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  weeklyTrendLabel: {
+    fontSize: 11,
     color: colors.textSecondary,
   },
 

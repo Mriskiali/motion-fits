@@ -1,34 +1,17 @@
 
 import React, { useState, useEffect } from "react";
 import { useTheme } from "@react-navigation/native";
-import { StyleSheet, View, Text, Platform, ScrollView, TouchableOpacity } from "react-native";
+import { StyleSheet, View, Text, Platform, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Stack } from "expo-router";
 import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
+import SkeletonLoader from "@/components/SkeletonLoader";
+import Onboarding from "@/components/Onboarding";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dataStore, CompletedExercise, DayWorkoutAssignment, WorkoutPlan as DataWorkoutPlan } from '@/lib/dataStore';
+import { showSuccessToast, showErrorToast } from '@/utils/notifications';
 
-interface CompletedExercise {
-  planId: string;
-  exerciseId: string;
-  date: string;
-}
-
-interface DayWorkoutAssignment {
-  date: string;
-  planId: string | null;
-}
-
-interface WorkoutPlan {
-  id: string;
-  name: string;
-  subtitle: string;
-  exercises: any[];
-  icon: string;
-  color: string;
-  isCustom?: boolean;
-}
-
-const defaultWorkoutPlans: WorkoutPlan[] = [
+const defaultWorkoutPlans: DataWorkoutPlan[] = [
   {
     id: 'upper1',
     name: 'UPPER',
@@ -85,40 +68,19 @@ export default function HomeScreen() {
   const theme = useTheme();
   const [completedExercises, setCompletedExercises] = useState<CompletedExercise[]>([]);
   const [workoutAssignments, setWorkoutAssignments] = useState<DayWorkoutAssignment[]>([]);
-  const [customWorkoutPlans, setCustomWorkoutPlans] = useState<WorkoutPlan[]>([]);
+  const [customWorkoutPlans, setCustomWorkoutPlans] = useState<DataWorkoutPlan[]>([]);
+  const [fitnessGoals, setFitnessGoals] = useState<{ weeklyTarget: number }>({ weeklyTarget: 3 });
+  const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  useEffect(() => {
-    calculateStats();
-  }, [completedExercises, workoutAssignments]);
-
-  const loadData = async () => {
-    try {
-      const completedData = await AsyncStorage.getItem('completedExercises');
-      const assignmentsData = await AsyncStorage.getItem('workoutAssignments');
-      const customPlansData = await AsyncStorage.getItem('customWorkoutPlans');
-      
-      if (completedData) {
-        setCompletedExercises(JSON.parse(completedData));
-      }
-      
-      if (assignmentsData) {
-        setWorkoutAssignments(JSON.parse(assignmentsData));
-      }
-
-      if (customPlansData) {
-        setCustomWorkoutPlans(JSON.parse(customPlansData));
-      }
-    } catch (error) {
-      console.log('Error loading data:', error);
-    }
-  };
-
   const getDateString = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    // Format date as YYYY-MM-DD in local time to prevent timezone shifts
+    // Use toLocaleDateString to ensure local timezone is respected
+    return date.toLocaleDateString('sv-SE'); // Swedish locale gives YYYY-MM-DD format
   };
 
   const getWeekDates = () => {
@@ -126,13 +88,13 @@ export default function HomeScreen() {
     const today = new Date();
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay());
-    
+
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
       dates.push(date);
     }
-    
+
     return dates;
   };
 
@@ -141,33 +103,60 @@ export default function HomeScreen() {
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
+
     for (let d = new Date(startOfMonth); d <= endOfMonth; d.setDate(d.getDate() + 1)) {
       dates.push(new Date(d));
     }
-    
+
     return dates;
   };
 
-  const getWorkoutPlans = () => {
-    return [...defaultWorkoutPlans, ...customWorkoutPlans];
-  };
-
-  const calculateStats = () => {
-    const weekDates = getWeekDates();
-    const monthDates = getMonthDates();
-    
-    const weekTotal = getTotalExercisesCompleted(weekDates);
-    const monthTotal = getTotalExercisesCompleted(monthDates);
-    
-    console.log('Week total exercises:', weekTotal);
-    console.log('Month total exercises:', monthTotal);
-  };
+  const weekDates = React.useMemo(() => getWeekDates(), []);
+  const monthDates = React.useMemo(() => getMonthDates(), []);
 
   const getTotalExercisesCompleted = (dates: Date[]) => {
     const dateStrings = dates.map(d => getDateString(d));
     return completedExercises.filter(ce => dateStrings.includes(ce.date)).length;
   };
+
+  const { weekTotal, monthTotal } = React.useMemo(() => {
+    return {
+      weekTotal: getTotalExercisesCompleted(weekDates),
+      monthTotal: getTotalExercisesCompleted(monthDates),
+    };
+  }, [completedExercises, weekDates, monthDates]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [completedExercises, workoutAssignments, customWorkoutPlans, fitnessGoals] = await Promise.all([
+        dataStore.getCompletedExercises(),
+        dataStore.getWorkoutAssignments(),
+        dataStore.getCustomWorkoutPlans(),
+        dataStore.getFitnessGoals()
+      ]);
+
+      setCompletedExercises(completedExercises);
+      setWorkoutAssignments(workoutAssignments);
+      setCustomWorkoutPlans(customWorkoutPlans);
+      setFitnessGoals(fitnessGoals);
+
+      // Check if onboarding should be shown
+      const onboardingComplete = await AsyncStorage.getItem('onboardingComplete');
+      if (!onboardingComplete) {
+        setShowOnboarding(true);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getWorkoutPlans = (): DataWorkoutPlan[] => {
+    return [...defaultWorkoutPlans as DataWorkoutPlan[], ...customWorkoutPlans];
+  };
+
 
   const getWeeklyPercentage = () => {
     const weekDates = getWeekDates();
@@ -175,27 +164,29 @@ export default function HomeScreen() {
       const dateStr = getDateString(date);
       return workoutAssignments.some(a => a.date === dateStr && a.planId !== null);
     });
-    
+
     if (assignedDays.length === 0) return 0;
-    
+
     const completedDays = assignedDays.filter(date => {
       const dateStr = getDateString(date);
       const assignment = workoutAssignments.find(a => a.date === dateStr);
       if (!assignment || !assignment.planId) return false;
-      
-      const plan = getWorkoutPlans().find(p => p.id === assignment.planId);
+
+      const plan = getWorkoutPlans().find((p: DataWorkoutPlan) => p.id === assignment.planId);
       if (!plan) return false;
-      
-      const completedCount = plan.exercises.filter(ex => 
-        completedExercises.some(ce => 
+
+      const completedCount = plan.exercises.filter(ex =>
+        completedExercises.some(ce =>
           ce.planId === plan.id && ce.exerciseId === ex.id && ce.date === dateStr
         )
       ).length;
-      
+
       return completedCount === plan.exercises.length;
     });
-    
-    return Math.round((completedDays.length / assignedDays.length) * 100);
+
+    // Calculate percentage based on user's weekly goal
+    const weeklyGoal = fitnessGoals.weeklyTarget || 3; // Default to 3 if not set
+    return Math.min(100, Math.round((completedDays.length / weeklyGoal) * 100));
   };
 
   const getMonthlyPercentage = () => {
@@ -204,27 +195,30 @@ export default function HomeScreen() {
       const dateStr = getDateString(date);
       return workoutAssignments.some(a => a.date === dateStr && a.planId !== null);
     });
-    
+
     if (assignedDays.length === 0) return 0;
-    
+
     const completedDays = assignedDays.filter(date => {
       const dateStr = getDateString(date);
       const assignment = workoutAssignments.find(a => a.date === dateStr);
       if (!assignment || !assignment.planId) return false;
-      
-      const plan = getWorkoutPlans().find(p => p.id === assignment.planId);
+
+      const plan = getWorkoutPlans().find((p: DataWorkoutPlan) => p.id === assignment.planId);
       if (!plan) return false;
-      
-      const completedCount = plan.exercises.filter(ex => 
-        completedExercises.some(ce => 
+
+      const completedCount = plan.exercises.filter(ex =>
+        completedExercises.some(ce =>
           ce.planId === plan.id && ce.exerciseId === ex.id && ce.date === dateStr
         )
       ).length;
-      
+
       return completedCount === plan.exercises.length;
     });
-    
-    return Math.round((completedDays.length / assignedDays.length) * 100);
+
+    // Calculate percentage based on user's weekly goal scaled to monthly
+    const weeklyGoal = fitnessGoals.weeklyTarget || 3; // Default to 3 if not set
+    const monthlyGoal = Math.round(weeklyGoal * 4.33); // Approximate weeks in a month
+    return Math.min(100, Math.round((completedDays.length / monthlyGoal) * 100));
   };
 
   const getRecentWorkouts = () => {
@@ -259,15 +253,13 @@ export default function HomeScreen() {
   };
 
   const getWorkoutName = (planId: string) => {
-    const plan = getWorkoutPlans().find(p => p.id === planId);
+    const plan = getWorkoutPlans().find((p: DataWorkoutPlan) => p.id === planId);
     return plan?.name || 'Unknown';
   };
 
   const weeklyPercentage = getWeeklyPercentage();
   const monthlyPercentage = getMonthlyPercentage();
   const recentWorkouts = getRecentWorkouts();
-  const weekTotal = getTotalExercisesCompleted(getWeekDates());
-  const monthTotal = getTotalExercisesCompleted(getMonthDates());
 
   return (
     <>
@@ -279,125 +271,208 @@ export default function HomeScreen() {
         />
       )}
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScrollView 
-          contentContainerStyle={[
-            styles.scrollContent,
-            Platform.OS !== 'ios' && styles.scrollContentWithTabBar
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.header}>
-            <Text style={styles.title}>Dashboard</Text>
-            <Text style={styles.subtitle}>Track your fitness progress</Text>
-          </View>
+        {showOnboarding ? (
+          <Onboarding onComplete={() => setShowOnboarding(false)} />
+        ) : loading ? (
+          <View style={{ flex: 1 }}>
+            {/* Header skeleton */}
+            <View style={styles.header}>
+              <SkeletonLoader width="60%" height={32} style={{ marginBottom: 6 }} />
+              <SkeletonLoader width="80%" height={16} />
+            </View>
 
-          {/* Stats Cards */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <View style={styles.statHeader}>
-                <IconSymbol name="calendar" size={24} color={colors.primary} />
-                <Text style={styles.statLabel}>This Week</Text>
-              </View>
-              <View style={styles.statContent}>
-                <Text style={styles.statValue}>{weekTotal}</Text>
-                <Text style={styles.statUnit}>exercises</Text>
-              </View>
-              <View style={styles.progressBarContainer}>
-                <View style={styles.progressBarBackground}>
-                  <View 
-                    style={[
-                      styles.progressBarFill, 
-                      { 
-                        width: `${weeklyPercentage}%`,
-                        backgroundColor: colors.primary 
-                      }
-                    ]} 
-                  />
+            {/* Stats cards skeleton */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <View style={styles.statHeader}>
+                  <SkeletonLoader width={24} height={24} style={{ marginRight: 8 }} />
+                  <SkeletonLoader width="40%" height={16} />
                 </View>
-                <Text style={styles.progressText}>{weeklyPercentage}% complete</Text>
+                <View style={styles.statContent}>
+                  <SkeletonLoader width={60} height={32} style={{ marginRight: 8 }} />
+                  <SkeletonLoader width={60} height={16} />
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <SkeletonLoader width="100%" height={8} style={{ marginBottom: 6 }} />
+                  <SkeletonLoader width="50%" height={12} />
+                </View>
+              </View>
+
+              <View style={styles.statCard}>
+                <View style={styles.statHeader}>
+                  <SkeletonLoader width={24} height={24} style={{ marginRight: 8 }} />
+                  <SkeletonLoader width="40%" height={16} />
+                </View>
+                <View style={styles.statContent}>
+                  <SkeletonLoader width={60} height={32} style={{ marginRight: 8 }} />
+                  <SkeletonLoader width={60} height={16} />
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <SkeletonLoader width="100%" height={8} style={{ marginBottom: 6 }} />
+                  <SkeletonLoader width="50%" height={12} />
+                </View>
               </View>
             </View>
 
-            <View style={styles.statCard}>
-              <View style={styles.statHeader}>
-                <IconSymbol name="calendar.badge.clock" size={24} color={colors.secondary} />
-                <Text style={styles.statLabel}>This Month</Text>
-              </View>
-              <View style={styles.statContent}>
-                <Text style={styles.statValue}>{monthTotal}</Text>
-                <Text style={styles.statUnit}>exercises</Text>
-              </View>
-              <View style={styles.progressBarContainer}>
-                <View style={styles.progressBarBackground}>
-                  <View 
-                    style={[
-                      styles.progressBarFill, 
-                      { 
-                        width: `${monthlyPercentage}%`,
-                        backgroundColor: colors.secondary 
-                      }
-                    ]} 
-                  />
-                </View>
-                <Text style={styles.progressText}>{monthlyPercentage}% complete</Text>
-              </View>
-            </View>
-          </View>
+            {/* Recent activity skeleton */}
+            <View style={styles.recentSection}>
+              <SkeletonLoader width="40%" height={20} style={{ marginBottom: 12 }} />
 
-          {/* Recent Activity */}
-          <View style={styles.recentSection}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            {recentWorkouts.length === 0 ? (
-              <View style={styles.emptyState}>
-                <IconSymbol name="figure.walk" size={48} color={colors.textSecondary} />
-                <Text style={styles.emptyStateText}>No recent workouts</Text>
-                <Text style={styles.emptyStateSubtext}>
-                  Start tracking your workouts to see your progress here
-                </Text>
-              </View>
-            ) : (
               <View style={styles.activityList}>
-                {recentWorkouts.map((workout, index) => (
+                {[...Array(3)].map((_, index) => (
                   <View key={index} style={styles.activityItem}>
-                    <View 
-                      style={[
-                        styles.activityIndicator, 
-                        { backgroundColor: workout.planColor }
-                      ]} 
-                    />
-                    <View style={styles.activityInfo}>
-                      <Text style={styles.activityName}>{workout.planName}</Text>
-                      <Text style={styles.activityDate}>{getDaysAgo(workout.date)}</Text>
+                    <SkeletonLoader width={8} height={8} style={{ borderRadius: 4, marginRight: 12 }} />
+                    <View style={{ flex: 1 }}>
+                      <SkeletonLoader width="60%" height={16} style={{ marginBottom: 4 }} />
+                      <SkeletonLoader width="40%" height={14} />
                     </View>
-                    <IconSymbol name="checkmark.circle.fill" size={24} color={colors.primary} />
+                    <SkeletonLoader width={24} height={24} style={{ borderRadius: 12 }} />
                   </View>
                 ))}
               </View>
-            )}
-          </View>
+            </View>
 
-          {/* Quick Stats */}
-          <View style={styles.quickStatsSection}>
-            <Text style={styles.sectionTitle}>Quick Stats</Text>
-            <View style={styles.quickStatsGrid}>
-              <View style={styles.quickStatCard}>
-                <IconSymbol name="flame.fill" size={32} color="#ef5350" />
-                <Text style={styles.quickStatValue}>{weekTotal}</Text>
-                <Text style={styles.quickStatLabel}>Week Total</Text>
-              </View>
-              <View style={styles.quickStatCard}>
-                <IconSymbol name="chart.bar.fill" size={32} color={colors.accent} />
-                <Text style={styles.quickStatValue}>{monthTotal}</Text>
-                <Text style={styles.quickStatLabel}>Month Total</Text>
-              </View>
-              <View style={styles.quickStatCard}>
-                <IconSymbol name="star.fill" size={32} color="#ffd700" />
-                <Text style={styles.quickStatValue}>{customWorkoutPlans.length}</Text>
-                <Text style={styles.quickStatLabel}>Custom Plans</Text>
+            {/* Quick stats skeleton */}
+            <View style={styles.quickStatsSection}>
+              <SkeletonLoader width="40%" height={20} style={{ marginBottom: 12 }} />
+              <View style={styles.quickStatsGrid}>
+                {[...Array(3)].map((_, index) => (
+                  <View key={index} style={styles.quickStatCard}>
+                    <SkeletonLoader width={32} height={32} style={{ marginBottom: 8 }} />
+                    <SkeletonLoader width={40} height={24} style={{ marginBottom: 4 }} />
+                    <SkeletonLoader width={60} height={12} />
+                  </View>
+                ))}
               </View>
             </View>
           </View>
-        </ScrollView>
+        ) : (
+          <ScrollView
+            contentContainerStyle={[
+              styles.scrollContent,
+              Platform.OS !== 'ios' && styles.scrollContentWithTabBar
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.header}>
+              <Text style={styles.title}>Dashboard</Text>
+              <Text style={styles.subtitle}>Track your fitness progress</Text>
+            </View>
+
+            {/* Stats Cards */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <View style={styles.statHeader}>
+                  <IconSymbol name="calendar" size={24} color={colors.primary} />
+                  <Text style={styles.statLabel}>This Week</Text>
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={styles.statValue}>{weekTotal}</Text>
+                  <Text style={styles.statUnit}>exercises</Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={styles.progressBarBackground}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        {
+                          width: `${weeklyPercentage}%`,
+                          backgroundColor: colors.primary
+                        }
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.progressText}>{Math.min(getWeekDates().filter(date => {
+                    const dateStr = getDateString(date);
+                    return workoutAssignments.some(a => a.date === dateStr && a.planId !== null);
+                  }).length, fitnessGoals.weeklyTarget || 3)}/{fitnessGoals.weeklyTarget || 3} workouts completed</Text>
+                </View>
+              </View>
+
+              <View style={styles.statCard}>
+                <View style={styles.statHeader}>
+                  <IconSymbol name="calendar.badge.clock" size={24} color={colors.secondary} />
+                  <Text style={styles.statLabel}>This Month</Text>
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={styles.statValue}>{monthTotal}</Text>
+                  <Text style={styles.statUnit}>exercises</Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={styles.progressBarBackground}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        {
+                          width: `${monthlyPercentage}%`,
+                          backgroundColor: colors.secondary
+                        }
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.progressText}>{Math.min(getMonthDates().filter(date => {
+                    const dateStr = getDateString(date);
+                    return workoutAssignments.some(a => a.date === dateStr && a.planId !== null);
+                  }).length, Math.round((fitnessGoals.weeklyTarget || 3) * 4.33))}/{Math.round((fitnessGoals.weeklyTarget || 3) * 4.33)} workouts completed</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Recent Activity */}
+            <View style={styles.recentSection}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              {recentWorkouts.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <IconSymbol name="figure.walk" size={48} color={colors.textSecondary} />
+                  <Text style={styles.emptyStateText}>No recent workouts</Text>
+                  <Text style={styles.emptyStateSubtext}>
+                    Start tracking your workouts to see your progress here
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.activityList}>
+                  {recentWorkouts.map((workout, index) => (
+                    <View key={index} style={styles.activityItem}>
+                      <View
+                        style={[
+                          styles.activityIndicator,
+                          { backgroundColor: workout.planColor }
+                        ]}
+                      />
+                      <View style={styles.activityInfo}>
+                        <Text style={styles.activityName}>{workout.planName}</Text>
+                        <Text style={styles.activityDate}>{getDaysAgo(workout.date)}</Text>
+                      </View>
+                      <IconSymbol name="checkmark.circle.fill" size={24} color={colors.primary} />
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Quick Stats */}
+            <View style={styles.quickStatsSection}>
+              <Text style={styles.sectionTitle}>Quick Stats</Text>
+              <View style={styles.quickStatsGrid}>
+                <View style={styles.quickStatCard}>
+                  <IconSymbol name="flame.fill" size={32} color="#ef5350" />
+                  <Text style={styles.quickStatValue}>{weekTotal}</Text>
+                  <Text style={styles.quickStatLabel}>Week Total</Text>
+                </View>
+                <View style={styles.quickStatCard}>
+                  <IconSymbol name="chart.bar.fill" size={32} color={colors.accent} />
+                  <Text style={styles.quickStatValue}>{monthTotal}</Text>
+                  <Text style={styles.quickStatLabel}>Month Total</Text>
+                </View>
+                <View style={styles.quickStatCard}>
+                  <IconSymbol name="star.fill" size={32} color="#ffd700" />
+                  <Text style={styles.quickStatValue}>{customWorkoutPlans.length}</Text>
+                  <Text style={styles.quickStatLabel}>Custom Plans</Text>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        )}
       </View>
     </>
   );

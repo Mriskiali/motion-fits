@@ -11,13 +11,19 @@ import {
   Modal,
   Pressable,
   Alert,
-  Animated
+  Animated,
+  ActivityIndicator,
+  TextInput
 } from "react-native";
 import { IconSymbol } from "@/components/IconSymbol";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
 import { colors } from "@/styles/commonStyles";
 import * as Haptics from "expo-haptics";
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dataStore } from '@/lib/dataStore';
+import { showSuccessToast, showErrorToast } from '@/utils/notifications';
 
 interface Exercise {
   id: string;
@@ -175,13 +181,36 @@ export default function WorkoutScreen() {
   const [setLogs, setSetLogs] = useState<SetLog[]>([]);
   const [best1RMByExercise, setBest1RMByExercise] = useState<Record<string, number>>({});
   const [restDefaultSec, setRestDefaultSec] = useState<number>(60);
+  const [customRestSec, setCustomRestSec] = useState<number>(60); // Default custom rest time
   const [autoRestOnIncrement, setAutoRestOnIncrement] = useState<boolean>(true);
+
+  // Load user's custom rest time preferences
+  useEffect(() => {
+    const loadCustomRestTime = async () => {
+      try {
+        const savedTime = await AsyncStorage.getItem('customRestTime');
+        if (savedTime) {
+          const time = parseInt(savedTime, 10);
+          if (!isNaN(time) && time > 0) {
+            setCustomRestSec(time);
+            setRestDefaultSec(time); // Also set as default if user prefers
+          }
+        }
+      } catch (error) {
+        console.log('Could not load custom rest time:', error);
+      }
+    };
+
+    loadCustomRestTime();
+  }, []);
   const [restEvents, setRestEvents] = useState<
     { planId: string; exerciseId: string; date: string; startedAt: number; durationSec: number }[]
   >([]);
+  const [pressedRestButtons, setPressedRestButtons] = useState<Record<string, boolean>>({});
   // Onboarding/helper states
   const [hasAnySession, setHasAnySession] = useState<boolean>(false);
   const [showWorkoutOnboarding, setShowWorkoutOnboarding] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
   
   // Load data from AsyncStorage on mount
   useEffect(() => {
@@ -217,12 +246,103 @@ export default function WorkoutScreen() {
     return () => clearInterval(id);
   }, []);
 
+  // Play sound notification
+  const playSound = async (soundName: 'complete' | 'restEnd' | 'success' | 'warning' | 'error' = 'success') => {
+    try {
+      // Check if we're in Expo Go, where push notifications aren't supported
+      const isExpoGo = Constants.appOwnership === 'expo';
+
+      if (isExpoGo) {
+        // In Expo Go, we can't use notifications for sounds, so we'll just use haptics
+        if (Platform.OS !== 'web') {
+          switch(soundName) {
+            case 'complete':
+            case 'success':
+              if (Haptics?.NotificationFeedbackType?.Success) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
+              break;
+            case 'warning':
+              if (Haptics?.NotificationFeedbackType?.Warning) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              }
+              break;
+            case 'error':
+              if (Haptics?.NotificationFeedbackType?.Error) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              }
+              break;
+            default:
+              if (Haptics?.NotificationFeedbackType?.Success) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
+          }
+        }
+        return;
+      }
+
+      // Request notification permissions if not already granted
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Notification permission not granted for sounds');
+        // Fallback to haptics if notification permission is not granted
+        if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        return;
+      }
+
+      // Play different sounds based on the type
+      let soundFile = 'default';
+      switch (soundName) {
+        case 'complete':
+          soundFile = 'complete';
+          break;
+        case 'restEnd':
+          soundFile = 'complete';
+          break;
+        case 'success':
+          soundFile = 'default';
+          break;
+        case 'warning':
+          soundFile = 'default';
+          break;
+        case 'error':
+          soundFile = 'default';
+          break;
+      }
+
+      // Schedule a silent notification with sound to play the sound
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '', // Silent notification
+          body: '',
+          sound: soundFile,
+          vibrate: false,
+          priority: Notifications.AndroidNotificationPriority.MIN,
+        },
+        trigger: { seconds: 0.1 }, // Trigger immediately
+      });
+    } catch (error) {
+      console.log('Error playing sound:', error);
+      // Fallback to haptics if sound fails
+      if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      // Only show toast in development to avoid spamming users
+      if (__DEV__) {
+        showErrorToast('Audio Error', 'Failed to play sound notification.');
+      }
+    }
+  };
+
   // Notify when any rest timer finishes
   useEffect(() => {
     const due = restTimers.filter(t => !t.notified && t.endsAt <= now);
     if (due.length) {
-      if (Platform.OS !== 'web') {
+      if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        playSound('restEnd');
       }
       setRestTimers(prev => prev.map(t => t.endsAt <= now ? { ...t, notified: true } : t));
     }
@@ -248,6 +368,9 @@ export default function WorkoutScreen() {
       setBest1RMByExercise(map);
     } catch (e) {
       console.log('loadBest1RMMap error', e);
+      if (__DEV__) {
+        showErrorToast('Analytics Error', 'Failed to load personal records.');
+      }
     }
   };
 
@@ -259,87 +382,60 @@ export default function WorkoutScreen() {
 
   const loadData = async () => {
     try {
-      const completedData = await AsyncStorage.getItem('completedExercises');
-      const assignmentsData = await AsyncStorage.getItem('workoutAssignments');
-      const customPlansData = await AsyncStorage.getItem('customWorkoutPlans');
-      const setCountsData = await AsyncStorage.getItem('exerciseSetCounts');
-      const restTimersData = await AsyncStorage.getItem('restTimers');
-      const setLogsData = await AsyncStorage.getItem('setLogs');
-      
-      if (completedData) {
-        setCompletedExercises(JSON.parse(completedData));
-        console.log('Loaded completed exercises from storage');
-      }
-      
-      if (assignmentsData) {
-        setWorkoutAssignments(JSON.parse(assignmentsData));
-        console.log('Loaded workout assignments from storage');
-      }
+      setLoading(true);
+      const completedExercises = await dataStore.getCompletedExercises();
+      const workoutAssignments = await dataStore.getWorkoutAssignments();
+      const customWorkoutPlans = await dataStore.getCustomWorkoutPlans();
+      const exerciseSetCounts = await dataStore.getExerciseSetCounts();
+      const restTimers = await dataStore.getRestTimers();
+      const setLogs = await dataStore.getSetLogs();
 
-      if (customPlansData) {
-        setCustomWorkoutPlans(JSON.parse(customPlansData));
-        console.log('Loaded custom workout plans from storage');
-      }
-
-      if (setCountsData) {
-        setExerciseSetCounts(JSON.parse(setCountsData));
-        console.log('Loaded exercise set counts from storage');
-      }
-
-      if (restTimersData) {
-        setRestTimers(JSON.parse(restTimersData));
-        console.log('Loaded rest timers from storage');
-      }
-
-      if (setLogsData) {
-        setSetLogs(JSON.parse(setLogsData));
-        console.log('Loaded set logs from storage');
-      }
+      setCompletedExercises(completedExercises);
+      setWorkoutAssignments(workoutAssignments);
+      setCustomWorkoutPlans(customWorkoutPlans);
+      setExerciseSetCounts(exerciseSetCounts);
+      setRestTimers(restTimers);
+      setSetLogs(setLogs);
 
       // Has any session ever been saved? (for onboarding context)
       try {
-        const sessionsStr = await AsyncStorage.getItem('workoutSessions');
-        const arr = sessionsStr ? JSON.parse(sessionsStr) : [];
-        setHasAnySession(Array.isArray(arr) && arr.length > 0);
+        const sessions = await dataStore.getWorkoutSessions();
+        setHasAnySession(Array.isArray(sessions) && sessions.length > 0);
       } catch {}
 
-      const restDefaultSecData = await AsyncStorage.getItem('restDefaultSec');
-      if (restDefaultSecData) {
-        setRestDefaultSec(JSON.parse(restDefaultSecData));
-        console.log('Loaded rest default sec from storage');
-      }
+      const restDefaultSec = await dataStore.getRestDefaultSec();
+      setRestDefaultSec(restDefaultSec);
 
-      const autoRestStr = await AsyncStorage.getItem('autoRestOnIncrement_v1');
-      if (autoRestStr !== null) {
-        try {
-          setAutoRestOnIncrement(JSON.parse(autoRestStr));
-          console.log('Loaded autoRestOnIncrement from storage');
-        } catch {}
-      }
+      const autoRestOnIncrement = await dataStore.getAutoRestOnIncrement();
+      setAutoRestOnIncrement(autoRestOnIncrement);
 
       // Show the quick-start helper until dismissed by the user
-      try {
-        const onbSeen = await AsyncStorage.getItem('onb_workout_seen_v1');
-        if (onbSeen === null) {
-          setShowWorkoutOnboarding(true);
-        }
-      } catch {}
+      const onboardingSeen = await dataStore.getOnboardingSeen();
+      if (!onboardingSeen) {
+        setShowWorkoutOnboarding(true);
+      }
     } catch (error) {
-      console.log('Error loading data:', error);
+      console.error('Error loading data:', error);
+      showErrorToast('Load Error', 'Failed to load workout data. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const saveData = async () => {
     try {
-      await AsyncStorage.setItem('completedExercises', JSON.stringify(completedExercises));
-      await AsyncStorage.setItem('workoutAssignments', JSON.stringify(workoutAssignments));
-      await AsyncStorage.setItem('customWorkoutPlans', JSON.stringify(customWorkoutPlans));
-      await AsyncStorage.setItem('exerciseSetCounts', JSON.stringify(exerciseSetCounts));
-      await AsyncStorage.setItem('restTimers', JSON.stringify(restTimers));
-      await AsyncStorage.setItem('setLogs', JSON.stringify(setLogs));
-      console.log('Data saved to storage');
+      await dataStore.setCompletedExercises(completedExercises);
+      await dataStore.setWorkoutAssignments(workoutAssignments);
+      await dataStore.setCustomWorkoutPlans(customWorkoutPlans);
+      await dataStore.setExerciseSetCounts(exerciseSetCounts);
+      await dataStore.setRestTimers(restTimers);
+      await dataStore.setSetLogs(setLogs);
     } catch (error) {
-      console.log('Error saving data:', error);
+      console.error('Error saving data:', error);
+      // Only show toast in development to avoid spamming users
+      if (__DEV__) {
+        showErrorToast('Save Error', 'Data failed to save. Changes may be lost.');
+      }
     }
   };
 
@@ -358,7 +454,9 @@ export default function WorkoutScreen() {
   };
 
   const getDateString = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    // Format date as YYYY-MM-DD in local time to prevent timezone shifts
+    // Use toLocaleDateString to ensure local timezone is respected
+    return date.toLocaleDateString('sv-SE'); // Swedish locale gives YYYY-MM-DD format
   };
 
   const getTodayString = () => {
@@ -389,7 +487,7 @@ export default function WorkoutScreen() {
   const assignWorkoutToDate = (date: Date, planId: string | null) => {
     const dateStr = getDateString(date);
     const existingIndex = workoutAssignments.findIndex(a => a.date === dateStr);
-    
+
     if (existingIndex >= 0) {
       const updated = [...workoutAssignments];
       updated[existingIndex] = { date: dateStr, planId };
@@ -397,17 +495,14 @@ export default function WorkoutScreen() {
     } else {
       setWorkoutAssignments([...workoutAssignments, { date: dateStr, planId }]);
     }
-    
-    console.log('Workout assigned to', dateStr, ':', planId);
   };
 
   const deleteWorkoutPlan = async (planId: string) => {
     try {
       // Remove plan from custom plans
-      const existingPlansData = await AsyncStorage.getItem('customWorkoutPlans');
-      const existingPlans: WorkoutPlan[] = existingPlansData ? JSON.parse(existingPlansData) : [];
+      const existingPlans = await dataStore.getCustomWorkoutPlans();
       const updatedPlans = existingPlans.filter(p => p.id !== planId);
-      await AsyncStorage.setItem('customWorkoutPlans', JSON.stringify(updatedPlans));
+      await dataStore.setCustomWorkoutPlans(updatedPlans);
       setCustomWorkoutPlans(updatedPlans);
 
       // Unassign any days referencing this plan
@@ -418,14 +513,13 @@ export default function WorkoutScreen() {
       // Remove completed exercises linked to this plan
       setCompletedExercises(prev => prev.filter(ce => ce.planId !== planId));
 
-      if (Platform.OS !== 'web') {
+      if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      console.log('Workout plan deleted:', planId);
-      Alert.alert('Deleted', 'Workout plan has been removed.');
+      showSuccessToast('Deleted', 'Workout plan has been removed.');
     } catch (error) {
-      console.log('Error deleting workout plan:', error);
-      Alert.alert('Error', 'Failed to delete workout plan.');
+      console.error('Error deleting workout plan:', error);
+      showErrorToast('Delete Failed', 'Failed to delete workout plan.');
     }
   };
 
@@ -439,8 +533,8 @@ export default function WorkoutScreen() {
   const toggleExerciseCompletion = (planId: string, exerciseId: string) => {
     const dateStr = getDateString(selectedDate);
     const isCompleted = isExerciseCompleted(planId, exerciseId);
-    
-    if (Platform.OS !== 'web') {
+
+    if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Medium) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
@@ -448,10 +542,12 @@ export default function WorkoutScreen() {
       setCompletedExercises(prev =>
         prev.filter(ce => !(ce.planId === planId && ce.exerciseId === exerciseId && ce.date === dateStr))
       );
-      console.log('Exercise unchecked:', exerciseId);
     } else {
       setCompletedExercises(prev => [...prev, { planId, exerciseId, date: dateStr }]);
-      console.log('Exercise completed:', exerciseId);
+      // Play sound when exercise is completed
+      if (Platform.OS !== 'web') {
+        playSound('complete');
+      }
     }
   };
 
@@ -486,7 +582,8 @@ export default function WorkoutScreen() {
 
   const DEFAULT_REST_SEC = 60;
 
-  const REST_PRESET_OPTIONS = [30, 60, 90, 120];
+  // Allow user to define custom rest times
+  const REST_PRESET_OPTIONS = [30, 60, 90, 120, 180]; // Default options
 
   const startRestTimer = (planId: string, exerciseId: string, seconds: number = DEFAULT_REST_SEC) => {
     const dateStr = getDateString(selectedDate);
@@ -560,6 +657,24 @@ export default function WorkoutScreen() {
   };
 
   const onLogSet = (planId: string, exerciseId: string, targetSets: number, repsDefault?: number) => {
+    // Check if exercise is already completed
+    if (isExerciseCompleted(planId, exerciseId)) {
+      // Optionally show a message to the user
+      if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Warning) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+      return; // Don't proceed if exercise is completed
+    }
+
+    // Check if a rest timer is already running for this exercise
+    if (getRemainingRestSec(planId, exerciseId) > 0) {
+      // Optionally show a message to the user
+      if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Warning) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+      return; // Don't start a new timer if one is already running
+    }
+
     const dateStr = getDateString(selectedDate);
     const nextIndex = getNextSetIndex(planId, exerciseId);
     const weight = 0;
@@ -577,7 +692,7 @@ export default function WorkoutScreen() {
     setExerciseSetCount(planId, exerciseId, next, targetSets);
     startRestTimer(planId, exerciseId, restDefaultSec);
 
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   };
@@ -636,6 +751,9 @@ export default function WorkoutScreen() {
       });
     } catch (e) {
       console.log('PB precompute error', e);
+      if (__DEV__) {
+        showErrorToast('Analytics Error', 'Failed to compute personal records.');
+      }
     }
 
     // Compute new PBs for this session
@@ -679,19 +797,19 @@ export default function WorkoutScreen() {
     };
 
     try {
-      const existing = await AsyncStorage.getItem('workoutSessions');
-      const arr: WorkoutSession[] = existing ? JSON.parse(existing) : [];
-      arr.push(session);
-      await AsyncStorage.setItem('workoutSessions', JSON.stringify(arr));
-      console.log('Workout session saved:', session.id);
+      const existing = await dataStore.getWorkoutSessions();
+      const arr: WorkoutSession[] = [...existing, session];
+      await dataStore.setWorkoutSessions(arr);
     } catch (e) {
-      console.log('Error saving workout session:', e);
+      console.error('Error saving workout session:', e);
+      showErrorToast('Save Error', 'Failed to save workout session.');
     } finally {
       setCurrentSessionStart(null);
       setShowPlanModal(false);
       setRestEvents([]);
-      if (Platform.OS !== 'web') {
+      if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        playSound('success');
       }
     }
   };
@@ -714,13 +832,17 @@ export default function WorkoutScreen() {
     const alreadyCompleted = isExerciseCompleted(planId, exerciseId, selectedDate);
     if (done && !alreadyCompleted) {
       setCompletedExercises((prev) => [...prev, { planId, exerciseId, date: dateStr }]);
+      // Play sound when exercise is completed
+      if (Platform.OS !== 'web') {
+        playSound('complete');
+      }
     } else if (!done && alreadyCompleted) {
       setCompletedExercises((prev) =>
         prev.filter((ce) => !(ce.planId === planId && ce.exerciseId === exerciseId && ce.date === dateStr))
       );
     }
 
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' && typeof Haptics.selectionAsync === 'function') {
       Haptics.selectionAsync();
     }
   };
@@ -754,15 +876,13 @@ export default function WorkoutScreen() {
   };
 
   const handleDayPress = (date: Date) => {
-    console.log('Day selected:', getDateString(date));
     setSelectedDate(date);
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   };
 
   const handlePlanPress = (plan: WorkoutPlan) => {
-    console.log('Workout plan selected:', plan.name);
     setSelectedPlan(plan);
     // mark session start when opening the plan modal
     setCurrentSessionStart(Date.now());
@@ -770,7 +890,6 @@ export default function WorkoutScreen() {
   };
 
   const handleExercisePress = (exercise: Exercise) => {
-    console.log('Exercise details opened:', exercise.name);
     setSelectedExercise(exercise);
     setShowExerciseDetail(true);
   };
@@ -782,7 +901,7 @@ export default function WorkoutScreen() {
   const handleWorkoutSelection = (planId: string | null) => {
     assignWorkoutToDate(selectedDate, planId);
     setShowWorkoutSelector(false);
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
@@ -808,7 +927,15 @@ export default function WorkoutScreen() {
     }, [checked]);
 
     return (
-      <TouchableOpacity onPress={onPress} style={styles.checkboxContainer}>
+      <TouchableOpacity
+        onPress={() => {
+          if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          onPress();
+        }}
+        style={styles.checkboxContainer}
+      >
         <Animated.View
           style={[
             styles.checkbox,
@@ -889,13 +1016,18 @@ export default function WorkoutScreen() {
         />
       )}
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScrollView 
-          contentContainerStyle={[
-            styles.scrollContent,
-            Platform.OS !== 'ios' && styles.scrollContentWithTabBar
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={[
+              styles.scrollContent,
+              Platform.OS !== 'ios' && styles.scrollContentWithTabBar
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
           <View style={styles.header}>
             <Text style={styles.title}>Weekly Workout Plan</Text>
             <Text style={styles.subtitle}>Select a day and assign your workout</Text>
@@ -1120,7 +1252,14 @@ export default function WorkoutScreen() {
                         onPress={() => {
                           Alert.alert('Delete Workout', 'Remove this workout plan?', [
                             { text: 'Cancel', style: 'cancel' },
-                            { text: 'Delete', style: 'destructive', onPress: () => deleteWorkoutPlan(plan.id) },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: () => {
+                                deleteWorkoutPlan(plan.id);
+                                showSuccessToast('Deleting', 'Workout plan will be removed.');
+                              }
+                            },
                           ]);
                         }}
                         style={{ padding: 8 }}
@@ -1135,14 +1274,16 @@ export default function WorkoutScreen() {
             ))}
           </View>
         </ScrollView>
+      )}
+    </View>
 
-        {/* Workout Plan Modal */}
-        <Modal
-          visible={showPlanModal}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowPlanModal(false)}
-        >
+    {/* Workout Plan Modal */}
+    <Modal
+      visible={showPlanModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowPlanModal(false)}
+    >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
@@ -1187,6 +1328,37 @@ export default function WorkoutScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+
+                {/* Custom rest time input */}
+                <View style={styles.customRestContainer}>
+                  <Text style={styles.customRestLabel}>Custom (seconds):</Text>
+                  <View style={styles.customRestInputContainer}>
+                    <TextInput
+                      style={styles.customRestInput}
+                      value={customRestSec.toString()}
+                      onChangeText={(text) => {
+                        const num = parseInt(text);
+                        if (!isNaN(num) && num > 0) {
+                          setCustomRestSec(num);
+                          // Save the custom rest time preference
+                          AsyncStorage.setItem('customRestTime', num.toString()).catch(() => {});
+                        }
+                      }}
+                      keyboardType="numeric"
+                      placeholder="Enter seconds"
+                    />
+                    <TouchableOpacity
+                      style={[styles.restPresetChip, restDefaultSec === customRestSec && styles.restPresetChipActive]}
+                      onPress={() => {
+                        setRestDefaultSec(customRestSec);
+                        // Also save as user preference
+                        AsyncStorage.setItem('customRestTime', customRestSec.toString()).catch(() => {});
+                      }}
+                    >
+                      <Text style={[styles.restPresetChipText, restDefaultSec === customRestSec && styles.restPresetChipTextActive]}>Set</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </View>
 
               <ScrollView
@@ -1208,7 +1380,12 @@ export default function WorkoutScreen() {
                       />
                       <TouchableOpacity
                         style={styles.exerciseItemContent}
-                        onPress={() => handleExercisePress(exercise)}
+                        onPress={() => {
+                          if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Medium) {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          }
+                          handleExercisePress(exercise);
+                        }}
                       >
                         <View style={styles.exerciseItemLeft}>
                           <Text style={[styles.exerciseItemName, isCompleted && styles.exerciseItemNameCompleted]} numberOfLines={2} ellipsizeMode="tail">
@@ -1221,7 +1398,12 @@ export default function WorkoutScreen() {
 
                         <View style={styles.exerciseItemRight}>
                           <TouchableOpacity
-                            onPress={() => decrementSetCount(planId, exercise.id, targetSets)}
+                            onPress={() => {
+                              if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              }
+                              decrementSetCount(planId, exercise.id, targetSets);
+                            }}
                             style={{ padding: 8 }}
                           >
                             <IconSymbol name="minus.circle.fill" size={22} color={colors.textSecondary} />
@@ -1230,7 +1412,12 @@ export default function WorkoutScreen() {
                             {setCount}/{targetSets}
                           </Text>
                           <TouchableOpacity
-                            onPress={() => incrementSetCount(planId, exercise.id, targetSets)}
+                            onPress={() => {
+                              if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              }
+                              incrementSetCount(planId, exercise.id, targetSets);
+                            }}
                             style={{ padding: 8 }}
                           >
                             <IconSymbol name="plus.circle.fill" size={22} color={colors.primary} />
@@ -1238,21 +1425,49 @@ export default function WorkoutScreen() {
 
                           {remainingRest > 0 ? (
                             <Pressable
-                              style={[styles.restChip]}
+                              style={[styles.restChip, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}
                               onLongPress={() => {
                                 cancelRestTimer(planId, exercise.id);
-                                if (Platform.OS !== 'web') {
+                                if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Warning) {
                                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                                 }
                               }}
                               delayLongPress={300}
                             >
-                              <Text style={styles.restChipText}>{formatSeconds(remainingRest)}</Text>
+                              <Text style={[styles.restChipText, { color: colors.primary }]}>{formatSeconds(remainingRest)}</Text>
                             </Pressable>
                           ) : (
                             <TouchableOpacity
-                              style={styles.restChip}
-                              onPress={() => startRestTimer(planId, exercise.id, restDefaultSec)}
+                              style={[
+                                styles.restChip,
+                                (isExerciseCompleted(planId, exercise.id) || getRemainingRestSec(planId, exercise.id) > 0) && { opacity: 0.5 } // Dim when exercise is completed or rest timer is active
+                              ]}
+                              onPress={() => {
+                                // Only start rest timer if exercise is not completed and no rest timer is active
+                                if (!isExerciseCompleted(planId, exercise.id) && getRemainingRestSec(planId, exercise.id) <= 0) {
+                                  // Provide haptic feedback
+                                  if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  }
+
+                                  // Disable the button temporarily
+                                  setPressedRestButtons(prev => ({
+                                    ...prev,
+                                    [`${planId}-${exercise.id}`]: true
+                                  }));
+
+                                  startRestTimer(planId, exercise.id, restDefaultSec);
+
+                                  // Re-enable the button after a short delay
+                                  setTimeout(() => {
+                                    setPressedRestButtons(prev => ({
+                                      ...prev,
+                                      [`${planId}-${exercise.id}`]: false
+                                    }));
+                                  }, 500); // 500ms delay before re-enabling
+                                }
+                              }}
+                              disabled={isExerciseCompleted(planId, exercise.id) || getRemainingRestSec(planId, exercise.id) > 0 || pressedRestButtons[`${planId}-${exercise.id}`]}
                             >
                               <Text style={styles.restChipText}>{setCount}</Text>
                             </TouchableOpacity>
@@ -1262,8 +1477,17 @@ export default function WorkoutScreen() {
                       {/* Inline logging inputs */}
                       <View style={styles.logInputContainer}>
                         <TouchableOpacity
-                          style={styles.logButton}
-                          onPress={() => onLogSet(planId, exercise.id, targetSets, parseDefaultReps(exercise.reps))}
+                          style={[
+                            styles.logButton,
+                            (isExerciseCompleted(planId, exercise.id) || getRemainingRestSec(planId, exercise.id) > 0) && { opacity: 0.5 }
+                          ]}
+                          onPress={() => {
+                            if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            }
+                            onLogSet(planId, exercise.id, targetSets, parseDefaultReps(exercise.reps));
+                          }}
+                          disabled={isExerciseCompleted(planId, exercise.id) || getRemainingRestSec(planId, exercise.id) > 0}
                         >
                           <IconSymbol name="square.and.pencil" size={18} color={colors.card} />
                         </TouchableOpacity>
@@ -1407,7 +1631,6 @@ export default function WorkoutScreen() {
             </View>
           </View>
         </Modal>
-      </View>
     </>
   );
 }
@@ -2141,4 +2364,65 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 14,
   },
+
+  // Exercise detail modal styles
+  exerciseDetailContent: {
+    padding: 16,
+    gap: 12,
+  },
+  exerciseDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.background,
+  },
+  exerciseDetailLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  exerciseDetailValue: {
+    fontSize: 16,
+    color: colors.text,
+  },
+
+  // Workout selector modal styles
+  workoutSelectorContent: {
+    padding: 16,
+    gap: 12,
+  },
+
+  // Custom rest time input styles
+  customRestContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.background,
+  },
+  customRestLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  customRestInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customRestInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: colors.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    color: colors.text,
+    backgroundColor: colors.card,
+    fontSize: 16,
+  },
 });
+
+

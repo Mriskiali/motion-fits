@@ -1,14 +1,23 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { IconSymbol } from "@/components/IconSymbol";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { View, Text, StyleSheet, ScrollView, Platform } from "react-native";
-import { useTheme } from "@react-navigation/native";
+import { View, Text, StyleSheet, ScrollView, Platform, Switch } from "react-native";
+import { useTheme, useColorScheme } from "@react-navigation/native";
 import { colors } from "@/styles/commonStyles";
 import { Stack } from "expo-router";
+import { useThemeContext } from "@/contexts/ThemeContext";
+import { showSuccessToast, showErrorToast } from '@/utils/notifications';
 
 export default function ProfileScreen() {
   const theme = useTheme();
+  const colorScheme = useColorScheme();
+  const { colorScheme: appColorScheme, toggleColorScheme } = useThemeContext();
+  const [isDarkMode, setIsDarkMode] = useState(appColorScheme === 'dark');
+
+  useEffect(() => {
+    setIsDarkMode(appColorScheme === 'dark');
+  }, [appColorScheme]);
 
   return (
     <>
@@ -84,6 +93,19 @@ export default function ProfileScreen() {
             <View style={styles.settingCard}>
               <IconSymbol name="chart.bar.fill" size={20} color={colors.primary} />
               <Text style={styles.settingText}>Progress Reports</Text>
+            </View>
+            <View style={styles.settingCardWithSwitch}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <IconSymbol name="paintbrush" size={20} color={colors.primary} />
+                <Text style={styles.settingText}>Theme</Text>
+              </View>
+              <Switch
+                trackColor={{ false: "#767577", true: colors.primary }}
+                thumbColor={isDarkMode ? colors.card : "#f4f3f4"}
+                ios_backgroundColor="#3e3e3e"
+                onValueChange={toggleColorScheme}
+                value={isDarkMode}
+              />
             </View>
             <View style={styles.settingCard}>
               <IconSymbol name="gear" size={20} color={colors.primary} />
@@ -195,6 +217,17 @@ const styles = StyleSheet.create({
   settingCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
+  },
+  settingCardWithSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
