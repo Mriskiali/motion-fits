@@ -1,126 +1,136 @@
 MotionFit
 
-A mobile fitness logging app built with Expo Router and React Native. Focused on minimal logging with smart rest timers, weekly goals, and simple analytics.
+Aplikasi fitness tracker yang dibangun pake Expo Router dan React Native. Fokusnya sih biar kamu bisa ngecatat latihan dengan simpel, ada timer istirahat pintar, target mingguan, sama analytics dasar aja.
 
-Repository overview
+Gambaran singkat repo
 
-- App navigation and tabs: [app/(tabs)/_layout.tsx](app/(tabs)/_layout.tsx)
-- Workout main screen: [app/(tabs)/workout.tsx](app/(tabs)/workout.tsx)
-- History & analytics: [app/(tabs)/history.tsx](app/(tabs)/history.tsx)
-- Goals & reminders: [app/(tabs)/goals.tsx](app/(tabs)/goals.tsx)
-- Notifications helpers: [lib/notifications.ts](lib/notifications.ts)
-- Expo config: [app.json](app.json)
-- EAS build config: [eas.json](eas.json)
+- Navigasi dan tab aplikasi: [app/(tabs)/_layout.tsx](app/(tabs)/_layout.tsx)
+- Layar utama workout: [app/(tabs)/workout.tsx](app/(tabs)/workout.tsx)
+- Riwayat & analitik: [app/(tabs)/history.ts](app/(tabs)/history.tsx)
+- Goals & pengingat: [app/(tabs)/goals.tsx](app/(tabs)/goals.tsx)
+- Bikin workout sendiri: [app/create-workout.tsx](app/create-workout.tsx)
+- Helper notifikasi: [lib/notifications.ts](lib/notifications.ts)
+- Config Expo: [app.json](app.json)
+- Config EAS build: [eas.json](eas.json)
 
-Key features
+Fitur-fitur utama
 
-- Weekly plan assignment with day tabs and progress ring
-- One-tap set logging with automatic rest timer per exercise
-- Rest presets with persistence (30/60/90/120s) and long-press cancel
-- Session summary with completion, total sets, personal bests, rest usage
-- History analytics, exercise progress (1RM) overview
-- Goals screen for weekly targets and reminder scheduling
-- First-time onboarding cards on Workout and History to guide new users
-- Accessibility labels on primary actions for improved clarity
+- Bikin rencana latihan mingguan pake tab hari dan ring kemajuan
+- Catet set cuma sekali tap, tiap latihan langsung ada timer istirahat otomatis
+- Timer istirahat udah disetting (30/60/90/120detik) bisa dibatalkan pake tekan lama
+- Ringkasin sesi latihan: kelar nggaknya, jumlah set, rekor pribadi, sama pake istirahat berapa lama
+- Analitik riwayat latihan ama kemajuan (1RM)
+- Halaman goals buat target mingguan ama jadwal pengingat
+- Bikin rencana workout sendiri pake ikon ama warna kesukaan
+- Panduan buat pemula pas buka halaman Workout ama History
+- Aksesibilitas buat bantu orang-orang yang butuh
 
-Quick start (development)
+Update & perbaikan terbaru
 
-- Install dependencies: npm install
-- Start the app: npx expo start
-- Open on device: scan QR with Expo Go or run with an emulator
+- Kompatibilitas paket: Semua dependensi udah diupdate ke versi SDK 54
+- Mapping ikon: Nambahin mapping lengkap dari SF Symbols ke Material Icons buat Android/web
+- Navigasi: Hilangin header gak perlu di halaman bikin workout biar lebih rapi
+- Haptic feedback: Nambahin pengecekan biar gak error kalo haptic gak ada
+- Kompatibilitas lintas platform: Ikon-ikon dijadiin lebih seragam di semua OS
 
-Notifications and reminders
+Mulai cepat (buat developer)
 
-- Expo Go does not support push/notification scheduling in SDK 53+. This app gates notifications usage in [lib/notifications.ts](lib/notifications.ts) so Expo Go will not error.
-- To test local reminders, use a Development Build (EAS Dev Client):
-  - Configure development build in [eas.json](eas.json)
-  - Build and install dev client: npx eas build -p android --profile development
-  - After installing the dev client, reminders can be scheduled from the Goals tab.
+- Install dependensi: npm install
+- Jalanin aplikasi: npx expo start
+- Buka di hp: scan QR pake Expo Go atau pake emulator
 
-Building an Android APK
+Notifikasi dan pengingat
 
-This project is configured to produce an APK via EAS.
+- Expo Go gak support notifikasi/push di SDK 53+. Tapi aplikasi ini udah diatur di [lib/notifications.ts](lib/notifications.ts) biar gak error.
+- Buat nyoba pengingat, pake Development Build (EAS Dev Client):
+  - Atur development build di [eas.json](eas.json)
+  - Build ama install dev client: npx eas build -p android --profile development
+  - Setelah install dev client, baru bisa jadwal pengingat dari tab Goals.
 
-- Ensure you are logged in: npx eas login
-- Initialize EAS (if first time): npx eas init
-- APK build profiles are set in [eas.json](eas.json) for preview and production.
-- Use Expo managed credentials on first build. When prompted, choose to generate a new Android keystore.
-- Run a production build: npx eas build -p android --profile production
-- Download the resulting APK from the EAS dashboard when the build completes.
+Build APK Android
 
-Environment configuration
+Proyek ini udah disetting buat bikin APK lewat EAS.
 
-- Remote environment variables can be configured per profile in EAS. This app expects EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_KEY when present.
-- In Expo, variables prefixed EXPO_PUBLIC_ are embedded at build time and available in the app.
-- For local development, you can run without these variables; features depending on them should degrade gracefully.
+- Login dulu: npx eas login
+- Inisialisasi EAS (buat pertama kali): npx eas init
+- Settingan build APK ada di [eas.json](eas.json) buat preview ama produksi.
+- Pake Expo managed credentials pas build pertama. Nanti bakal disuruh bikin Android keystore baru.
+- Build produksi: npx eas build -p android --profile production
+- Download APK-nya dari dashboard EAS pas build selesai.
 
-App usage walkthrough
+Settingan lingkungan
 
-- On Workout tab:
-  - Select a day and tap Assign to pick a workout plan.
-  - Inside the plan modal, tap + to increment sets. The right chip starts a rest timer.
-  - Long-press the timer chip to cancel if tapped by mistake.
-  - Adjust rest presets using the chips above the exercise list.
-  - Tap Finish Workout to save a session to History.
+- Variabel lingkungan bisa diatur per profil di EAS. Aplikasi ini nyari EXPO_PUBLIC_SUPABASE_URL ama EXPO_PUBLIC_SUPABASE_KEY kalo ada.
+- Di Expo, variabel yang pakenya awalan EXPO_PUBLIC_ bakal disisipin pas build dan bisa dipake di aplikasi.
+- Buat development lokal, bisa jalanin tanpa variabel ini; fitur yang butuh bakal tetep jalan tapi dengan fungsi terbatas.
 
-- On History tab:
-  - Recent sessions show completion, sets, exercises, and rest usage where available.
-  - Exercise progress section visualizes recent 1RM improvements.
+Cara pake aplikasi
 
-- On Goals tab:
-  - Set weekly workout target and preferred days.
-  - Enable reminders and choose a time; in Expo Go, reminders are disabled by design.
+- Di tab Workout:
+  - Pilih hari trus tap "Assign" buat pilih rencana latihan.
+  - Di modal rencana, tap + buat nambah set. Chip sebelah kanan nyalain timer istirahat.
+  - Tekan lama chip timer buat batalkan kalo salah ketuk.
+  - Ganti durasi istirahat pake chip-chip di atas daftar latihan.
+  - Tap "Finish Workout" buat simpen sesi ke History.
 
-Project structure (selected)
+- Di tab History:
+  - Sesi terbaru nunjukin kelar nggaknya, jumlah set, latihan, ama pake istirahat berapa lama.
+  - Bagian kemajuan latihan nunjukin peningkatan 1RM terbaru.
 
-- [app/(tabs)/workout.tsx](app/(tabs)/workout.tsx) — weekly UI, plan modal, logging and rest timers
-- [app/(tabs)/history.tsx](app/(tabs)/history.tsx) — analytics, recent sessions, progress
-- [app/(tabs)/goals.tsx](app/(tabs)/goals.tsx) — weekly targets, reminders UI
-- [lib/notifications.ts](lib/notifications.ts) — dynamic import of notifications, scheduling helpers
-- [styles/commonStyles.ts](styles/commonStyles.ts) — theme colors
-- [components/IconSymbol.tsx](components/IconSymbol.tsx) — system icons abstraction
-- [eas.json](eas.json) — EAS build profiles and android buildType apk
+- Di tab Goals:
+  - Atur target latihan mingguan ama hari favorit.
+  - Aktifin pengingat ama pilih waktu; di Expo Go, pengingat emang sengaja dimatiin.
 
-Accessibility notes
+- Di Create Workout:
+  - Bikin rencana workout sendiri pake nama, deskripsi, ikon, ama warna kesukaan
+  - Tambahin latihan ama jumlah set, repetisi, durasi, ama catatan
+  - Simpen rencana buat dipake lagi nanti
 
-- Primary actions include accessibilityLabel and accessibilityHint to aid discoverability.
-- Tap targets and text sizes follow comfortable defaults; further tuning is planned.
+Struktur proyek (pilihan)
 
-Security and configuration
+- [app/(tabs)/workout.tsx](app/(tabs)/workout.tsx) — UI mingguan, modal rencana, pencatatan ama timer istirahat
+- [app/(tabs)/history.tsx](app/(tabs)/history.tsx) — analitik, sesi terbaru, kemajuan
+- [app/(tabs)/goals.tsx](app/(tabs)/goals.tsx) — target mingguan, UI pengingat
+- [app/create-workout.tsx](app/create-workout.tsx) — UI buat bikin workout sendiri
+- [lib/notifications.ts](lib/notifications.ts) — impor notifikasi dinamis, helper jadwal
+- [styles/commonStyles.ts](styles/commonStyles.ts) — warna tema
+- [components/IconSymbol.tsx](components/IconSymbol.tsx) — abstraksi ikon sistem ama mapping lintas platform
+- [eas.json](eas.json) — settingan build EAS ama buildType android apk
 
-- No secrets are hard-coded. Use EAS environment variables for any required public configuration.
-- Avoid storing sensitive credentials on-device; prefer managed services.
+Catatan aksesibilitas
 
-Known limitations
+- Aksi utama udah dilengkapi accessibilityLabel ama accessibilityHint biar gampang ditemuin.
+- Ukuran tap target ama teks nyaman buat dibaca; masih bakal disempurnain.
+- Mapping ikon lengkap biar pengalaman seragam di iOS, Android, ama web.
 
-- Reminders: Expo Go cannot schedule notifications; requires a dev build.
-- Personal best (1RM) calculations use Epley formula and only update when weight and reps are non-zero.
+Keamanan ama settingan
 
-Versioning and releases
+- Gak ada secret yang dihardcode. Pake variabel lingkungan EAS buat konfigurasi publik yang dibutuhin.
+- Jangan nyimpen kredensial sensitif di hp; mending pake layanan yang dikelola.
 
-- Android versionCode increments automatically on production builds (see [eas.json](eas.json)).
-- Use GitHub releases to track APK artifacts from EAS builds.
+Limitasi yang diketahui
 
-Contributing
+- Pengingat: Expo Go gak bisa jadwal notifikasi; butuh dev build.
+- Perhitungan rekor pribadi (1RM) pake rumus Epley dan cuman diupdate kalo berat ama repetisi bukan nol.
 
-- Fork the repository and create feature branches.
-- Run lint checks before committing.
-- Open a pull request against main.
+Versi ama rilis
 
-License
+- Android versionCode naik otomatis pas build produksi (liat [eas.json](eas.json)).
+- Pake GitHub releases buat nyimpen APK dari build EAS.
 
-- Specify your license here (e.g., MIT).
+Kontribusi
 
-Acknowledgements
+- Fork repo ini ama buat branch fitur.
+- Jalanin lint check sebelum commit.
+- Buka pull request ke main.
 
-- Built with Expo Router, React Native, and EAS.
-- Icons courtesy of SF Symbols where supported.
 
-Screenshots (optional)
+Terima kasih
 
-- Place app screenshots under [assets/images](assets/images)
-- Reference them in your GitHub README as needed.
+- Dibikin pake Expo Router, React Native, ama EAS.
+- Ikon dari SF Symbols kalo didukung, pake Material Icons buat Android/web.
+- Kompatibilitas lintas platform dicapai lewat lapisan abstraksi IconSymbol.
 
-Support
+<!-- Screenshot (opsional)
 
-- Open an issue on GitHub with detailed steps and logs to reproduce any problems.
+- Taruh screenshot aplikasi di [assets/images](assets/images) -->
