@@ -27,7 +27,7 @@ export default function TabLayout() {
       route: '/(tabs)/history',
       icon: 'chart.bar.fill',
       label: 'History',
-      hasBadge: true, // Show badge for history tab
+      hasBadge: false, // Changed from true to false to remove the badge/icon indicator
     },
     {
       name: 'goals',

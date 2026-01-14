@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, SafeAreaView, Keyboard, Dimensions } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useTheme } from '@react-navigation/native';
 import { colors } from '@/styles/commonStyles';
@@ -34,6 +34,22 @@ function CreateWorkoutContent() {
   const [exercises, setExercises] = useState<Exercise[]>([
     { id: Date.now().toString(), name: '', sets: '3', reps: '10' }
   ]);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  React.useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardWillShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+
+    const hideSubscription = Keyboard.addListener('keyboardWillHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription?.remove();
+      hideSubscription?.remove();
+    };
+  }, []);
 
   const addExercise = () => {
     const newExercise: Exercise = {
@@ -145,8 +161,15 @@ function CreateWorkoutContent() {
           headerShown: false,
         }}
       />
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            keyboardHeight > 0 ? { paddingBottom: keyboardHeight } : {}
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()}>
@@ -161,7 +184,7 @@ function CreateWorkoutContent() {
           {/* Workout Info */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Workout Details</Text>
-            
+
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Workout Name</Text>
               <TextInput
@@ -170,6 +193,7 @@ function CreateWorkoutContent() {
                 onChangeText={setWorkoutName}
                 placeholder="e.g. My Upper Body Routine"
                 placeholderTextColor={colors.textSecondary}
+                autoCapitalize="words"
               />
             </View>
 
@@ -181,6 +205,7 @@ function CreateWorkoutContent() {
                 onChangeText={setWorkoutSubtitle}
                 placeholder="e.g. Chest, Shoulders, Triceps"
                 placeholderTextColor={colors.textSecondary}
+                autoCapitalize="words"
               />
             </View>
 
@@ -196,10 +221,10 @@ function CreateWorkoutContent() {
                     ]}
                     onPress={() => setWorkoutIcon(option.name)}
                   >
-                    <IconSymbol 
-                      name={option.name as any} 
-                      size={24} 
-                      color={workoutIcon === option.name ? colors.card : colors.text} 
+                    <IconSymbol
+                      name={option.name as any}
+                      size={24}
+                      color={workoutIcon === option.name ? colors.card : colors.text}
                     />
                   </TouchableOpacity>
                 ))}
@@ -236,56 +261,56 @@ function CreateWorkoutContent() {
 
             {exercises.map((exercise, index) => (
               <View key={exercise.id} style={styles.exerciseCard}>
-                <View style={styles.exerciseRow}>
+                <View style={styles.exerciseHeaderRow}>
                   <Text style={styles.exerciseNumber}>{index + 1}.</Text>
-                  <View style={styles.exerciseInputs}>
-                    <TextInput
-                      style={[styles.input, styles.exerciseNameInput]}
-                      value={exercise.name}
-                      onChangeText={(value) => updateExercise(exercise.id, 'name', value)}
-                      placeholder="Exercise name"
-                      placeholderTextColor={colors.textSecondary}
-                    />
-                    
-                    <View style={styles.exerciseDetailsRow}>
-                      <View style={styles.detailInput}>
-                        <Text style={styles.detailLabel}>Sets</Text>
-                        <TextInput
-                          style={styles.smallInput}
-                          value={exercise.sets}
-                          onChangeText={(value) => updateExercise(exercise.id, 'sets', value)}
-                          placeholder="3"
-                          keyboardType="numeric"
-                          placeholderTextColor={colors.textSecondary}
-                        />
-                      </View>
-                      
-                      <View style={styles.detailInput}>
-                        <Text style={styles.detailLabel}>Reps</Text>
-                        <TextInput
-                          style={styles.smallInput}
-                          value={exercise.reps || ''}
-                          onChangeText={(value) => updateExercise(exercise.id, 'reps', value)}
-                          placeholder="10"
-                          keyboardType="numeric"
-                          placeholderTextColor={colors.textSecondary}
-                        />
-                      </View>
-                    </View>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={styles.removeButton} 
+                  <Text style={styles.exerciseLabel}>Exercise</Text>
+                  <TouchableOpacity
+                    style={styles.removeButton}
                     onPress={() => removeExercise(exercise.id)}
                   >
                     <IconSymbol name="trash" size={20} color="#ef5350" />
                   </TouchableOpacity>
                 </View>
+
+                <TextInput
+                  style={[styles.input, styles.exerciseNameInput]}
+                  value={exercise.name}
+                  onChangeText={(value) => updateExercise(exercise.id, 'name', value)}
+                  placeholder="Exercise name"
+                  placeholderTextColor={colors.textSecondary}
+                  autoCapitalize="words"
+                />
+
+                <View style={styles.exerciseDetailsRow}>
+                  <View style={styles.detailInputGroup}>
+                    <Text style={styles.detailLabel}>Sets</Text>
+                    <TextInput
+                      style={styles.smallInput}
+                      value={exercise.sets}
+                      onChangeText={(value) => updateExercise(exercise.id, 'sets', value)}
+                      placeholder="3"
+                      keyboardType="numeric"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  </View>
+
+                  <View style={styles.detailInputGroup}>
+                    <Text style={styles.detailLabel}>Reps</Text>
+                    <TextInput
+                      style={styles.smallInput}
+                      value={exercise.reps || ''}
+                      onChangeText={(value) => updateExercise(exercise.id, 'reps', value)}
+                      placeholder="10"
+                      keyboardType="numeric"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  </View>
+                </View>
               </View>
             ))}
           </View>
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </>
   );
 }
@@ -405,28 +430,32 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
-  exerciseRow: {
+  exerciseHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   exerciseNumber: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
-    marginRight: 12,
-    marginTop: 8,
   },
-  exerciseInputs: {
+  exerciseLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
     flex: 1,
+    textAlign: 'center',
   },
   exerciseNameInput: {
-    marginBottom: 8,
+    marginBottom: 12,
   },
   exerciseDetailsRow: {
     flexDirection: 'row',
     gap: 12,
   },
-  detailInput: {
+  detailInputGroup: {
     flex: 1,
   },
   detailLabel: {
@@ -434,6 +463,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textSecondary,
     marginBottom: 4,
+    textAlign: 'center',
   },
   smallInput: {
     height: 40,
