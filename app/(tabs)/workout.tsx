@@ -13,6 +13,8 @@ import {
   Alert,
   Animated,
   ActivityIndicator,
+  AppState,
+  BackHandler,
   TextInput
 } from "react-native";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -206,7 +208,8 @@ export default function WorkoutScreen() {
   const [restEvents, setRestEvents] = useState<
     { planId: string; exerciseId: string; date: string; startedAt: number; durationSec: number }[]
   >([]);
-  const [pressedRestButtons, setPressedRestButtons] = useState<Record<string, boolean>>({});
+  // Track if session is actively in progress
+  const [sessionInProgress, setSessionInProgress] = useState<boolean>(false);
   // Onboarding/helper states
   const [hasAnySession, setHasAnySession] = useState<boolean>(false);
   const [showWorkoutOnboarding, setShowWorkoutOnboarding] = useState<boolean>(false);
@@ -245,6 +248,40 @@ export default function WorkoutScreen() {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Handle app going to background/foreground
+  useEffect(() => {
+    let appState = AppState.currentState;
+
+    const handleAppStateChange = (nextAppState: string) => {
+      // Only handle transition from active to background while modal is open
+      if (appState === 'active' && nextAppState === 'background' && sessionInProgress && showPlanModal) {
+        // For background transitions, we'll save the session to prevent data loss
+        // This is a compromise since we can't show an alert when going to background
+        finishCurrentSession();
+      }
+      appState = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [sessionInProgress, showPlanModal]);
+
+  // Handle hardware back button on Android when modal is open
+  useEffect(() => {
+    const handleBackButton = () => {
+      if (showPlanModal) {
+        handleExitWorkout();
+        return true; // Prevent default back behavior
+      }
+      return false; // Allow default back behavior
+    };
+
+    if (Platform.OS === 'android') {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackButton);
+      return () => subscription.remove();
+    }
+  }, [showPlanModal]);
 
   // Play sound notification
   const playSound = async (soundName: 'complete' | 'restEnd' | 'success' | 'warning' | 'error' = 'success') => {
@@ -778,13 +815,23 @@ export default function WorkoutScreen() {
     const restTotalSec = restForSession.reduce((sum, ev) => sum + (ev.durationSec || 0), 0);
     const restAvgSec = restCount ? Math.round(restTotalSec / restCount) : 0;
 
+    // Check if a session already exists for this date and plan
+    const existingSessions = await dataStore.getWorkoutSessions();
+    const existingSessionIndex = existingSessions.findIndex(
+      s => s.date === dateStr && s.planId === selectedPlan.id
+    );
+
     const session: WorkoutSession = {
-      id: `${dateStr}_${selectedPlan.id}_${endedAt}`,
+      id: existingSessionIndex !== -1
+        ? existingSessions[existingSessionIndex].id  // Use existing ID if updating
+        : `${dateStr}_${selectedPlan.id}_${endedAt}`,
       date: dateStr,
       planId: selectedPlan.id,
       planName: selectedPlan.name,
       color: selectedPlan.color,
-      startedAt,
+      startedAt: existingSessionIndex !== -1
+        ? existingSessions[existingSessionIndex].startedAt  // Keep original start time if updating
+        : startedAt,
       endedAt,
       durationSec,
       exercises: exercisesSnapshot,
@@ -793,18 +840,29 @@ export default function WorkoutScreen() {
       restCount,
       restAvgSec,
       setLogs: logsForSession,
-      newPBs,
+      newPBs: existingSessionIndex !== -1
+        ? [...(existingSessions[existingSessionIndex].newPBs || []), ...newPBs]  // Combine PBs if updating
+        : newPBs,
     };
 
     try {
-      const existing = await dataStore.getWorkoutSessions();
-      const arr: WorkoutSession[] = [...existing, session];
-      await dataStore.setWorkoutSessions(arr);
+      let updatedSessions: WorkoutSession[];
+      if (existingSessionIndex !== -1) {
+        // Update existing session
+        updatedSessions = [...existingSessions];
+        updatedSessions[existingSessionIndex] = session;
+      } else {
+        // Add new session
+        updatedSessions = [...existingSessions, session];
+      }
+
+      await dataStore.setWorkoutSessions(updatedSessions);
     } catch (e) {
       console.error('Error saving workout session:', e);
       showErrorToast('Save Error', 'Failed to save workout session.');
     } finally {
       setCurrentSessionStart(null);
+      setSessionInProgress(false); // Reset session in progress flag
       setShowPlanModal(false);
       setRestEvents([]);
       if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
@@ -882,10 +940,48 @@ export default function WorkoutScreen() {
     }
   };
 
+  const handleExitWorkout = () => {
+    if (sessionInProgress) {
+      // Ask user if they want to save or discard the workout
+      Alert.alert(
+        "Exit Workout",
+        "Do you want to save this workout session?",
+        [
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => {
+              // Reset session state without saving
+              setCurrentSessionStart(null);
+              setSessionInProgress(false);
+              setRestEvents([]);
+              setShowPlanModal(false);
+            }
+          },
+          {
+            text: "Save",
+            style: "default",
+            onPress: () => {
+              finishCurrentSession();
+            }
+          },
+          {
+            text: "Cancel",
+            style: "cancel"
+          }
+        ]
+      );
+    } else {
+      // If no session in progress, just close the modal
+      setShowPlanModal(false);
+    }
+  };
+
   const handlePlanPress = (plan: WorkoutPlan) => {
     setSelectedPlan(plan);
     // mark session start when opening the plan modal
     setCurrentSessionStart(Date.now());
+    setSessionInProgress(true); // Mark that a session is in progress
     setShowPlanModal(true);
   };
 
@@ -1291,7 +1387,7 @@ export default function WorkoutScreen() {
                   <Text style={styles.modalTitle}>{selectedPlan?.name}</Text>
                   <Text style={styles.modalSubtitle}>{selectedPlan?.subtitle}</Text>
                 </View>
-                <TouchableOpacity onPress={() => setShowPlanModal(false)}>
+                <TouchableOpacity onPress={() => handleExitWorkout()}>
                   <IconSymbol name="xmark.circle.fill" size={32} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
@@ -1450,24 +1546,10 @@ export default function WorkoutScreen() {
                                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                   }
 
-                                  // Disable the button temporarily
-                                  setPressedRestButtons(prev => ({
-                                    ...prev,
-                                    [`${planId}-${exercise.id}`]: true
-                                  }));
-
                                   startRestTimer(planId, exercise.id, restDefaultSec);
-
-                                  // Re-enable the button after a short delay
-                                  setTimeout(() => {
-                                    setPressedRestButtons(prev => ({
-                                      ...prev,
-                                      [`${planId}-${exercise.id}`]: false
-                                    }));
-                                  }, 500); // 500ms delay before re-enabling
                                 }
                               }}
-                              disabled={isExerciseCompleted(planId, exercise.id) || getRemainingRestSec(planId, exercise.id) > 0 || pressedRestButtons[`${planId}-${exercise.id}`]}
+                              disabled={isExerciseCompleted(planId, exercise.id) || getRemainingRestSec(planId, exercise.id) > 0}
                             >
                               <Text style={styles.restChipText}>{setCount}</Text>
                             </TouchableOpacity>

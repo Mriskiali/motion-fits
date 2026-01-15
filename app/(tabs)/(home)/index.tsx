@@ -244,12 +244,21 @@ export default function HomeScreen() {
   const getDaysAgo = (dateStr: string) => {
     const date = new Date(dateStr);
     const today = new Date();
-    const diffTime = Math.abs(today.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    return `${diffDays} days ago`;
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // Check if it's today
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    }
+    // Check if it's yesterday
+    else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    }
+    // Otherwise return the day of the week
+    else {
+      return date.toLocaleDateString('en-US', { weekday: 'long' });
+    }
   };
 
   const getWorkoutName = (planId: string) => {
