@@ -131,6 +131,17 @@ Terima kasih
 - Ikon dari SF Symbols kalo didukung, pake Material Icons buat Android/web.
 - Kompatibilitas lintas platform dicapai lewat lapisan abstraksi IconSymbol.
 
-<!-- Screenshot (opsional)
+## Preview
 
-- Taruh screenshot aplikasi di [assets/images](assets/images) -->
+Berikut adalah beberapa tangkapan layar dari aplikasi MotionFit:
+
+![Screenshot 1](./assets/snapshot/Screenshot_20260121-123019.jpg)
+![Screenshot 2](./assets/snapshot/Screenshot_20260121-123022.jpg)
+![Screenshot 3](./assets/snapshot/Screenshot_20260121-123101.jpg)
+![Screenshot 4](./assets/snapshot/Screenshot_20260121-123105.jpg)
+![Screenshot 5](./assets/snapshot/Screenshot_20260121-123112.jpg)
+![Screenshot 6](./assets/snapshot/Screenshot_20260121-123128.jpg)
+![Screenshot 7](./assets/snapshot/Screenshot_20260121-123141.jpg)
+![Screenshot 8](./assets/snapshot/Screenshot_20260121-123206.jpg)
+![Screenshot 9](./assets/snapshot/Screenshot_20260121-123225.jpg)
+![Screenshot 10](./assets/snapshot/Screenshot_20260121-123248.jpg)
