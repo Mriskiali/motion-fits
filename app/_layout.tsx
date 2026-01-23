@@ -1,4 +1,5 @@
 import "react-native-reanimated";
+import 'nativewind';
 
 // Suppress noisy Reanimated inline-style warnings during development only.
 // These are emitted by dependencies using SharedValue in styles internally.
@@ -35,13 +36,13 @@ import {
   ThemeProvider as NavigationThemeProvider,
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
-import { Button } from "@/components/button";
+import { Button } from "@/components/ui/button";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { ThemeProvider as AppThemeProvider } from "@/contexts/ThemeContext";
-import ErrorBoundary from "@/components/ErrorBoundary";
+import ErrorBoundary from "@/components/feedback/ErrorBoundary";
 import Toast from 'react-native-toast-message';
 import * as Notifications from 'expo-notifications';
-import toastConfig from '@/components/ToastConfig';
+import toastConfig from '@/components/feedback/ToastConfig';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();

@@ -17,7 +17,8 @@ import {
   BackHandler,
   TextInput
 } from "react-native";
-import { IconSymbol } from "@/components/IconSymbol";
+import { IconSymbol } from "@/components/ui/IconSymbol";
+import { ProgressRing } from "@/components/ui/ProgressRing";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
 import { colors } from "@/styles/commonStyles";
 import * as Haptics from "expo-haptics";
@@ -30,9 +31,13 @@ import { showSuccessToast, showErrorToast } from '@/utils/notifications';
 interface Exercise {
   id: string;
   name: string;
+  type?: 'strength' | 'cardio' | 'duration'; // strength (sets/reps/weight), cardio (duration), duration (just time)
   sets: string;
   reps?: string;
   duration?: string;
+  hours?: string; // for cardio/duration exercises
+  minutes?: string; // for cardio/duration exercises
+  seconds?: string; // for cardio/duration exercises
   notes?: string;
 }
 
@@ -107,9 +112,57 @@ type SetLog = {
   setIndex: number;
   weight: number;
   reps: number;
+  duration?: number; // For cardio/duration exercises
 };
 
 const DAYS_OF_WEEK = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+// Simple Progress Component with numeric animation
+const AnimatedProgressText = ({ value, size = 20 }: { value: number; size?: number }) => {
+  const [currentValue, setCurrentValue] = useState(0);
+  const [opacity, setOpacity] = useState(0.5);
+
+  useEffect(() => {
+    // Reset to 0 and fade in when value changes
+    setOpacity(0.5);
+    setCurrentValue(0);
+
+    // Animate to target value
+    const duration = 800;
+    const startTime = Date.now();
+    const startValue = 0;
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Ease-out function for smoother animation
+      const easeOut = 1 - Math.pow(1 - progress, 2);
+      const newValue = startValue + (value - startValue) * easeOut;
+
+      setCurrentValue(newValue);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setOpacity(1);
+      }
+    };
+
+    animate();
+  }, [value]);
+
+  return (
+    <Text
+      style={[
+        styles.progressPercentage,
+        { fontSize: size, opacity }
+      ]}
+    >
+      {Math.round(currentValue)}%
+    </Text>
+  );
+};
 
 const defaultWorkoutPlans: WorkoutPlan[] = [
   {
@@ -119,13 +172,13 @@ const defaultWorkoutPlans: WorkoutPlan[] = [
     icon: 'figure.strengthtraining.traditional',
     color: '#64b5f6',
     exercises: [
-      { id: 'u1-1', name: 'Resistance Band Chest Press', sets: '4', reps: '12' },
-      { id: 'u1-2', name: 'Incline Push-up / Pike Push-up', sets: '3', reps: '10' },
-      { id: 'u1-3', name: 'Single Dumbbell Shoulder Press', sets: '3', reps: '12' },
-      { id: 'u1-4', name: 'Resistance Band Lateral Raise', sets: '3', reps: '12–15' },
-      { id: 'u1-5', name: 'Single Dumbbell Overhead Tricep Extension', sets: '3', reps: '12' },
-      { id: 'u1-6', name: 'Resistance Band Tricep Pushdown', sets: '3', reps: '12' },
-      { id: 'u1-7', name: 'Cooldown Cycling', sets: '1', duration: '5–15 minutes light' },
+      { id: 'u1-1', name: 'Resistance Band Chest Press', type: 'strength', sets: '4', reps: '12' },
+      { id: 'u1-2', name: 'Incline Push-up / Pike Push-up', type: 'strength', sets: '3', reps: '10' },
+      { id: 'u1-3', name: 'Single Dumbbell Shoulder Press', type: 'strength', sets: '3', reps: '12' },
+      { id: 'u1-4', name: 'Resistance Band Lateral Raise', type: 'strength', sets: '3', reps: '12–15' },
+      { id: 'u1-5', name: 'Single Dumbbell Overhead Tricep Extension', type: 'strength', sets: '3', reps: '12' },
+      { id: 'u1-6', name: 'Resistance Band Tricep Pushdown', type: 'strength', sets: '3', reps: '12' },
+      { id: 'u1-7', name: 'Cooldown Cycling', type: 'cardio', sets: '1', duration: '5–15 minutes light', hours: '0', minutes: '5', seconds: '0' },
     ],
   },
   {
@@ -135,12 +188,12 @@ const defaultWorkoutPlans: WorkoutPlan[] = [
     icon: 'figure.strengthtraining.functional',
     color: '#aed581',
     exercises: [
-      { id: 'l-1', name: 'Goblet Squat (with dumbbell)', sets: '4', reps: '12' },
-      { id: 'l-2', name: 'Resistance Band Deadlift / Romanian Deadlift', sets: '3', reps: '12' },
-      { id: 'l-3', name: 'Front Lunges', sets: '3', reps: '12' },
-      { id: 'l-4', name: 'Glute Bridge', sets: '3', reps: '15' },
-      { id: 'l-5', name: 'Standing Calf Raise', sets: '4', reps: '15–20' },
-      { id: 'l-6', name: 'Cycling', sets: '1', duration: '10–20 minutes' },
+      { id: 'l-1', name: 'Goblet Squat (with dumbbell)', type: 'strength', sets: '4', reps: '12' },
+      { id: 'l-2', name: 'Resistance Band Deadlift / Romanian Deadlift', type: 'strength', sets: '3', reps: '12' },
+      { id: 'l-3', name: 'Front Lunges', type: 'strength', sets: '3', reps: '12' },
+      { id: 'l-4', name: 'Glute Bridge', type: 'strength', sets: '3', reps: '15' },
+      { id: 'l-5', name: 'Standing Calf Raise', type: 'strength', sets: '4', reps: '15–20' },
+      { id: 'l-6', name: 'Cycling', type: 'cardio', sets: '1', duration: '10–20 minutes', hours: '0', minutes: '10', seconds: '0' },
     ],
   },
   {
@@ -150,16 +203,16 @@ const defaultWorkoutPlans: WorkoutPlan[] = [
     icon: 'figure.core.training',
     color: '#ffb74d',
     exercises: [
-      { id: 'u2-1', name: 'Resistance Band Row', sets: '4', reps: '12' },
-      { id: 'u2-2', name: 'Resistance Band Face Pull', sets: '3', reps: '12' },
-      { id: 'u2-3', name: 'Single Dumbbell Bicep Curl', sets: '3', reps: '12' },
-      { id: 'u2-4', name: 'Hammer Curl (alternate dumbbell)', sets: '3', reps: '12' },
-      { id: 'u2-5', name: 'Resistance Band Reverse Curl', sets: '3', reps: '12' },
-      { id: 'u2-6', name: 'Renegade Row (with dumbbell)', sets: '3', reps: '10' },
-      { id: 'u2-7', name: 'Penguin Crunch', sets: '3', reps: '20' },
-      { id: 'u2-8', name: 'Plank', sets: '3', duration: '30–45 seconds' },
-      { id: 'u2-9', name: 'Hollow Position', sets: '3', duration: '30 seconds' },
-      { id: 'u2-10', name: 'Cooldown Cycling', sets: '1', duration: '5–15 minutes easy' },
+      { id: 'u2-1', name: 'Resistance Band Row', type: 'strength', sets: '4', reps: '12' },
+      { id: 'u2-2', name: 'Resistance Band Face Pull', type: 'strength', sets: '3', reps: '12' },
+      { id: 'u2-3', name: 'Single Dumbbell Bicep Curl', type: 'strength', sets: '3', reps: '12' },
+      { id: 'u2-4', name: 'Hammer Curl (alternate dumbbell)', type: 'strength', sets: '3', reps: '12' },
+      { id: 'u2-5', name: 'Resistance Band Reverse Curl', type: 'strength', sets: '3', reps: '12' },
+      { id: 'u2-6', name: 'Renegade Row (with dumbbell)', type: 'strength', sets: '3', reps: '10' },
+      { id: 'u2-7', name: 'Penguin Crunch', type: 'strength', sets: '3', reps: '20' },
+      { id: 'u2-8', name: 'Plank', type: 'duration', sets: '3', duration: '30–45 seconds', hours: '0', minutes: '0', seconds: '30' },
+      { id: 'u2-9', name: 'Hollow Position', type: 'duration', sets: '3', duration: '30 seconds', hours: '0', minutes: '0', seconds: '30' },
+      { id: 'u2-10', name: 'Cooldown Cycling', type: 'cardio', sets: '1', duration: '5–15 minutes easy', hours: '0', minutes: '5', seconds: '0' },
     ],
   },
 ];
@@ -185,6 +238,8 @@ export default function WorkoutScreen() {
   const [restDefaultSec, setRestDefaultSec] = useState<number>(60);
   const [customRestSec, setCustomRestSec] = useState<number>(60); // Default custom rest time
   const [autoRestOnIncrement, setAutoRestOnIncrement] = useState<boolean>(true);
+  const [exerciseGroups, setExerciseGroups] = useState<Record<string, string[]>>({}); // Groups of exercises that form supersets/circuits
+  const [selectedExercisesForGroup, setSelectedExercisesForGroup] = useState<string[]>([]); // Currently selected exercises for grouping
 
   // Load user's custom rest time preferences
   useEffect(() => {
@@ -214,6 +269,10 @@ export default function WorkoutScreen() {
   const [hasAnySession, setHasAnySession] = useState<boolean>(false);
   const [showWorkoutOnboarding, setShowWorkoutOnboarding] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
+  // Celebration states
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationTitle, setCelebrationTitle] = useState('');
+  const [celebrationSubtitle, setCelebrationSubtitle] = useState('');
   
   // Load data from AsyncStorage on mount
   useEffect(() => {
@@ -256,9 +315,9 @@ export default function WorkoutScreen() {
     const handleAppStateChange = (nextAppState: string) => {
       // Only handle transition from active to background while modal is open
       if (appState === 'active' && nextAppState === 'background' && sessionInProgress && showPlanModal) {
-        // For background transitions, we'll save the session to prevent data loss
-        // This is a compromise since we can't show an alert when going to background
-        finishCurrentSession();
+        // Don't save the session automatically when going to background
+        // Just close the modal but preserve the session data for analytics
+        setShowPlanModal(false);
       }
       appState = nextAppState;
     };
@@ -271,7 +330,9 @@ export default function WorkoutScreen() {
   useEffect(() => {
     const handleBackButton = () => {
       if (showPlanModal) {
-        handleExitWorkout();
+        // Don't save the session when user presses back button
+        // Just close the modal but preserve the session data for analytics
+        setShowPlanModal(false);
         return true; // Prevent default back behavior
       }
       return false; // Allow default back behavior
@@ -377,10 +438,18 @@ export default function WorkoutScreen() {
   useEffect(() => {
     const due = restTimers.filter(t => !t.notified && t.endsAt <= now);
     if (due.length) {
-      if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (Platform.OS !== 'web') {
+        // Enhanced haptic feedback for rest timer completion
+        if (Haptics?.NotificationFeedbackType?.Warning) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        } else if (Haptics?.NotificationFeedbackType?.Success) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+
+        // Enhanced audio alert for rest timer
         playSound('restEnd');
       }
+
       setRestTimers(prev => prev.map(t => t.endsAt <= now ? { ...t, notified: true } : t));
     }
   }, [now, restTimers]);
@@ -562,28 +631,54 @@ export default function WorkoutScreen() {
 
   const isExerciseCompleted = (planId: string, exerciseId: string, date?: Date) => {
     const dateStr = date ? getDateString(date) : getDateString(selectedDate);
-    return completedExercises.some(
-      ce => ce.planId === planId && ce.exerciseId === exerciseId && ce.date === dateStr
-    );
+
+    // Get the exercise to determine its type
+    const plan = getAllWorkoutPlans().find(p => p.id === planId);
+    const exercise = plan?.exercises.find(ex => ex.id === exerciseId);
+
+    // For duration/cardio exercises, check if duration was logged
+    if (exercise && (exercise.type === 'cardio' || exercise.type === 'duration')) {
+      const logs = getExerciseLogs(planId, exerciseId, date);
+      return logs.length > 0;
+    } else {
+      // For strength exercises, check if marked as completed
+      return completedExercises.some(
+        ce => ce.planId === planId && ce.exerciseId === exerciseId && ce.date === dateStr
+      );
+    }
   };
 
   const toggleExerciseCompletion = (planId: string, exerciseId: string) => {
     const dateStr = getDateString(selectedDate);
     const isCompleted = isExerciseCompleted(planId, exerciseId);
 
+    // Get the exercise to determine its type
+    const plan = getAllWorkoutPlans().find(p => p.id === planId);
+    const exercise = plan?.exercises.find(ex => ex.id === exerciseId);
+
     if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Medium) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
-    if (isCompleted) {
-      setCompletedExercises(prev =>
-        prev.filter(ce => !(ce.planId === planId && ce.exerciseId === exerciseId && ce.date === dateStr))
-      );
-    } else {
-      setCompletedExercises(prev => [...prev, { planId, exerciseId, date: dateStr }]);
-      // Play sound when exercise is completed
-      if (Platform.OS !== 'web') {
+    // For duration/cardio exercises, we don't use the traditional completion toggle
+    if (exercise && (exercise.type === 'cardio' || exercise.type === 'duration')) {
+      // For these exercises, we'll handle completion differently - perhaps by logging duration
+      // For now, we'll just play the completion sound if not already completed
+      if (!isCompleted && Platform.OS !== 'web') {
         playSound('complete');
+      }
+    } else {
+      // For strength exercises, use the traditional completion toggle
+      if (isCompleted) {
+        setCompletedExercises(prev =>
+          prev.filter(ce => !(ce.planId === planId && ce.exerciseId === exerciseId && ce.date === dateStr))
+        );
+      } else {
+        setCompletedExercises(prev => [...prev, { planId, exerciseId, date: dateStr }]);
+        // Play sound when exercise is completed
+        if (Platform.OS !== 'web') {
+          playSound('complete');
+        }
       }
     }
   };
@@ -694,6 +789,47 @@ export default function WorkoutScreen() {
   };
 
   const onLogSet = (planId: string, exerciseId: string, targetSets: number, repsDefault?: number) => {
+    // Get the exercise to determine its type
+    const plan = getAllWorkoutPlans().find(p => p.id === planId);
+    const exercise = plan?.exercises.find(ex => ex.id === exerciseId);
+
+    // For duration/cardio exercises, we'll handle logging differently
+    if (exercise && (exercise.type === 'cardio' || exercise.type === 'duration')) {
+      // For these exercises, we'll show a prompt to enter duration
+      // For now, we'll just mark the exercise as completed by adding a log entry
+      const dateStr = getDateString(selectedDate);
+      const nextIndex = getNextSetIndex(planId, exerciseId);
+
+      // Calculate total duration in minutes from hours, minutes, and seconds
+      const hours = parseInt(exercise.hours || '0');
+      const minutes = parseInt(exercise.minutes || '0');
+      const seconds = parseInt(exercise.seconds || '0');
+      const totalMinutes = hours * 60 + minutes + seconds / 60;
+
+      // Persist log for cardio/duration exercise
+      setSetLogs(prev => {
+        const withoutDup = prev.filter(l => !(l.planId === planId && l.exerciseId === exerciseId && l.date === dateStr && l.setIndex === nextIndex));
+        return [...withoutDup, {
+          planId,
+          exerciseId,
+          date: dateStr,
+          setIndex: nextIndex,
+          weight: 0,
+          reps: 0, // For cardio/duration, reps might not be applicable
+          duration: totalMinutes // Store as total minutes
+        }];
+      });
+
+      // Enhanced haptic feedback for logging
+      if (Platform.OS !== 'web') {
+        if (Haptics?.ImpactFeedbackStyle?.Medium) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+      }
+      return;
+    }
+
+    // For strength exercises, use the traditional set logging
     // Check if exercise is already completed
     if (isExerciseCompleted(planId, exerciseId)) {
       // Optionally show a message to the user
@@ -717,7 +853,7 @@ export default function WorkoutScreen() {
     const weight = 0;
     const reps = Number(repsDefault || 0);
 
-    // Persist log
+    // Persist log for strength exercise
     setSetLogs(prev => {
       const withoutDup = prev.filter(l => !(l.planId === planId && l.exerciseId === exerciseId && l.date === dateStr && l.setIndex === nextIndex));
       return [...withoutDup, { planId, exerciseId, date: dateStr, setIndex: nextIndex, weight, reps }];
@@ -729,8 +865,12 @@ export default function WorkoutScreen() {
     setExerciseSetCount(planId, exerciseId, next, targetSets);
     startRestTimer(planId, exerciseId, restDefaultSec);
 
-    if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Enhanced haptic feedback for set completion
+    if (Platform.OS !== 'web') {
+      // Medium impact for set completion
+      if (Haptics?.ImpactFeedbackStyle?.Medium) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
     }
   };
 
@@ -793,19 +933,22 @@ export default function WorkoutScreen() {
       }
     }
 
-    // Compute new PBs for this session
+    // Compute new PBs for this session (only for strength exercises)
     const newPBs: { exerciseId: string; name: string; metric: '1RM'; value: number }[] = [];
     selectedPlan.exercises.forEach(ex => {
-      const logs = logsForSession.filter(l => l.exerciseId === ex.id);
-      const bestThisSession = computeBest1RMFromLogs(logs);
-      const prevBest = prevBestMap[ex.id] || 0;
-      if (bestThisSession > prevBest && bestThisSession > 0) {
-        newPBs.push({
-          exerciseId: ex.id,
-          name: ex.name,
-          metric: '1RM',
-          value: Math.round(bestThisSession * 10) / 10,
-        });
+      // Only calculate PBs for strength exercises
+      if (ex.type !== 'cardio' && ex.type !== 'duration') {
+        const logs = logsForSession.filter(l => l.exerciseId === ex.id);
+        const bestThisSession = computeBest1RMFromLogs(logs);
+        const prevBest = prevBestMap[ex.id] || 0;
+        if (bestThisSession > prevBest && bestThisSession > 0) {
+          newPBs.push({
+            exerciseId: ex.id,
+            name: ex.name,
+            metric: '1RM',
+            value: Math.round(bestThisSession * 10) / 10,
+          });
+        }
       }
     });
 
@@ -865,10 +1008,33 @@ export default function WorkoutScreen() {
       setSessionInProgress(false); // Reset session in progress flag
       setShowPlanModal(false);
       setRestEvents([]);
-      if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        playSound('success');
+
+      // Enhanced haptic feedback for workout completion
+      if (Platform.OS !== 'web') {
+        // Success notification with stronger vibration
+        if (Haptics?.NotificationFeedbackType?.Success) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+
+        // Additional haptic for workout completion
+        if (Haptics?.ImpactFeedbackStyle?.Heavy) {
+          setTimeout(() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          }, 300); // Delay to create a sequence effect
+        }
       }
+
+      // Show celebration for completed workout
+      setCelebrationTitle('Workout Complete!');
+      setCelebrationSubtitle(`Great job completing your ${selectedPlan?.name} workout!`);
+      setShowCelebration(true);
+
+      // Hide celebration after 3 seconds
+      setTimeout(() => {
+        setShowCelebration(false);
+      }, 3000);
+
+      playSound('success');
     }
   };
 
@@ -913,25 +1079,92 @@ export default function WorkoutScreen() {
     if (autoRestOnIncrement) {
       startRestTimer(planId, exerciseId, restDefaultSec);
     }
+
+    // Enhanced haptic feedback for set increment
+    if (Platform.OS !== 'web') {
+      // Light impact for set increment
+      if (Haptics?.ImpactFeedbackStyle?.Light) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    }
   };
 
   const decrementSetCount = (planId: string, exerciseId: string, targetSets: number) => {
     const current = getExerciseSetCount(planId, exerciseId);
     const next = Math.max(current - 1, 0);
     setExerciseSetCount(planId, exerciseId, next, targetSets);
+
+    // Enhanced haptic feedback for set decrement
+    if (Platform.OS !== 'web') {
+      // Light impact for set decrement
+      if (Haptics?.ImpactFeedbackStyle?.Light) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    }
   };
 
   const getCompletionPercentage = (plan: WorkoutPlan, date?: Date) => {
     const dateStr = date ? getDateString(date) : getDateString(selectedDate);
     const total = plan.exercises.length;
     if (total === 0) return 0;
-    const completedCount = plan.exercises.filter(ex =>
-      completedExercises.some(ce =>
-        ce.planId === plan.id && ce.exerciseId === ex.id && ce.date === dateStr
-      )
-    ).length;
+
+    const completedCount = plan.exercises.filter(ex => {
+      // For duration/cardio exercises, check if duration was logged
+      if (ex.type === 'cardio' || ex.type === 'duration') {
+        const logs = getExerciseLogs(plan.id, ex.id, date);
+        return logs.length > 0;
+      } else {
+        // For strength exercises, check if marked as completed
+        return completedExercises.some(ce =>
+          ce.planId === plan.id && ce.exerciseId === ex.id && ce.date === dateStr
+        );
+      }
+    }).length;
+
     return Math.round((completedCount / total) * 100);
   };
+
+  // Superset/Circuit Functions
+  const toggleExerciseForGrouping = (exerciseId: string) => {
+    setSelectedExercisesForGroup(prev => {
+      if (prev.includes(exerciseId)) {
+        return prev.filter(id => id !== exerciseId);
+      } else {
+        return [...prev, exerciseId];
+      }
+    });
+  };
+
+  const createExerciseGroup = () => {
+    if (selectedExercisesForGroup.length < 2) {
+      Alert.alert('Not Enough Exercises', 'Please select at least 2 exercises to create a group.');
+      return;
+    }
+
+    const groupId = `group_${Date.now()}`;
+    setExerciseGroups(prev => ({
+      ...prev,
+      [groupId]: [...selectedExercisesForGroup]
+    }));
+
+    // Clear selection
+    setSelectedExercisesForGroup([]);
+
+    // Provide feedback
+    if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    showSuccessToast('Group Created', `Superset with ${selectedExercisesForGroup.length} exercises created!`);
+  };
+
+  const removeExerciseGroup = (groupId: string) => {
+    setExerciseGroups(prev => {
+      const newGroups = { ...prev };
+      delete newGroups[groupId];
+      return newGroups;
+    });
+  };
+
 
   const handleDayPress = (date: Date) => {
     setSelectedDate(date);
@@ -941,40 +1174,9 @@ export default function WorkoutScreen() {
   };
 
   const handleExitWorkout = () => {
-    if (sessionInProgress) {
-      // Ask user if they want to save or discard the workout
-      Alert.alert(
-        "Exit Workout",
-        "Do you want to save this workout session?",
-        [
-          {
-            text: "Discard",
-            style: "destructive",
-            onPress: () => {
-              // Reset session state without saving
-              setCurrentSessionStart(null);
-              setSessionInProgress(false);
-              setRestEvents([]);
-              setShowPlanModal(false);
-            }
-          },
-          {
-            text: "Save",
-            style: "default",
-            onPress: () => {
-              finishCurrentSession();
-            }
-          },
-          {
-            text: "Cancel",
-            style: "cancel"
-          }
-        ]
-      );
-    } else {
-      // If no session in progress, just close the modal
-      setShowPlanModal(false);
-    }
+    // Simply exit without saving or showing a popup
+    // Keep session data for analytics purposes
+    setShowPlanModal(false);
   };
 
   const handlePlanPress = (plan: WorkoutPlan) => {
@@ -996,10 +1198,33 @@ export default function WorkoutScreen() {
 
   const handleWorkoutSelection = (planId: string | null) => {
     assignWorkoutToDate(selectedDate, planId);
-    setShowWorkoutSelector(false);
     if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
+  };
+
+  const duplicateWorkout = (plan: WorkoutPlan) => {
+    const newPlan = {
+      ...plan,
+      id: `duplicate_${plan.id}_${Date.now()}`, // Unique ID for the duplicate
+      name: `${plan.name} (Copy)`, // Add "Copy" to distinguish it
+      isCustom: true, // Mark as custom since it's a user-created duplicate
+    };
+
+    // Add to custom workout plans
+    setCustomWorkoutPlans(prev => [...prev, newPlan as WorkoutPlan]);
+
+    // Save to storage
+    dataStore.setCustomWorkoutPlans([...customWorkoutPlans, newPlan]).catch(error => {
+      console.error('Error saving duplicated workout:', error);
+      showErrorToast('Save Error', 'Failed to save duplicated workout.');
+    });
+
+    // Provide feedback
+    if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    showSuccessToast('Workout Duplicated', `${plan.name} has been duplicated successfully.`);
   };
 
   const AnimatedCheckbox = ({ checked, onPress }: { checked: boolean; onPress: () => void }) => {
@@ -1093,7 +1318,7 @@ export default function WorkoutScreen() {
           />
         </View>
         <View style={styles.progressRingText}>
-          <Text style={[styles.progressPercentage, { fontSize: size / 3 }]}>{percentage}%</Text>
+          <AnimatedProgressText value={percentage} size={size / 3} />
         </View>
       </View>
     );
@@ -1177,8 +1402,8 @@ export default function WorkoutScreen() {
 
           {/* Week Day Tabs */}
           <View style={styles.weekContainer}>
-            <ScrollView 
-              horizontal 
+            <ScrollView
+              horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.weekScrollContent}
             >
@@ -1186,7 +1411,7 @@ export default function WorkoutScreen() {
                 const isSelected = isSameDay(date, selectedDate);
                 const isTodayDate = isToday(date);
                 const workout = getWorkoutForDate(date);
-                
+
                 return (
                   <TouchableOpacity
                     key={getDateString(date)}
@@ -1255,6 +1480,7 @@ export default function WorkoutScreen() {
               <TouchableOpacity
                 style={[styles.workoutCard, { borderLeftColor: selectedWorkout.color }]}
                 onPress={() => handlePlanPress(selectedWorkout)}
+                activeOpacity={0.8}
               >
                 <View style={styles.workoutCardHeader}>
                   <View style={[styles.workoutIconContainer, { backgroundColor: selectedWorkout.color + '20' }]}>
@@ -1267,23 +1493,23 @@ export default function WorkoutScreen() {
                       {selectedWorkout.exercises.length} exercises
                     </Text>
                   </View>
-                  <ProgressRing 
-                    percentage={getCompletionPercentage(selectedWorkout)} 
-                    size={60} 
-                    color={selectedWorkout.color} 
+                  <ProgressRing
+                    percentage={getCompletionPercentage(selectedWorkout)}
+                    size={60}
+                    color={selectedWorkout.color}
                   />
                 </View>
-                
+
                 {getCompletionPercentage(selectedWorkout) > 0 && (
                   <View style={styles.progressBar}>
-                    <View 
+                    <View
                       style={[
-                        styles.progressBarFill, 
-                        { 
-                          width: `${getCompletionPercentage(selectedWorkout)}%`, 
-                          backgroundColor: selectedWorkout.color 
+                        styles.progressBarFill,
+                        {
+                          width: `${getCompletionPercentage(selectedWorkout)}%`,
+                          backgroundColor: selectedWorkout.color
                         }
-                      ]} 
+                      ]}
                     />
                   </View>
                 )}
@@ -1291,10 +1517,12 @@ export default function WorkoutScreen() {
             </View>
           ) : (
             <View style={styles.emptyState}>
-              <IconSymbol name="calendar.badge.plus" size={64} color={colors.textSecondary} />
-              <Text style={styles.emptyStateTitle}>No Workout Assigned</Text>
+              <View style={styles.emptyStateIconContainer}>
+                <IconSymbol name="figure.strengthtraining.traditional" size={64} color={colors.primary} />
+              </View>
+              <Text style={styles.emptyStateTitle}>Ready to Train?</Text>
               <Text style={styles.emptyStateText}>
-                Tap the button above to assign a workout to this day
+                No workout assigned for this day yet. Choose a workout to get started!
               </Text>
               <TouchableOpacity
                 style={[styles.emptyAssignBtn, { backgroundColor: colors.primary }]}
@@ -1313,7 +1541,7 @@ export default function WorkoutScreen() {
           <View style={styles.allWorkoutsSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Available Workouts</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.createButton}
                 onPress={() => router.push('/create-workout')}
               >
@@ -1369,6 +1597,28 @@ export default function WorkoutScreen() {
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Quick Stats Summary */}
+          <View style={styles.quickStatsSection}>
+            <Text style={styles.sectionTitle}>Today's Summary</Text>
+            <View style={styles.quickStatsGrid}>
+              <View style={styles.quickStatCard}>
+                <IconSymbol name="figure.run" size={28} color={colors.primary} />
+                <Text style={styles.quickStatValue}>{workoutAssignments.filter(a => a.date === getDateString(new Date()) && a.planId !== null).length}</Text>
+                <Text style={styles.quickStatLabel}>Workouts</Text>
+              </View>
+              <View style={styles.quickStatCard}>
+                <IconSymbol name="checkmark.circle.fill" size={28} color={colors.primary} />
+                <Text style={styles.quickStatValue}>{completedExercises.filter(ce => ce.date === getDateString(new Date())).length}</Text>
+                <Text style={styles.quickStatLabel}>Exercises</Text>
+              </View>
+              <View style={styles.quickStatCard}>
+                <IconSymbol name="flame.fill" size={28} color={colors.primary} />
+                <Text style={styles.quickStatValue}>{customWorkoutPlans.length}</Text>
+                <Text style={styles.quickStatLabel}>Custom Plans</Text>
+              </View>
+            </View>
+          </View>
         </ScrollView>
       )}
     </View>
@@ -1387,9 +1637,17 @@ export default function WorkoutScreen() {
                   <Text style={styles.modalTitle}>{selectedPlan?.name}</Text>
                   <Text style={styles.modalSubtitle}>{selectedPlan?.subtitle}</Text>
                 </View>
-                <TouchableOpacity onPress={() => handleExitWorkout()}>
-                  <IconSymbol name="xmark.circle.fill" size={32} color={colors.textSecondary} />
-                </TouchableOpacity>
+                <View style={styles.modalActions}>
+                  {selectedExercisesForGroup.length > 0 && (
+                    <TouchableOpacity style={styles.groupButton} onPress={createExerciseGroup}>
+                      <IconSymbol name="figure.superset" size={20} color={colors.card} />
+                      <Text style={styles.groupButtonText}>Group ({selectedExercisesForGroup.length})</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={handleExitWorkout}>
+                    <IconSymbol name="xmark.circle.fill" size={32} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {selectedPlan && (
@@ -1398,14 +1656,14 @@ export default function WorkoutScreen() {
                     {selectedPlan.exercises.filter(ex => isExerciseCompleted(selectedPlan.id, ex.id)).length} of {selectedPlan.exercises.length} completed
                   </Text>
                   <View style={styles.progressBarLarge}>
-                    <View 
+                    <View
                       style={[
-                        styles.progressBarFill, 
-                        { 
-                          width: `${getCompletionPercentage(selectedPlan)}%`, 
-                          backgroundColor: selectedPlan.color 
+                        styles.progressBarFill,
+                        {
+                          width: `${getCompletionPercentage(selectedPlan)}%`,
+                          backgroundColor: selectedPlan.color
                         }
-                      ]} 
+                      ]}
                     />
                   </View>
                 </View>
@@ -1468,12 +1726,19 @@ export default function WorkoutScreen() {
                   const isCompleted = isExerciseCompleted(planId, exercise.id);
                   const remainingRest = getRemainingRestSec(planId, exercise.id);
                   const logs = getExerciseLogs(planId, exercise.id);
+                  const isSelectedForGrouping = selectedExercisesForGroup.includes(exercise.id);
+
                   return (
                     <View key={exercise.id} style={styles.exerciseItem}>
-                      <AnimatedCheckbox
-                        checked={isCompleted}
-                        onPress={() => toggleExerciseCompletion(planId, exercise.id)}
-                      />
+                      <TouchableOpacity
+                        style={styles.groupSelectCheckbox}
+                        onPress={() => toggleExerciseForGrouping(exercise.id)}
+                      >
+                        {isSelectedForGrouping && (
+                          <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
+                        )}
+                      </TouchableOpacity>
+
                       <TouchableOpacity
                         style={styles.exerciseItemContent}
                         onPress={() => {
@@ -1484,44 +1749,64 @@ export default function WorkoutScreen() {
                         }}
                       >
                         <View style={styles.exerciseItemLeft}>
-                          <Text style={[styles.exerciseItemName, isCompleted && styles.exerciseItemNameCompleted]} numberOfLines={2} ellipsizeMode="tail">
+                          <Text style={[styles.exerciseItemName, isCompleted && styles.exerciseItemNameCompleted, isSelectedForGrouping && styles.exerciseItemSelected]} numberOfLines={2} ellipsizeMode="tail">
                             {exercise.name}
                           </Text>
-                          <Text style={styles.exerciseItemDetails} numberOfLines={1} ellipsizeMode="tail">
-                            {targetSets} sets × {exercise.reps || exercise.duration}
-                          </Text>
+                          <View style={styles.exerciseDetailsRow}>
+                            <Text style={styles.exerciseItemDetails} numberOfLines={1} ellipsizeMode="tail">
+                              {exercise.type === 'strength'
+                                ? `${targetSets} sets × ${exercise.reps || '0'} reps`
+                                : `${exercise.hours || '0'}h ${exercise.minutes || '0'}m ${exercise.seconds || '0'}s`}
+                            </Text>
+                            <View style={[styles.exerciseTypeBadge, styles[`exerciseType${exercise.type || 'strength'}`]]}>
+                              <Text style={styles.exerciseTypeText}>
+                                {exercise.type === 'cardio' ? 'Cardio' :
+                                 exercise.type === 'duration' ? 'Duration' : 'Strength'}
+                              </Text>
+                            </View>
+                          </View>
                         </View>
 
                         <View style={styles.exerciseItemRight}>
-                          <TouchableOpacity
-                            onPress={() => {
-                              if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              }
-                              decrementSetCount(planId, exercise.id, targetSets);
-                            }}
-                            style={{ padding: 8 }}
-                          >
-                            <IconSymbol name="minus.circle.fill" size={22} color={colors.textSecondary} />
-                          </TouchableOpacity>
-                          <Text style={{ minWidth: 48, textAlign: 'center', color: colors.text, fontWeight: '600' }}>
-                            {setCount}/{targetSets}
-                          </Text>
-                          <TouchableOpacity
-                            onPress={() => {
-                              if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              }
-                              incrementSetCount(planId, exercise.id, targetSets);
-                            }}
-                            style={{ padding: 8 }}
-                          >
-                            <IconSymbol name="plus.circle.fill" size={22} color={colors.primary} />
-                          </TouchableOpacity>
+                          {exercise.type === 'strength' ? (
+                            <>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  }
+                                  decrementSetCount(planId, exercise.id, targetSets);
+                                }}
+                                style={{ padding: 8 }}
+                              >
+                                <IconSymbol name="minus.circle.fill" size={22} color={colors.textSecondary} />
+                              </TouchableOpacity>
+                              <Text style={{ minWidth: 48, textAlign: 'center', color: colors.text, fontWeight: '600' }}>
+                                {setCount}/{targetSets}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  }
+                                  incrementSetCount(planId, exercise.id, targetSets);
+                                }}
+                                style={{ padding: 8 }}
+                              >
+                                <IconSymbol name="plus.circle.fill" size={22} color={colors.primary} />
+                              </TouchableOpacity>
+                            </>
+                          ) : (
+                            <View style={styles.cardioDurationContainer}>
+                              <Text style={styles.cardioDurationText}>
+                                {exercise.hours || '0'}h {exercise.minutes || '0'}m {exercise.seconds || '0'}s
+                              </Text>
+                            </View>
+                          )}
 
                           {remainingRest > 0 ? (
                             <Pressable
-                              style={[styles.restChip, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}
+                              style={[styles.activeRestChip, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}
                               onLongPress={() => {
                                 cancelRestTimer(planId, exercise.id);
                                 if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Warning) {
@@ -1530,6 +1815,7 @@ export default function WorkoutScreen() {
                               }}
                               delayLongPress={300}
                             >
+                              <IconSymbol name="timer" size={12} color={colors.primary} />
                               <Text style={[styles.restChipText, { color: colors.primary }]}>{formatSeconds(remainingRest)}</Text>
                             </Pressable>
                           ) : (
@@ -1551,7 +1837,8 @@ export default function WorkoutScreen() {
                               }}
                               disabled={isExerciseCompleted(planId, exercise.id) || getRemainingRestSec(planId, exercise.id) > 0}
                             >
-                              <Text style={styles.restChipText}>{setCount}</Text>
+                              <IconSymbol name="timer" size={12} color={colors.text} />
+                              <Text style={styles.restChipText}>Rest</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -1567,12 +1854,31 @@ export default function WorkoutScreen() {
                             if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             }
+
+                            // For strength exercises, log a set
+                            // For cardio/duration exercises, log the activity
                             onLogSet(planId, exercise.id, targetSets, parseDefaultReps(exercise.reps));
                           }}
                           disabled={isExerciseCompleted(planId, exercise.id) || getRemainingRestSec(planId, exercise.id) > 0}
                         >
                           <IconSymbol name="square.and.pencil" size={18} color={colors.card} />
                         </TouchableOpacity>
+
+                        {/* Show weight for strength exercises */}
+                        {exercise.type === 'strength' && (
+                          <View style={styles.exerciseWeightContainer}>
+                            <Text style={styles.exerciseWeightText}>0kg</Text>
+                          </View>
+                        )}
+
+                        {/* Show duration for cardio/duration exercises */}
+                        {(exercise.type === 'cardio' || exercise.type === 'duration') && (
+                          <View style={styles.cardioDurationContainer}>
+                            <Text style={styles.cardioDurationText}>
+                              {exercise.hours || '0'}h {exercise.minutes || '0'}m {exercise.seconds || '0'}s
+                            </Text>
+                          </View>
+                        )}
                       </View>
 
                     </View>
@@ -1617,20 +1923,82 @@ export default function WorkoutScreen() {
                   <Text style={styles.detailLabel}>Sets:</Text>
                   <Text style={styles.detailValue}>{selectedExercise?.sets}</Text>
                 </View>
-                {selectedExercise?.reps && (
-                  <View style={styles.detailRow}>
-                    <IconSymbol name="repeat" size={20} color={colors.secondary} />
-                    <Text style={styles.detailLabel}>Reps:</Text>
-                    <Text style={styles.detailValue}>{selectedExercise.reps}</Text>
-                  </View>
+                {/* Exercise Type */}
+                <View style={styles.detailRow}>
+                  <IconSymbol name="figure.run" size={20} color={colors.primary} />
+                  <Text style={styles.detailLabel}>Type:</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedExercise?.type === 'cardio' ? 'Cardio' :
+                     selectedExercise?.type === 'duration' ? 'Duration' : 'Strength'}
+                  </Text>
+                </View>
+
+                {selectedExercise?.type === 'strength' && (
+                  <>
+                    {selectedExercise?.sets && (
+                      <View style={styles.detailRow}>
+                        <IconSymbol name="number" size={20} color={colors.primary} />
+                        <Text style={styles.detailLabel}>Sets:</Text>
+                        <Text style={styles.detailValue}>{selectedExercise.sets}</Text>
+                      </View>
+                    )}
+                    {selectedExercise?.reps && (
+                      <View style={styles.detailRow}>
+                        <IconSymbol name="repeat" size={20} color={colors.secondary} />
+                        <Text style={styles.detailLabel}>Reps:</Text>
+                        <Text style={styles.detailValue}>{selectedExercise.reps}</Text>
+                      </View>
+                    )}
+                  </>
                 )}
-                {selectedExercise?.duration && (
-                  <View style={styles.detailRow}>
-                    <IconSymbol name="clock.fill" size={20} color={colors.accent} />
-                    <Text style={styles.detailLabel}>Duration:</Text>
-                    <Text style={styles.detailValue}>{selectedExercise.duration}</Text>
-                  </View>
+                {(selectedExercise?.type === 'cardio' || selectedExercise?.type === 'duration') && (
+                  <>
+                    <View style={styles.detailRow}>
+                      <IconSymbol name="clock.fill" size={20} color={colors.accent} />
+                      <Text style={styles.detailLabel}>Hours:</Text>
+                      <Text style={styles.detailValue}>{selectedExercise.hours || '0'}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <IconSymbol name="clock.fill" size={20} color={colors.accent} />
+                      <Text style={styles.detailLabel}>Minutes:</Text>
+                      <Text style={styles.detailValue}>{selectedExercise.minutes || '0'}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <IconSymbol name="clock.fill" size={20} color={colors.accent} />
+                      <Text style={styles.detailLabel}>Seconds:</Text>
+                      <Text style={styles.detailValue}>{selectedExercise.seconds || '0'}</Text>
+                    </View>
+                  </>
                 )}
+
+                {/* Previous workout data */}
+                {selectedExercise && selectedPlan && (() => {
+                  // Get all past sessions for this plan/exercise
+                  const previousLogs = setLogs
+                    .filter(log => log.planId === selectedPlan.id && log.exerciseId === selectedExercise.id)
+                    .sort((a, b) => b.date.localeCompare(a.date)); // Sort by date descending
+
+                  if (previousLogs.length === 0) {
+                    return null; // Don't render anything if no previous data
+                  }
+
+                  // Get the most recent log
+                  const latestLog = previousLogs[0];
+
+                  return (
+                    <View style={styles.previousDataSection}>
+                      <Text style={styles.previousDataTitle}>Previous Data</Text>
+                      <View style={styles.previousDataRow}>
+                        <Text style={styles.previousDataText}>
+                          Last: {latestLog.weight}kg × {latestLog.reps} reps
+                        </Text>
+                        <Text style={styles.previousDataDate}>
+                          on {new Date(latestLog.date).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
               </View>
 
               <View style={styles.detailTips}>
@@ -1674,7 +2042,20 @@ export default function WorkoutScreen() {
                   <TouchableOpacity
                     key={plan.id}
                     style={styles.selectorItem}
-                    onPress={() => handleWorkoutSelection(plan.id)}
+                    onPress={() => {
+                      handleWorkoutSelection(plan.id);
+                      // Immediately start the workout if one was selected
+                      if (plan.id) {
+                        const selectedPlan = allWorkoutPlans.find(p => p.id === plan.id);
+                        if (selectedPlan) {
+                          setSelectedPlan(selectedPlan);
+                          setCurrentSessionStart(Date.now());
+                          setSessionInProgress(true);
+                          setShowPlanModal(true);
+                        }
+                      }
+                    }}
+                    activeOpacity={0.8}
                   >
                     <View style={[styles.selectorIcon, { backgroundColor: plan.color + '20' }]}>
                       <IconSymbol name={plan.icon as any} size={28} color={plan.color} />
@@ -1691,14 +2072,29 @@ export default function WorkoutScreen() {
                       <Text style={styles.selectorSubtitle}>{plan.subtitle}</Text>
                       <Text style={styles.selectorCount}>{plan.exercises.length} exercises</Text>
                     </View>
-                    <IconSymbol name="chevron.right" size={24} color={colors.textSecondary} />
+                    <View style={styles.selectorActions}>
+                      <TouchableOpacity
+                        style={styles.duplicateButton}
+                        onPress={(e) => {
+                          e.stopPropagation(); // Prevent triggering the parent onPress
+                          duplicateWorkout(plan);
+                        }}
+                      >
+                        <IconSymbol name="doc.on.doc" size={20} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                      <IconSymbol name="chevron.right" size={24} color={colors.textSecondary} />
+                    </View>
                   </TouchableOpacity>
                 ))}
 
                 {selectedWorkout && (
                   <TouchableOpacity
                     style={[styles.selectorItem, styles.removeItem]}
-                    onPress={() => handleWorkoutSelection(null)}
+                    onPress={() => {
+                      handleWorkoutSelection(null);
+                      // Close the selector after removing
+                      setShowWorkoutSelector(false);
+                    }}
                   >
                     <View style={[styles.selectorIcon, { backgroundColor: '#ff525220' }]}>
                       <IconSymbol name="trash.fill" size={28} color="#ff5252" />
@@ -1713,6 +2109,14 @@ export default function WorkoutScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* Simple Celebration Message */}
+        {showCelebration && (
+          <View style={styles.celebrationMessage}>
+            <IconSymbol name="trophy.fill" size={24} color={colors.accent} />
+            <Text style={styles.celebrationText}>{celebrationTitle}</Text>
+          </View>
+        )}
     </>
   );
 }
@@ -1798,11 +2202,12 @@ const styles = StyleSheet.create({
   },
   selectedDayInfo: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16, // Increased border radius for consistency
     padding: 16,
     marginBottom: 20,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.12), 0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 5,
   },
   selectedDayHeader: {
     flexDirection: 'row',
@@ -1841,8 +2246,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     borderLeftWidth: 4,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.08)',
-    elevation: 3,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.12), 0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 5,
   },
   workoutCardHeader: {
     flexDirection: 'row',
@@ -1871,9 +2277,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   workoutExerciseCount: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '400',
   },
   emptyState: {
     alignItems: 'center',
@@ -1881,18 +2287,35 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
     paddingHorizontal: 40,
   },
+  emptyStateIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.primary + '15', // Light tint of primary color
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
   emptyStateTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.text,
-    marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  emptyStateTip: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    fontStyle: 'italic',
+    marginTop: 12,
   },
   allWorkoutsSection: {
     marginBottom: 20,
@@ -1926,11 +2349,12 @@ const styles = StyleSheet.create({
   },
   planCard: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16, // Increased border radius for consistency
     padding: 16,
     marginBottom: 12,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   planCardContent: {
     flexDirection: 'row',
@@ -2040,6 +2464,26 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
+  modalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  groupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  groupButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.card,
+    marginLeft: 4,
+  },
   modalSubtitle: {
     fontSize: 16,
     color: colors.textSecondary,
@@ -2123,6 +2567,40 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexWrap: 'nowrap',
     flexShrink: 0,
+  },
+  groupSelectCheckbox: {
+    marginRight: 12,
+    padding: 4,
+  },
+  exerciseItemSelected: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  exerciseDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  exerciseTypeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  exerciseTypestrength: {
+    backgroundColor: colors.primary + '20',
+  },
+  exerciseTypecardio: {
+    backgroundColor: colors.accent + '20',
+  },
+  exerciseTypeduration: {
+    backgroundColor: colors.secondary + '20',
+  },
+  exerciseTypeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.text,
   },
   completeButton: {
     flexDirection: 'row',
@@ -2281,6 +2759,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.textSecondary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  activeRestChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: colors.primary + '20',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   restChipText: {
     fontSize: 12,
@@ -2325,6 +2817,31 @@ const styles = StyleSheet.create({
   setChipText: {
     fontSize: 12,
     color: colors.text,
+    fontWeight: '600',
+  },
+  exerciseWeightContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: colors.primary + '20',
+    marginLeft: 8,
+  },
+  exerciseWeightText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  cardioDurationContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: colors.accent + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardioDurationText: {
+    fontSize: 12,
+    color: colors.accent,
     fontWeight: '600',
   },
 
@@ -2504,6 +3021,105 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.card,
     fontSize: 16,
+  },
+
+  // Workout selector duplicate button
+  selectorActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  duplicateButton: {
+    padding: 6,
+  },
+
+  // Celebration message
+  celebrationMessage: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    zIndex: 999,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.15), 0px 4px 12px rgba(0, 0, 0, 0.1)',
+    elevation: 8,
+  },
+  celebrationText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+
+  // Previous workout data
+  previousDataSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.background,
+  },
+  previousDataTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  previousDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  previousDataText: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  previousDataDate: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  previousDataEmpty: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
+
+  // Quick stats section
+  quickStatsSection: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  quickStatsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  quickStatCard: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
+  },
+  quickStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  quickStatLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 });
 

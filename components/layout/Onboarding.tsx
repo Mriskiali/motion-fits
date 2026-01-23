@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
-import { IconSymbol } from './IconSymbol';
-import { colors } from '@/styles/commonStyles';
+import { View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import { IconSymbol } from '../ui/IconSymbol';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -12,7 +11,7 @@ interface OnboardingProps {
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [currentPage, setCurrentPage] = useState(0);
-  
+
   const pages = [
     {
       title: "Welcome to Motion Fits",
@@ -65,7 +64,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <View className="flex-1 bg-gray-50 dark:bg-gray-900 p-5">
       <ScrollView
         horizontal
         pagingEnabled
@@ -77,44 +76,41 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         scrollEnabled={false} // Disable scrolling to force button navigation
       >
         {pages.map((page, index) => (
-          <View key={index} style={[styles.page, { width }]}>
-            <View style={styles.iconContainer}>
-              <IconSymbol name={page.icon as any} size={80} color={colors.primary} />
+          <View key={index} className="flex-1 justify-center items-center px-5" style={{ width }}>
+            <View className="w-30 h-30 rounded-full bg-blue-500/20 justify-center items-center mb-7.5">
+              <IconSymbol name={page.icon as any} size={80} color="#007AFF" />
             </View>
-            <Text style={styles.title}>{page.title}</Text>
-            <Text style={styles.subtitle}>{page.subtitle}</Text>
-            <Text style={styles.description}>{page.description}</Text>
+            <Text className="text-2xl font-700 text-gray-900 dark:text-white text-center mb-2">{page.title}</Text>
+            <Text className="text-base font-500 text-gray-500 dark:text-gray-400 text-center mb-5">{page.subtitle}</Text>
+            <Text className="text-base text-gray-900 dark:text-white text-center leading-6">{page.description}</Text>
           </View>
         ))}
       </ScrollView>
 
-      <View style={styles.pagination}>
+      <View className="flex-row justify-center items-center my-7.5">
         {pages.map((_, index) => (
           <View
             key={index}
-            style={[
-              styles.paginationDot,
-              { backgroundColor: index === currentPage ? colors.primary : colors.textSecondary }
-            ]}
+            className={`w-2 h-2 rounded-full mx-1 ${index === currentPage ? 'bg-blue-500 dark:bg-blue-400' : 'bg-gray-500 dark:bg-gray-400'}`}
           />
         ))}
       </View>
 
-      <View style={styles.buttonContainer}>
+      <View className="flex-row justify-between w-full px-5 mb-10">
         <TouchableOpacity
-          style={[styles.button, styles.prevButton]}
+          className={`flex-1 py-3.5 px-5 rounded-lg items-center mx-2 ${currentPage === 0 ? 'bg-gray-50 dark:bg-gray-700' : 'bg-gray-50 dark:bg-gray-700'}`}
           onPress={handlePrev}
           disabled={currentPage === 0}
           opacity={currentPage === 0 ? 0.5 : 1}
         >
-          <Text style={styles.buttonText}>Previous</Text>
+          <Text className="text-base font-600 text-gray-900 dark:text-white">Previous</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.button, styles.nextButton]}
+          className="flex-1 py-3.5 px-5 rounded-lg items-center mx-2 bg-blue-500 dark:bg-blue-600"
           onPress={handleNext}
         >
-          <Text style={[styles.buttonText, styles.nextButtonText]}>
+          <Text className="text-base font-600 text-white">
             {currentPage === pages.length - 1 ? 'Get Started' : 'Next'}
           </Text>
         </TouchableOpacity>
@@ -122,89 +118,5 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    padding: 20,
-  },
-  page: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  description: {
-    fontSize: 16,
-    color: colors.text,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 30,
-  },
-  paginationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingHorizontal: 20,
-    marginBottom: 40,
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginHorizontal: 8,
-  },
-  prevButton: {
-    backgroundColor: colors.background,
-  },
-  nextButton: {
-    backgroundColor: colors.primary,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  nextButtonText: {
-    color: colors.card,
-  },
-});
 
 export default Onboarding;

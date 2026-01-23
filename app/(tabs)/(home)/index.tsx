@@ -1,15 +1,15 @@
 
 import React, { useState, useEffect } from "react";
 import { useTheme } from "@react-navigation/native";
-import { StyleSheet, View, Text, Platform, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { StyleSheet, View, Text, Platform, ScrollView } from "react-native";
 import { Stack } from "expo-router";
 import { colors } from "@/styles/commonStyles";
-import { IconSymbol } from "@/components/IconSymbol";
-import SkeletonLoader from "@/components/SkeletonLoader";
-import Onboarding from "@/components/Onboarding";
+import { IconSymbol } from "@/components/ui/IconSymbol";
+import { ProgressRing } from "@/components/ui/ProgressRing";
+import SkeletonLoader from "@/components/feedback/SkeletonLoader";
+import Onboarding from "@/components/layout/Onboarding";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dataStore, CompletedExercise, DayWorkoutAssignment, WorkoutPlan as DataWorkoutPlan } from '@/lib/dataStore';
-import { showSuccessToast, showErrorToast } from '@/utils/notifications';
 
 const defaultWorkoutPlans: DataWorkoutPlan[] = [
   {
@@ -126,6 +126,37 @@ export default function HomeScreen() {
     };
   }, [completedExercises, weekDates, monthDates]);
 
+  // Calculate streaks
+  const streaks = React.useMemo(() => {
+    const uniqueDays = Array.from(new Set(completedExercises.map(ce => ce.date))).sort();
+    // longest streak
+    let longest = 0;
+    let current = 0;
+    let prev: Date | null = null;
+    uniqueDays.forEach(ds => {
+      const d = new Date(ds + 'T00:00:00');
+      if (!prev) {
+        current = 1;
+      } else {
+        const diff = Math.round((d.getTime() - prev.getTime())/(1000*60*60*24));
+        current = (diff === 1) ? current + 1 : 1;
+      }
+      longest = Math.max(longest, current);
+      prev = d;
+    });
+    // current streak ending today
+    let currStreak = 0;
+    const daySet = new Set(uniqueDays);
+    const now = new Date();
+    let cursor = new Date(now);
+    cursor.setHours(0,0,0,0);
+    while (daySet.has(getDateString(cursor))) {
+      currStreak++;
+      cursor.setDate(cursor.getDate()-1);
+    }
+    return { current: currStreak, longest };
+  }, [completedExercises]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -241,6 +272,7 @@ export default function HomeScreen() {
     });
   };
 
+
   const getDaysAgo = (dateStr: string) => {
     const date = new Date(dateStr);
     const today = new Date();
@@ -259,11 +291,6 @@ export default function HomeScreen() {
     else {
       return date.toLocaleDateString('en-US', { weekday: 'long' });
     }
-  };
-
-  const getWorkoutName = (planId: string) => {
-    const plan = getWorkoutPlans().find((p: DataWorkoutPlan) => p.id === planId);
-    return plan?.name || 'Unknown';
   };
 
   const weeklyPercentage = getWeeklyPercentage();
@@ -372,13 +399,18 @@ export default function HomeScreen() {
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
                 <View style={styles.statHeader}>
-                  <IconSymbol name="calendar" size={24} color={colors.primary} />
+                  <IconSymbol name="calendar" size={24} color="#009688" />
                   <Text style={styles.statLabel}>This Week</Text>
                 </View>
                 <View style={styles.statContent}>
-                  <Text style={styles.statValue}>{weekTotal}</Text>
+                  <Text style={styles.statValue}>{String(weekTotal)}</Text>
                   <Text style={styles.statUnit}>exercises</Text>
                 </View>
+                <ProgressRing
+                  percentage={weeklyPercentage}
+                  size={60}
+                  color="#009688"
+                />
                 <View style={styles.progressBarContainer}>
                   <View style={styles.progressBarBackground}>
                     <View
@@ -386,27 +418,34 @@ export default function HomeScreen() {
                         styles.progressBarFill,
                         {
                           width: `${weeklyPercentage}%`,
-                          backgroundColor: colors.primary
+                          backgroundColor: "#4CAF50"
                         }
                       ]}
                     />
                   </View>
-                  <Text style={styles.progressText}>{Math.min(getWeekDates().filter(date => {
-                    const dateStr = getDateString(date);
-                    return workoutAssignments.some(a => a.date === dateStr && a.planId !== null);
-                  }).length, fitnessGoals.weeklyTarget || 3)}/{fitnessGoals.weeklyTarget || 3} workouts completed</Text>
+                  <Text style={styles.progressText}>
+                    {`${Math.min(getWeekDates().filter(date => {
+                      const dateStr = getDateString(date);
+                      return workoutAssignments.some(a => a.date === dateStr && a.planId !== null);
+                    }).length, fitnessGoals.weeklyTarget || 3)}/${fitnessGoals.weeklyTarget || 3}`} workouts completed
+                  </Text>
                 </View>
               </View>
 
               <View style={styles.statCard}>
                 <View style={styles.statHeader}>
-                  <IconSymbol name="calendar.badge.clock" size={24} color={colors.secondary} />
+                  <IconSymbol name="calendar.badge.clock" size={24} color="#009688" />
                   <Text style={styles.statLabel}>This Month</Text>
                 </View>
                 <View style={styles.statContent}>
-                  <Text style={styles.statValue}>{monthTotal}</Text>
+                  <Text style={styles.statValue}>{String(monthTotal)}</Text>
                   <Text style={styles.statUnit}>exercises</Text>
                 </View>
+                <ProgressRing
+                  percentage={monthlyPercentage}
+                  size={60}
+                  color="#009688"
+                />
                 <View style={styles.progressBarContainer}>
                   <View style={styles.progressBarBackground}>
                     <View
@@ -414,15 +453,17 @@ export default function HomeScreen() {
                         styles.progressBarFill,
                         {
                           width: `${monthlyPercentage}%`,
-                          backgroundColor: colors.secondary
+                          backgroundColor: "#4CAF50"
                         }
                       ]}
                     />
                   </View>
-                  <Text style={styles.progressText}>{Math.min(getMonthDates().filter(date => {
-                    const dateStr = getDateString(date);
-                    return workoutAssignments.some(a => a.date === dateStr && a.planId !== null);
-                  }).length, Math.round((fitnessGoals.weeklyTarget || 3) * 4.33))}/{Math.round((fitnessGoals.weeklyTarget || 3) * 4.33)} workouts completed</Text>
+                  <Text style={styles.progressText}>
+                    {`${Math.min(getMonthDates().filter(date => {
+                      const dateStr = getDateString(date);
+                      return workoutAssignments.some(a => a.date === dateStr && a.planId !== null);
+                    }).length, Math.round((fitnessGoals.weeklyTarget || 3) * 4.33))}/${Math.round((fitnessGoals.weeklyTarget || 3) * 4.33)}`} workouts completed
+                  </Text>
                 </View>
               </View>
             </View>
@@ -465,18 +506,30 @@ export default function HomeScreen() {
               <View style={styles.quickStatsGrid}>
                 <View style={styles.quickStatCard}>
                   <IconSymbol name="flame.fill" size={32} color="#ef5350" />
-                  <Text style={styles.quickStatValue}>{weekTotal}</Text>
+                  <Text style={styles.quickStatValue}>{String(weekTotal)}</Text>
                   <Text style={styles.quickStatLabel}>Week Total</Text>
                 </View>
                 <View style={styles.quickStatCard}>
                   <IconSymbol name="chart.bar.fill" size={32} color={colors.accent} />
-                  <Text style={styles.quickStatValue}>{monthTotal}</Text>
+                  <Text style={styles.quickStatValue}>{String(monthTotal)}</Text>
                   <Text style={styles.quickStatLabel}>Month Total</Text>
                 </View>
                 <View style={styles.quickStatCard}>
                   <IconSymbol name="star.fill" size={32} color="#ffd700" />
-                  <Text style={styles.quickStatValue}>{customWorkoutPlans.length}</Text>
+                  <Text style={styles.quickStatValue}>{String(customWorkoutPlans.length)}</Text>
                   <Text style={styles.quickStatLabel}>Custom Plans</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Motivational Section */}
+            <View style={styles.motivationalSection}>
+              <View style={styles.motivationalCard}>
+                <Text style={styles.motivationalTitle}>Keep Going!</Text>
+                <Text style={styles.motivationalSubtitle}>You're building healthy habits</Text>
+                <View style={styles.streakContainer}>
+                  <IconSymbol name="flame.fill" size={24} color="#ff7043" />
+                  <Text style={styles.streakText}>{String(streaks.current)} day streak</Text>
                 </View>
               </View>
             </View>
@@ -520,8 +573,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 16,
     padding: 20,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.08)',
-    elevation: 3,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.12), 0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 5,
   },
   statHeader: {
     flexDirection: 'row',
@@ -580,11 +634,12 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16, // Increased border radius for consistency
     padding: 40,
     alignItems: 'center',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   emptyStateText: {
     fontSize: 16,
@@ -604,12 +659,13 @@ const styles = StyleSheet.create({
   },
   activityItem: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16, // Increased border radius for consistency
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   activityIndicator: {
     width: 8,
@@ -640,11 +696,12 @@ const styles = StyleSheet.create({
   quickStatCard: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16, // Increased border radius for consistency
     padding: 16,
     alignItems: 'center',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   quickStatValue: {
     fontSize: 24,
@@ -657,5 +714,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  motivationalSection: {
+    marginBottom: 20,
+  },
+  motivationalCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
+  },
+  motivationalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  motivationalSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  streakContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  streakText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
   },
 });

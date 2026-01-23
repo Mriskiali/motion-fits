@@ -68,6 +68,14 @@ export type WorkoutSession = {
   restAvgSec?: number;
   setLogs?: SetLog[];
   newPBs?: PersonalBest[];
+  progressPhotos?: ProgressPhoto[];
+};
+
+export type ProgressPhoto = {
+  id: string;
+  uri: string;
+  date: string;
+  note?: string;
 };
 
 export type WorkoutPlan = {

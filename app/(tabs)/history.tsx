@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dataStore, WorkoutSession } from '@/lib/dataStore';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { IconSymbol } from '@/components/IconSymbol';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { GoalsSettings, DEFAULT_GOALS_SETTINGS, getNextReminderSummary } from '@/lib/notifications';
 import { router } from 'expo-router';
@@ -259,6 +259,60 @@ export default function HistoryScreen() {
     ]);
   };
 
+  const deleteSession = async (sessionId: string, sessionDate: string) => {
+    Alert.alert('Delete Session', 'Are you sure you want to delete this workout session? This will remove all related data including from recent activity.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // Remove the specific session from workout sessions
+            const updatedSessions = sessions.filter(s => s.id !== sessionId);
+            await dataStore.setWorkoutSessions(updatedSessions);
+
+            // Also remove related completed exercises for this date
+            const completedExercises = await dataStore.getCompletedExercises();
+            const updatedCompletedExercises = completedExercises.filter(ce => ce.date !== sessionDate);
+            await dataStore.setCompletedExercises(updatedCompletedExercises);
+
+            // Also remove related set logs for this date
+            const setLogs = await dataStore.getSetLogs();
+            const updatedSetLogs = setLogs.filter(log => log.date !== sessionDate);
+            await dataStore.setSetLogs(updatedSetLogs);
+
+            // Also remove related rest timers for this date
+            const restTimers = await dataStore.getRestTimers();
+            const updatedRestTimers = restTimers.filter(timer => timer.date !== sessionDate);
+            await dataStore.setRestTimers(updatedRestTimers);
+
+            // Also remove related exercise set counts for this date
+            const exerciseSetCounts = await dataStore.getExerciseSetCounts();
+            const updatedExerciseSetCounts = exerciseSetCounts.filter(count => count.date !== sessionDate);
+            await dataStore.setExerciseSetCounts(updatedExerciseSetCounts);
+
+            // Also remove related workout assignment for this date
+            const workoutAssignments = await dataStore.getWorkoutAssignments();
+            const updatedWorkoutAssignments = workoutAssignments.map(assignment =>
+              assignment.date === sessionDate ? { ...assignment, planId: null } : assignment
+            );
+            await dataStore.setWorkoutAssignments(updatedWorkoutAssignments);
+
+            if (Platform.OS !== 'web' && Haptics?.NotificationFeedbackType?.Warning) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            }
+
+            load(); // Reload the data
+            showSuccessToast('Session Deleted', 'The workout session and related data have been deleted.');
+          } catch (error) {
+            console.error('Error deleting session:', error);
+            showErrorToast('Delete Failed', 'Unable to delete session. Please try again.');
+          }
+        }
+      },
+    ]);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -467,10 +521,15 @@ export default function HistoryScreen() {
             <Text style={styles.sectionTitle}>Recent Personal Bests</Text>
             {recentPBs.map(pb => (
               <View key={`${pb.exerciseId}-${pb.date}-${pb.value}`} style={styles.pbItem}>
-                <IconSymbol name="star.fill" size={16} color={colors.accent} />
+                <View style={styles.pbIconContainer}>
+                  <IconSymbol name="trophy.fill" size={20} color="#FFD700" />
+                </View>
                 <View style={{ flex: 1, marginLeft: 8 }}>
                   <Text style={styles.pbText}>{pb.name}: {pb.value}</Text>
                   <Text style={styles.pbSub}>{formatDateHuman(pb.date)} • {pb.planName}</Text>
+                </View>
+                <View style={styles.pbHighlightBadge}>
+                  <Text style={styles.pbHighlightText}>NEW PR!</Text>
                 </View>
               </View>
             ))}
@@ -478,7 +537,7 @@ export default function HistoryScreen() {
         ) : null}
 
         {/* Weekly Trends */}
-        <View style={{ marginTop: 8 }}>
+        <View style={styles.weeklyTrendsSection}>
           <Text style={styles.sectionTitle}>Weekly Trends</Text>
           <View style={styles.weeklyTrends}>
             <View style={styles.weeklyTrendCard}>
@@ -499,14 +558,38 @@ export default function HistoryScreen() {
           </View>
         </View>
 
+        {/* Performance Insights */}
+        <View style={styles.insightsSection}>
+          <Text style={styles.sectionTitle}>Performance Insights</Text>
+          <View style={styles.insightCard}>
+            <IconSymbol name="chart.bar.fill" size={24} color={colors.primary} />
+            <Text style={styles.insightText}>
+              {sessions.length > 0
+                ? `You've completed ${sessions.length} workout${sessions.length > 1 ? 's' : ''} this month!`
+                : 'Complete your first workout to see insights.'}
+            </Text>
+          </View>
+          {streaks.current > 0 && (
+            <View style={styles.insightCard}>
+              <IconSymbol name="flame.fill" size={24} color="#ff7043" />
+              <Text style={styles.insightText}>
+                Great job maintaining a {streaks.current}-day workout streak!
+              </Text>
+            </View>
+          )}
+        </View>
+
         {/* Recent Sessions */}
-        <View style={{ marginTop: 8 }}>
+        <View style={styles.sessionsSection}>
           <Text style={styles.sectionTitle}>Recent Sessions</Text>
           {!sessions.length && !loading && (
             <View style={styles.empty}>
-              <IconSymbol name="calendar.badge.exclamationmark" size={48} color={colors.textSecondary} />
-              <Text style={styles.emptyTitle}>No sessions yet</Text>
-              <Text style={styles.emptyText}>Finish a workout to see it here</Text>
+              <View style={styles.emptyIconContainer}>
+                <IconSymbol name="figure.run" size={64} color={colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>No Workout Sessions Yet</Text>
+              <Text style={styles.emptyText}>Complete a workout to start tracking your progress</Text>
+              <Text style={styles.emptyTip}>Get started by going to the Workout tab!</Text>
             </View>
           )}
           {sessions.map(s => (
@@ -518,6 +601,11 @@ export default function HistoryScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sessionTitle}>{s.planName}</Text>
                   <Text style={styles.sessionSub}>{formatDateHuman(s.date)} • {formatDuration(s.durationSec)}</Text>
+                </View>
+                <View style={styles.sessionActions}>
+                  <TouchableOpacity onPress={() => deleteSession(s.id, s.date)}>
+                    <IconSymbol name="trash" size={20} color="#ff4444" />
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.sessionKpis}>
                   <Text style={styles.kpiText}>{s.completionPercent}%</Text>
@@ -592,10 +680,11 @@ const styles = StyleSheet.create({
   card: {
     flexBasis: '48%',
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 14,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    borderRadius: 16, // Increased border radius for consistency
+    padding: 16, // Increased padding for better spacing
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   cardLabel: {
     fontSize: 12,
@@ -670,26 +759,47 @@ const styles = StyleSheet.create({
   },
   empty: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.primary + '15', // Light tint of primary color
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    marginTop: 8,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   emptyText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  emptyTip: {
     fontSize: 13,
     color: colors.textSecondary,
-    marginTop: 2,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 8,
   },
   sessionCard: {
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16, // Increased border radius for consistency
+    padding: 16, // Increased padding for better spacing
     marginBottom: 12,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   sessionHeader: {
     flexDirection: 'row',
@@ -715,6 +825,10 @@ const styles = StyleSheet.create({
   sessionKpis: {
     alignItems: 'flex-end',
     minWidth: 64,
+  },
+  sessionActions: {
+    marginLeft: 8,
+    marginRight: 8,
   },
   kpiText: {
     fontSize: 16,
@@ -753,6 +867,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
   },
+  pbIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFF2CC', // Light gold background
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   pbText: {
     fontSize: 14,
     fontWeight: '700',
@@ -761,6 +883,17 @@ const styles = StyleSheet.create({
   pbSub: {
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  pbHighlightBadge: {
+    backgroundColor: '#FFEB3B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pbHighlightText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#F57F17',
   },
 
   // Weekly trends styles
@@ -771,11 +904,12 @@ const styles = StyleSheet.create({
   weeklyTrendCard: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16, // Increased border radius for consistency
+    padding: 14, // Increased padding for better spacing
     alignItems: 'center',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   weeklyTrendTitle: {
     fontSize: 12,
@@ -831,11 +965,12 @@ const styles = StyleSheet.create({
   // Goals header card
   goalCard: {
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16, // Increased border radius for consistency
+    padding: 16, // Increased padding for better spacing
     marginBottom: 12,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   goalRow: {
     flexDirection: 'row',
@@ -938,5 +1073,68 @@ const styles = StyleSheet.create({
     color: colors.card,
     fontWeight: '800',
     fontSize: 12,
+  },
+
+  // Weekly trends section
+  weeklyTrendsSection: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
+  },
+  weeklyTrends: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  weeklyTrendCard: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  weeklyTrendTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  weeklyTrendValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  weeklyTrendLabel: {
+    fontSize: 10,
+    color: colors.textSecondary,
+  },
+
+  // Insights section
+  insightsSection: {
+    marginBottom: 16,
+  },
+  insightCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
+  },
+  insightText: {
+    fontSize: 14,
+    color: colors.text,
+    marginLeft: 12,
+    flex: 1,
+  },
+
+  // Sessions section
+  sessionsSection: {
+    marginBottom: 20,
   },
 });

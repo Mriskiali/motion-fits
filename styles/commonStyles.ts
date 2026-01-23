@@ -2,14 +2,26 @@
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
 export const colors = {
-  background: '#f9f9f9',
-  text: '#212121',
-  textSecondary: '#757575',
-  primary: '#64b5f6',
-  secondary: '#aed581',
-  accent: '#ffb74d',
+  background: '#f5f5f7', // Slightly darker background for better contrast
+  text: '#1d1d1f',
+  textSecondary: '#6e6e73',
+  primary: '#007AFF',
+  secondary: '#34C759',
+  accent: '#FF9500',
   card: '#ffffff',
-  highlight: '#64b5f6',
+  highlight: '#007AFF',
+};
+
+// Tailwind-compatible color classes
+export const twColors = {
+  background: 'bg-gray-100',
+  text: 'text-gray-900',
+  textSecondary: 'text-gray-500',
+  primary: 'text-blue-500',
+  secondary: 'text-green-500',
+  accent: 'text-orange-500',
+  card: 'bg-white',
+  highlight: 'text-blue-500',
 };
 
 export const buttonStyles = StyleSheet.create({
@@ -73,12 +85,13 @@ export const commonStyles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16, // Increased border radius for more modern look
     padding: 16,
     marginVertical: 8,
     width: '100%',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-    elevation: 3,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.08), 0px 2px 4px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   icon: {
     width: 60,

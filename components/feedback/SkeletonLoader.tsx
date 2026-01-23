@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
-import { colors } from '@/styles/commonStyles';
+import { View, Animated } from 'react-native';
 
 interface SkeletonLoaderProps {
   width?: number | string;
@@ -15,7 +14,7 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
   height = 20,
   borderRadius = 4,
   style,
-  shimmerColor = colors.background,
+  shimmerColor = '#f5f5f7',
 }) => {
   const shimmerAnimation = new Animated.Value(0);
 
@@ -44,13 +43,13 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
 
   const shimmerColorInterpolation = shimmerAnimation.interpolate({
     inputRange: [0, 1],
-    outputRange: [shimmerColor, colors.card],
+    outputRange: [shimmerColor, '#ffffff'],
   });
 
   return (
     <View
+      className="overflow-hidden relative"
       style={[
-        styles.skeleton,
         {
           width,
           height,
@@ -62,7 +61,7 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
     >
       <Animated.View
         style={[
-          StyleSheet.absoluteFill,
+          { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
           {
             backgroundColor: shimmerColorInterpolation,
             opacity: 0.5,
@@ -80,12 +79,5 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  skeleton: {
-    overflow: 'hidden',
-    position: 'relative',
-  },
-});
 
 export default SkeletonLoader;

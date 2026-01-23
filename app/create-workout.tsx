@@ -3,16 +3,21 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
 import { Stack, router } from 'expo-router';
 import { useTheme } from '@react-navigation/native';
 import { colors } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 import * as Haptics from 'expo-haptics';
 import { dataStore } from '@/lib/dataStore';
 
 interface Exercise {
   id: string;
   name: string;
-  sets: string;
+  type: 'strength' | 'cardio' | 'duration'; // strength (sets/reps/weight), cardio (duration), duration (just time)
+  sets?: string;
   reps?: string;
-  duration?: string;
+  weight?: string; // for strength exercises
+  duration?: string; // for cardio/duration exercises
+  hours?: string; // for cardio/duration exercises
+  minutes?: string; // for cardio/duration exercises
+  seconds?: string; // for cardio/duration exercises
   notes?: string;
 }
 
@@ -32,7 +37,7 @@ function CreateWorkoutContent() {
   const [workoutIcon, setWorkoutIcon] = useState('figure.strengthtraining.traditional');
   const [workoutColor, setWorkoutColor] = useState('#64b5f6');
   const [exercises, setExercises] = useState<Exercise[]>([
-    { id: Date.now().toString(), name: '', sets: '3', reps: '10' }
+    { id: Date.now().toString(), name: '', type: 'strength', sets: '3', reps: '10' }
   ]);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -55,8 +60,12 @@ function CreateWorkoutContent() {
     const newExercise: Exercise = {
       id: Date.now().toString(),
       name: '',
+      type: 'strength', // Default to strength exercise
       sets: '3',
-      reps: '10'
+      reps: '10',
+      hours: '0',
+      minutes: '0',
+      seconds: '0'
     };
     setExercises([...exercises, newExercise]);
     if (Platform.OS !== 'web' && Haptics?.ImpactFeedbackStyle?.Light) {
@@ -105,8 +114,19 @@ function CreateWorkoutContent() {
         name: workoutName.trim(),
         subtitle: workoutSubtitle.trim() || 'Custom workout',
         exercises: exercises.map(ex => ({
-          ...ex,
-          id: `ex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+          id: `ex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          name: ex.name,
+          type: ex.type || 'strength', // Default to strength if not specified
+          sets: ex.sets || '3',
+          reps: ex.reps || '10',
+          weight: ex.weight, // May be undefined for non-strength exercises
+          duration: (ex.type === 'cardio' || ex.type === 'duration')
+            ? `${ex.hours || '0'}h ${ex.minutes || '0'}m ${ex.seconds || '0'}s`
+            : ex.duration, // May be undefined for strength exercises
+          hours: ex.hours,
+          minutes: ex.minutes,
+          seconds: ex.seconds,
+          notes: ex.notes
         })),
         icon: workoutIcon,
         color: workoutColor,
@@ -281,31 +301,127 @@ function CreateWorkoutContent() {
                   autoCapitalize="words"
                 />
 
-                <View style={styles.exerciseDetailsRow}>
-                  <View style={styles.detailInputGroup}>
-                    <Text style={styles.detailLabel}>Sets</Text>
-                    <TextInput
-                      style={styles.smallInput}
-                      value={exercise.sets}
-                      onChangeText={(value) => updateExercise(exercise.id, 'sets', value)}
-                      placeholder="3"
-                      keyboardType="numeric"
-                      placeholderTextColor={colors.textSecondary}
-                    />
-                  </View>
-
-                  <View style={styles.detailInputGroup}>
-                    <Text style={styles.detailLabel}>Reps</Text>
-                    <TextInput
-                      style={styles.smallInput}
-                      value={exercise.reps || ''}
-                      onChangeText={(value) => updateExercise(exercise.id, 'reps', value)}
-                      placeholder="10"
-                      keyboardType="numeric"
-                      placeholderTextColor={colors.textSecondary}
-                    />
+                {/* Exercise Type Selector */}
+                <View style={styles.exerciseTypeSelector}>
+                  <Text style={styles.detailLabel}>Exercise Type</Text>
+                  <View style={styles.typeOptions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeOption,
+                        exercise.type === 'strength' && styles.typeOptionSelected
+                      ]}
+                      onPress={() => updateExercise(exercise.id, 'type', 'strength')}
+                    >
+                      <Text style={[
+                        styles.typeOptionText,
+                        exercise.type === 'strength' && styles.typeOptionTextSelected
+                      ]}>Strength</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeOption,
+                        exercise.type === 'cardio' && styles.typeOptionSelected
+                      ]}
+                      onPress={() => updateExercise(exercise.id, 'type', 'cardio')}
+                    >
+                      <Text style={[
+                        styles.typeOptionText,
+                        exercise.type === 'cardio' && styles.typeOptionTextSelected
+                      ]}>Cardio</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeOption,
+                        exercise.type === 'duration' && styles.typeOptionSelected
+                      ]}
+                      onPress={() => updateExercise(exercise.id, 'type', 'duration')}
+                    >
+                      <Text style={[
+                        styles.typeOptionText,
+                        exercise.type === 'duration' && styles.typeOptionTextSelected
+                      ]}>Duration</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
+
+                {/* Conditional Inputs based on exercise type */}
+                {exercise.type === 'strength' && (
+                  <View style={styles.exerciseDetailsRow}>
+                    <View style={styles.detailInputGroup}>
+                      <Text style={styles.detailLabel}>Sets</Text>
+                      <TextInput
+                        style={styles.smallInput}
+                        value={exercise.sets || '3'}
+                        onChangeText={(value) => updateExercise(exercise.id, 'sets', value)}
+                        placeholder="3"
+                        keyboardType="numeric"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
+
+                    <View style={styles.detailInputGroup}>
+                      <Text style={styles.detailLabel}>Reps</Text>
+                      <TextInput
+                        style={styles.smallInput}
+                        value={exercise.reps || '10'}
+                        onChangeText={(value) => updateExercise(exercise.id, 'reps', value)}
+                        placeholder="10"
+                        keyboardType="numeric"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
+
+                    <View style={styles.detailInputGroup}>
+                      <Text style={styles.detailLabel}>Weight (kg)</Text>
+                      <TextInput
+                        style={styles.smallInput}
+                        value={exercise.weight || ''}
+                        onChangeText={(value) => updateExercise(exercise.id, 'weight', value)}
+                        placeholder="0"
+                        keyboardType="decimal-pad"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
+                  </View>
+                )}
+
+                {(exercise.type === 'cardio' || exercise.type === 'duration') && (
+                  <View style={styles.exerciseDetailsRow}>
+                    <View style={styles.detailInputGroup}>
+                      <Text style={styles.detailLabel}>Hours</Text>
+                      <TextInput
+                        style={styles.smallInput}
+                        value={exercise.hours || ''}
+                        onChangeText={(value) => updateExercise(exercise.id, 'hours', value)}
+                        placeholder="0"
+                        keyboardType="numeric"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
+                    <View style={styles.detailInputGroup}>
+                      <Text style={styles.detailLabel}>Minutes</Text>
+                      <TextInput
+                        style={styles.smallInput}
+                        value={exercise.minutes || ''}
+                        onChangeText={(value) => updateExercise(exercise.id, 'minutes', value)}
+                        placeholder="0"
+                        keyboardType="numeric"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
+                    <View style={styles.detailInputGroup}>
+                      <Text style={styles.detailLabel}>Seconds</Text>
+                      <TextInput
+                        style={styles.smallInput}
+                        value={exercise.seconds || ''}
+                        onChangeText={(value) => updateExercise(exercise.id, 'seconds', value)}
+                        placeholder="0"
+                        keyboardType="numeric"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
+                  </View>
+                )}
               </View>
             ))}
           </View>
@@ -336,11 +452,12 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16, // Increased border radius for consistency
     padding: 16,
     marginBottom: 16,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   sectionTitle: {
     fontSize: 16,
@@ -426,9 +543,12 @@ const styles = StyleSheet.create({
   },
   exerciseCard: {
     backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16, // Increased border radius for consistency
+    padding: 16, // Increased padding for better spacing
     marginBottom: 12,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.06)',
+    elevation: 3,
   },
   exerciseHeaderRow: {
     flexDirection: 'row',
@@ -480,5 +600,34 @@ const styles = StyleSheet.create({
     padding: 8,
     marginLeft: 8,
     marginTop: 4,
+  },
+  exerciseTypeSelector: {
+    marginBottom: 12,
+  },
+  typeOptions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  typeOption: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.background,
+    alignItems: 'center',
+  },
+  typeOptionSelected: {
+    backgroundColor: colors.primary + '20',
+    borderColor: colors.primary,
+  },
+  typeOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  typeOptionTextSelected: {
+    color: colors.primary,
   },
 });

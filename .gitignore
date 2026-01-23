@@ -37,3 +37,7 @@ netlify.toml
 
 pnpm-lock.yaml
 package-lock.json
+
+
+assets/ui-refrence/
+assets/error/

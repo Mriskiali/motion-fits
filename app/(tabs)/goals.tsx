@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, TextInput, Alert, Modal } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dataStore } from '@/lib/dataStore';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 import {
   GoalsSettings,
   DEFAULT_GOALS_SETTINGS,
@@ -29,6 +30,7 @@ export default function GoalsScreen() {
   const [dirty, setDirty] = useState(false); // track unsaved changes
   const [showWeeklyGoalModal, setShowWeeklyGoalModal] = useState(false);
   const [tempWeeklyGoal, setTempWeeklyGoal] = useState(settings.weeklyTarget.toString());
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const preferredSet = useMemo(() => new Set(settings.preferredDays || []), [settings.preferredDays]);
 
@@ -265,20 +267,35 @@ export default function GoalsScreen() {
           <View style={[styles.timeRow, !settings.remindersEnabled && { opacity: 0.5 }]}>
             <IconSymbol name="clock.fill" size={18} color={colors.textSecondary} />
             <Text style={styles.label}>Time</Text>
-            <TextInput
-              style={[
-                styles.timeInput,
+            <TouchableOpacity
+              style={styles.timeButton}
+              onPress={() => settings.remindersEnabled && setShowTimePicker(true)}
+              disabled={!settings.remindersEnabled}
+            >
+              <Text style={[
+                styles.timeButtonText,
                 settings.remindersEnabled && !isValidTime(settings.reminderTime) && styles.timeInputInvalid,
-              ]}
-              editable={settings.remindersEnabled}
-              keyboardType="numeric"
-              placeholder="HH:mm"
-              placeholderTextColor={colors.textSecondary}
-              value={settings.reminderTime}
-              onChangeText={(t) => update({ reminderTime: t })}
-              maxLength={5}
-            />
+              ]}>
+                {settings.reminderTime || 'Select Time'}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {showTimePicker && settings.remindersEnabled && (
+            <DateTimePicker
+              value={settings.reminderTime ? new Date(`2000-01-01T${settings.reminderTime}`) : new Date()}
+              mode="time"
+              display="spinner"
+              onChange={(event, selectedDate) => {
+                setShowTimePicker(false);
+                if (selectedDate) {
+                  const hours = String(selectedDate.getHours()).padStart(2, '0');
+                  const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
+                  update({ reminderTime: `${hours}:${minutes}` });
+                }
+              }}
+            />
+          )}
 
           <View style={styles.statusRow}>
             <IconSymbol name="info.circle" size={16} color={colors.textSecondary} />
@@ -290,6 +307,13 @@ export default function GoalsScreen() {
             <IconSymbol name="calendar" size={16} color={colors.textSecondary} />
             <Text style={styles.statusText}>{nextReminderText}</Text>
           </View>
+        </View>
+
+        {/* Motivational Section */}
+        <View style={styles.motivationalCard}>
+          <IconSymbol name="trophy.fill" size={24} color={colors.accent} />
+          <Text style={styles.motivationalTitle}>Achieve Your Goals</Text>
+          <Text style={styles.motivationalSubtitle}>Set realistic targets and stay consistent</Text>
         </View>
 
         {dirty ? (
@@ -382,11 +406,12 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16, // Increased border radius for consistency
+    padding: 16, // Increased padding for better spacing
     marginBottom: 16,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
   },
   sectionTitle: {
     fontSize: 16,
@@ -484,6 +509,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     fontWeight: '700',
   },
+  timeButton: {
+    marginLeft: 'auto',
+    width: 100,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.background,
+    paddingHorizontal: 10,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timeButtonText: {
+    color: colors.text,
+    fontWeight: '700',
+    fontSize: 14,
+  },
   timeInputInvalid: {
     borderColor: '#ef5350',
   },
@@ -527,6 +569,30 @@ const styles = StyleSheet.create({
   noticeText: {
     color: colors.textSecondary,
     fontSize: 12,
+  },
+
+  // Motivational section
+  motivationalCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+    // Enhanced shadow for better depth perception
+    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1), 0px 2px 6px rgba(0, 0, 0, 0.06)',
+    elevation: 4,
+  },
+  motivationalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  motivationalSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 
   // Modal styles

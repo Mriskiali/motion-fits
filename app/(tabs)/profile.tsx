@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { IconSymbol } from "@/components/IconSymbol";
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { View, Text, StyleSheet, ScrollView, Platform, Switch } from "react-native";
 import { useTheme, useColorScheme } from "@react-navigation/native";
@@ -85,6 +85,20 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Goals Progress</Text>
+            <View style={styles.progressCard}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressTitle}>Weekly Goal</Text>
+                <Text style={styles.progressValue}>4/7</Text>
+              </View>
+              <View style={styles.progressBarContainer}>
+                <View style={[styles.progressBar, { width: '57%' }]} />
+              </View>
+              <Text style={styles.progressText}>2 workouts remaining</Text>
+            </View>
+          </View>
+
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Settings</Text>
             <View style={styles.settingCard}>
               <IconSymbol name="bell.fill" size={20} color={colors.primary} />
@@ -111,6 +125,15 @@ export default function ProfileScreen() {
               <IconSymbol name="gear" size={20} color={colors.primary} />
               <Text style={styles.settingText}>App Settings</Text>
             </View>
+          </View>
+
+          {/* Motivational Section */}
+          <View style={styles.motivationalSection}>
+            <Text style={styles.motivationalTitle}>Keep Going!</Text>
+            <Text style={styles.motivationalSubtitle}>Consistency is key to achieving your fitness goals</Text>
+            <TouchableOpacity style={styles.actionButton}>
+              <Text style={styles.actionButtonText}>View Workout Plan</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </View>
@@ -240,5 +263,79 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.text,
     marginLeft: 12,
+  },
+  // Progress section
+  progressCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  progressValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  progressBarContainer: {
+    height: 8,
+    backgroundColor: colors.background,
+    borderRadius: 4,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  // Motivational section
+  motivationalSection: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 24,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
+  },
+  motivationalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  motivationalSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  actionButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  actionButtonText: {
+    color: colors.card,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
