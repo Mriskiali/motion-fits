@@ -1,13 +1,15 @@
 import React from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { ArrowLeft, Edit2, Play, Repeat, Clock } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function PreviewWorkoutScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { t } = useTranslation();
   
   const templates = useWorkoutStore((state) => state.templates);
   const startSession = useWorkoutStore((state) => state.startSession);
@@ -20,7 +22,7 @@ export default function PreviewWorkoutScreen() {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
-        <Text style={{ color: colors.text, marginTop: 100, textAlign: 'center' }}>Template not found</Text>
+        <Text style={{ color: colors.text, marginTop: 100, textAlign: 'center' }}>{t('template_not_found')}</Text>
       </View>
     );
   }
@@ -36,9 +38,9 @@ export default function PreviewWorkoutScreen() {
       
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-          <ArrowLeft color={colors.text} size={24} />
+          <Ionicons name="arrow-back" color={colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Preview</Text>
+        <Text style={styles.headerTitle}>{t('preview')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -47,7 +49,7 @@ export default function PreviewWorkoutScreen() {
         {template.subtitle && <Text style={styles.subtitle}>{template.subtitle}</Text>}
 
         <View style={styles.exercisesHeader}>
-          <Text style={styles.sectionTitle}>Exercises ({template.exercises.length})</Text>
+          <Text style={styles.sectionTitle}>{t('exercises')} ({template.exercises.length})</Text>
         </View>
 
         {template.exercises.map((exercise, index) => {
@@ -55,28 +57,35 @@ export default function PreviewWorkoutScreen() {
           return (
             <View key={exercise.id || index.toString()} style={styles.exerciseCard}>
               <View style={styles.exerciseHeader}>
-                <Text style={styles.exerciseName}>{exercise.name || 'Unnamed Exercise'}</Text>
-                {isTimeBased ? <Clock color={colors.success} size={18} /> : <Repeat color={colors.primary} size={18} />}
+                <Text style={styles.exerciseName}>{exercise.name || t('unnamed_exercise')}</Text>
+                {isTimeBased ? <Ionicons name="time-outline" color={colors.success} size={18} /> : <Ionicons name="repeat-outline" color={colors.primary} size={18} />}
               </View>
               
               <View style={styles.exerciseDetailsRow}>
                 <View style={styles.detailBadge}>
-                  <Text style={styles.detailLabel}>{isTimeBased ? 'Intervals / Sets' : 'Sets'}</Text>
+                  <Text style={styles.detailLabel}>{isTimeBased ? t('intervals_sets') : t('sets')}</Text>
                   <Text style={styles.detailText}>{exercise.sets}</Text>
                 </View>
                 
                 <View style={styles.detailBadge}>
-                  <Text style={styles.detailLabel}>{isTimeBased ? 'Duration' : 'Reps'}</Text>
+                  <Text style={styles.detailLabel}>{isTimeBased ? t('duration') : t('reps')}</Text>
                   <Text style={styles.detailText}>
-                    {isTimeBased ? `${exercise.duration}s` : `${exercise.reps}`}
+                    {isTimeBased ? `${exercise.duration}${t('seconds_short')}` : `${exercise.reps}`}
                   </Text>
                 </View>
               </View>
             </View>
           );
         })}
-        <View style={{ height: 40 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.startButton} onPress={handleStart}>
+          <Ionicons name="play" color="#fff" size={20} />
+          <Text style={styles.startButtonText}>{t('start_workout')}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }

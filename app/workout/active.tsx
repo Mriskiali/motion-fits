@@ -1,15 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
-import { Check, X } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
+import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import RestTimerOverlay from '@/components/RestTimerOverlay';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function ActiveWorkoutScreen() {
   const router = useRouter();
   const { activeSession, templates, logSession, clearActiveSession, updateActiveSession } = useWorkoutStore();
+  const { autoStartTimer, defaultRestTimer } = useUserStore();
+  const { t } = useTranslation();
   
   const [elapsedTime, setElapsedTime] = useState(0);
   const [restTimerVisible, setRestTimerVisible] = useState(false);
@@ -45,7 +49,7 @@ export default function ActiveWorkoutScreen() {
     }
   }, [activeSession]);
 
-  const template = templates.find((t) => t.id === activeSession?.templateId);
+  const template = templates.find((tData) => tData.id === activeSession?.templateId);
 
   useEffect(() => {
     if (!activeSession?.startTime) return;
@@ -70,7 +74,7 @@ export default function ActiveWorkoutScreen() {
     return null; // Will redirect
   }
 
-  const toggleLogSet = (exerciseId: string, setIndex: number, restTime: number) => {
+  const toggleLogSet = (exerciseId: string, setIndex: number) => {
     const exerciseSets = completedSets[exerciseId] || [];
     let newCompletedSets;
     
@@ -86,7 +90,7 @@ export default function ActiveWorkoutScreen() {
         ...completedSets,
         [exerciseId]: [...exerciseSets, setIndex],
       };
-      setCurrentRestTime(restTime);
+      setCurrentRestTime(autoStartTimer ? defaultRestTimer : 0);
       setLastLoggedSet({ exerciseId, setIndex });
       setRestTimerVisible(true);
     }
@@ -96,19 +100,18 @@ export default function ActiveWorkoutScreen() {
 
   const handleFinishWorkout = () => {
     showAlert(
-      'Finish Workout',
-      'Are you sure you want to finish this workout?',
+      t('finish_workout'),
+      t('finish_workout_confirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         { 
-          text: 'Finish', 
+          text: t('finish'), 
           style: 'default',
           onPress: () => {
             logSession({
               ...activeSession,
               duration: elapsedTime,
               completedExercises: Object.entries(completedSets).map(([exerciseId, sets]) => {
-                // Return an array of the actual reps/durations logged for each completed set
                 const actualRepsArray = sets.map(setIndex => {
                   const val = actualValues[exerciseId]?.[setIndex];
                   return val ? parseInt(val) : 0;
@@ -119,7 +122,13 @@ export default function ActiveWorkoutScreen() {
                 };
               }),
             });
-            router.replace('/(tabs)/history'); // Redirect to history or somewhere appropriate
+            // Auto unassign if they just finished today's scheduled workout
+            const { scheduledWorkouts, scheduleWorkout } = useWorkoutStore.getState();
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (scheduledWorkouts[todayStr] === activeSession.templateId) {
+              scheduleWorkout(todayStr, null);
+            }
+            router.replace('/(tabs)/history');
           }
         }
       ]
@@ -128,16 +137,16 @@ export default function ActiveWorkoutScreen() {
 
   const handleCancelWorkout = () => {
     showAlert(
-      'Cancel Workout',
-      'Are you sure? This session will not be saved.',
+      t('cancel_workout'),
+      t('cancel_workout_confirm'),
       [
-        { text: 'No', style: 'cancel' },
+        { text: t('no'), style: 'cancel' },
         { 
-          text: 'Yes, Cancel', 
+          text: t('yes'), 
           style: 'destructive',
           onPress: () => {
             clearActiveSession();
-            router.back();
+            router.replace('/(tabs)/workout');
           }
         }
       ]
@@ -153,7 +162,7 @@ export default function ActiveWorkoutScreen() {
           headerTintColor: colors.text,
           headerLeft: () => (
             <TouchableOpacity onPress={handleCancelWorkout} style={{ marginLeft: 8 }}>
-              <X color={colors.danger} size={24} />
+              <Ionicons name="close" color={colors.danger} size={24} />
             </TouchableOpacity>
           ),
           headerRight: () => (
@@ -176,8 +185,8 @@ export default function ActiveWorkoutScreen() {
               </Text>
               
               <View style={styles.setsHeader}>
-                <Text style={[styles.headerCol, { flex: 0.5 }]}>Set</Text>
-                <Text style={[styles.headerCol, { flex: 1 }]}>Target</Text>
+                <Text style={[styles.headerCol, { flex: 0.5 }]}>{t('set')}</Text>
+                <Text style={[styles.headerCol, { flex: 1 }]}>{t('target')}</Text>
                 <Text style={[styles.headerCol, { flex: 1, textAlign: 'right' }]}></Text>
               </View>
 
@@ -216,14 +225,14 @@ export default function ActiveWorkoutScreen() {
                         selectTextOnFocus
                       />
                       <Text style={[styles.unitText, isCompleted && styles.textCompleted]}>
-                        {isTimeBased ? 's' : ' reps'}
+                        {isTimeBased ? t('seconds_short') : ` ${t('reps_label')}`}
                       </Text>
                     </View>
                     <TouchableOpacity 
                       style={[styles.logButton, isCompleted && styles.logButtonCompleted]}
-                      onPress={() => toggleLogSet(exercise.id, setIndex, template.defaultRestTime)}
+                      onPress={() => toggleLogSet(exercise.id, setIndex)}
                     >
-                      <Check color={isCompleted ? "#fff" : colors.primary} size={20} strokeWidth={isCompleted ? 3 : 2} />
+                      <Ionicons name="checkmark-outline" color={isCompleted ? "#fff" : colors.primary} size={20} strokeWidth={isCompleted ? 3 : 2} />
                     </TouchableOpacity>
                   </View>
                 );
@@ -237,7 +246,7 @@ export default function ActiveWorkoutScreen() {
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.finishButton} onPress={handleFinishWorkout}>
-          <Text style={styles.finishButtonText}>FINISH WORKOUT</Text>
+          <Text style={styles.finishButtonText}>{t('finish_workout')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -248,7 +257,7 @@ export default function ActiveWorkoutScreen() {
         onCancelSet={() => {
           setRestTimerVisible(false);
           if (lastLoggedSet) {
-             toggleLogSet(lastLoggedSet.exerciseId, lastLoggedSet.setIndex, 0);
+             toggleLogSet(lastLoggedSet.exerciseId, lastLoggedSet.setIndex);
              setLastLoggedSet(null);
           }
         }}
@@ -369,7 +378,9 @@ const getStyles = (colors: any) => StyleSheet.create({
     right: 0,
     padding: 24,
     paddingBottom: 40,
-    backgroundColor: colors.overlay,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   finishButton: {
     backgroundColor: colors.primary,

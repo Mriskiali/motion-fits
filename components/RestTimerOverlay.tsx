@@ -1,10 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, Text, View, Modal, TouchableOpacity, Animated, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { StyleSheet, Text, View, Modal, TouchableOpacity, Animated, TextInput, KeyboardAvoidingView, Platform, Keyboard, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle } from 'react-native-svg';
-import { Edit2, Check, X } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
+// dynamically require expo-av
+let Audio: any = null;
+try {
+  Audio = require('expo-av').Audio;
+} catch (e) {
+  console.warn('expo-av is not available in this environment');
+}
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { scheduleRestTimerNotification, cancelNotification } from '@/utils/notifications';
+import { useTranslation } from '@/hooks/useTranslation';
+import { useUserStore } from '@/store/useUserStore';
 
 interface RestTimerOverlayProps {
   visible: boolean;
@@ -14,6 +23,7 @@ interface RestTimerOverlayProps {
 }
 
 export default function RestTimerOverlay({ visible, initialTime, onClose, onCancelSet }: RestTimerOverlayProps) {
+  const { t } = useTranslation();
   const [timeLeft, setTimeLeft] = useState(initialTime);
   const [isEditing, setIsEditing] = useState(false);
   const [manualInput, setManualInput] = useState('');
@@ -21,6 +31,16 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
   const setupNotificationIdRef = useRef<number>(0);
   const targetEndTimeRef = useRef<number | null>(null);
   const animationValue = useRef(new Animated.Value(1)).current;
+  const { audioNotification, hapticsEnabled } = useUserStore();
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, []);
 
   // Track max time to correctly render the SVG progress ring
   const [maxTime, setMaxTime] = useState(initialTime);
@@ -47,21 +67,44 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
 
   useEffect(() => {
     if (visible) {
-      targetEndTimeRef.current = Date.now() + initialTime * 1000;
-      setTimeLeft(initialTime);
-      setMaxTime(initialTime);
-      setIsEditing(false);
-      startAnimation(initialTime);
-      setupNotification(initialTime);
+      if (initialTime > 0) {
+        targetEndTimeRef.current = Date.now() + initialTime * 1000;
+        setTimeLeft(initialTime);
+        setMaxTime(initialTime);
+        setIsEditing(false);
+        
+        // Reset and start animation
+        animationValue.stopAnimation();
+        animationValue.setValue(1);
+        
+        // Slight delay to ensure the modal is visible before animating
+        setTimeout(() => {
+          Animated.timing(animationValue, {
+            toValue: 0,
+            duration: initialTime * 1000,
+            useNativeDriver: false, 
+          }).start();
+        }, 100);
+
+        setupNotification(initialTime);
+      } else {
+        setTimeLeft(0);
+        setMaxTime(1);
+        setIsEditing(true);
+        animationValue.stopAnimation();
+        animationValue.setValue(0);
+      }
     } else {
       // Reset state when hiding to prevent race condition on next open
       targetEndTimeRef.current = null;
       setTimeLeft(initialTime);
+      animationValue.stopAnimation();
       if (notificationIdRef.current) cancelNotification(notificationIdRef.current);
     }
   }, [visible, initialTime]);
 
   const startAnimation = (duration: number) => {
+    animationValue.stopAnimation();
     animationValue.setValue(1);
     Animated.timing(animationValue, {
       toValue: 0,
@@ -70,18 +113,52 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
     }).start();
   };
 
+  const playNotificationSound = async () => {
+    if (!Audio) return;
+    try {
+      if (audioNotification === 'default_notification') {
+        return;
+      }
+      
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+
+      if (audioNotification === 'library_bell') {
+        const { sound } = await Audio.Sound.createAsync(
+          require('@/assets/sounds/timerendsound.wav')
+        );
+        soundRef.current = sound;
+        await sound.playAsync();
+      } else {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: audioNotification }
+        );
+        soundRef.current = sound;
+        await sound.playAsync();
+      }
+    } catch (error) {
+      console.log('Error playing sound:', error);
+    }
+  };
+
   useEffect(() => {
     if (!visible || isEditing) return;
 
     if (timeLeft <= 0) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (hapticsEnabled) {
+        // Long vibration pattern: vibrate 500ms, pause 200ms, vibrate 500ms, pause 200ms, vibrate 1000ms
+        Vibration.vibrate([0, 500, 200, 500, 200, 1000]);
+      }
+      playNotificationSound();
       if (notificationIdRef.current) cancelNotification(notificationIdRef.current);
       onClose();
       return;
     }
 
     if (timeLeft <= 5 && timeLeft > 0) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
 
     const timerId = setInterval(() => {
@@ -170,7 +247,7 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.overlay}>
-          <Text style={styles.title}>Rest</Text>
+          <Text style={styles.title}>{t('rest_timer')}</Text>
 
           {!isEditing ? (
             <View style={styles.timerContainer}>
@@ -188,39 +265,39 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
                   <Text style={styles.timeText}>
                     {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
                   </Text>
-                  <Edit2 color={colors.textSecondary} size={20} style={{ position: 'absolute', right: -30 }} />
+                  <Ionicons name="pencil-outline" color={colors.textSecondary} size={24} style={{ position: 'absolute', right: -40 }} />
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
             <View style={styles.editingContainer}>
-              <Text style={styles.editingTitle}>Adjust Time</Text>
+              <Text style={styles.editingTitle}>{t('edit')} {t('rest_timer')}</Text>
               
               <View style={styles.presetsGrid}>
                 {[30, 60, 90, 120].map((preset) => (
                   <TouchableOpacity key={preset} style={styles.presetButton} onPress={() => handleApplyPreset(preset)}>
-                    <Text style={styles.presetText}>{preset}s</Text>
+                    <Text style={styles.presetText}>{preset}{t('seconds_short')}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.orText}>OR ENTER SECONDS</Text>
+              <Text style={styles.orText}>{t('or_enter_seconds')}</Text>
 
               <View style={styles.manualInputContainer}>
                 <TextInput
                   style={styles.manualInput}
                   keyboardType="numeric"
-                  placeholder="e.g. 45"
+                  placeholder={t('rest_timer_input_placeholder')}
                   placeholderTextColor="#475569"
                   value={manualInput}
                   onChangeText={setManualInput}
                   autoFocus
                 />
                 <TouchableOpacity style={[styles.applyButton, { backgroundColor: colors.danger, marginRight: 8 }]} onPress={() => setIsEditing(false)}>
-                  <X color="#fff" size={24} />
+                  <Ionicons name="close" color="#fff" size={24} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.applyButton} onPress={handleManualApply}>
-                  <Check color="#fff" size={24} />
+                  <Ionicons name="checkmark-outline" color={colors.textPrimaryOnVolt || '#000'} size={24} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -229,10 +306,10 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
           {!isEditing && (
             <View style={styles.controls}>
               <TouchableOpacity style={styles.adjustButton} onPress={() => adjustTime(-15)}>
-                <Text style={styles.adjustText}>-15s</Text>
+                <Text style={styles.adjustText}>{t('minus_15s')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.adjustButton} onPress={() => adjustTime(15)}>
-                <Text style={styles.adjustText}>+15s</Text>
+                <Text style={styles.adjustText}>{t('plus_15s')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -240,11 +317,11 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
           <View style={styles.footerButtons}>
             {onCancelSet && (
               <TouchableOpacity style={styles.cancelSetButton} onPress={handleCancelSet}>
-                <Text style={styles.cancelSetText}>Cancel Set</Text>
+                <Text style={styles.cancelSetText}>{t('cancel')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-              <Text style={styles.skipText}>Skip Rest</Text>
+              <Text style={styles.skipText}>{t('skip')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -256,7 +333,7 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
 const getStyles = (colors: any) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: colors.overlay,
+    backgroundColor: colors.background, // Make it opaque instead of transparent overlay
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -287,9 +364,10 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   timeText: {
     color: colors.text,
-    fontSize: 64,
+    fontSize: 72,
     fontWeight: 'bold',
     fontVariant: ['tabular-nums'],
+    letterSpacing: -2,
   },
   controls: {
     flexDirection: 'row',
@@ -298,16 +376,25 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   adjustButton: {
     backgroundColor: colors.card,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   adjustText: {
     color: colors.text,
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   footerButtons: {
     width: '100%',
@@ -318,25 +405,34 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   skipButton: {
     flex: 1,
-    backgroundColor: colors.danger,
+    backgroundColor: colors.primary,
     paddingVertical: 18,
     borderRadius: 30,
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   skipText: {
-    color: '#fff',
+    color: colors.textPrimaryOnVolt || '#000',
     fontSize: 16,
     fontWeight: 'bold',
     textTransform: 'uppercase',
   },
   cancelSetButton: {
     flex: 1,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: colors.card,
     paddingVertical: 18,
     borderRadius: 30,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.danger,
   },
   cancelSetText: {
     color: colors.danger,
@@ -347,16 +443,25 @@ const getStyles = (colors: any) => StyleSheet.create({
   editingContainer: {
     width: '100%',
     backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 30,
+    padding: 32,
     alignItems: 'center',
     marginBottom: 40,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
   },
   editingTitle: {
     color: colors.text,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 24,
   },
@@ -368,15 +473,15 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginBottom: 24,
   },
   presetButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
+    backgroundColor: colors.background,
+    paddingVertical: 14,
     paddingHorizontal: 20,
-    borderRadius: 16,
+    borderRadius: 20,
     minWidth: 80,
     alignItems: 'center',
   },
   presetText: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -385,6 +490,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     marginBottom: 16,
+    letterSpacing: 1,
   },
   manualInputContainer: {
     flexDirection: 'row',
@@ -398,14 +504,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
-    borderRadius: 12,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 16,
+    paddingVertical: 16,
   },
   applyButton: {
-    backgroundColor: colors.success,
+    backgroundColor: colors.primary,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
   },
 });
+

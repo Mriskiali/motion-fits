@@ -1,11 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, subDays } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
 import { Trash2 } from 'lucide-react-native';
 import Svg, { Rect, Text as SvgText } from 'react-native-svg';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function HistoryScreen() {
   const sessions = useWorkoutStore((state) => state.sessions);
@@ -14,14 +16,15 @@ export default function HistoryScreen() {
   const showAlert = useAlertStore((state) => state.showAlert);
   const colors = useThemeColors();
   const styles = getStyles(colors);
+  const { t, language } = useTranslation();
 
   const handleDelete = (id: string) => {
     showAlert(
-      "Delete Workout",
-      "Are you sure you want to delete this workout from your history? This cannot be undone.",
+      t('delete_workout'),
+      t('delete_workout_confirm'),
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => deleteSession(id) }
+        { text: t('cancel'), style: "cancel" },
+        { text: t('delete'), style: "destructive", onPress: () => deleteSession(id) }
       ]
     );
   };
@@ -54,10 +57,10 @@ export default function HistoryScreen() {
 
   const renderCalendar = () => (
     <View style={styles.calendarContainer}>
-      <Text style={styles.monthTitle}>{format(new Date(), 'MMMM yyyy')}</Text>
+      <Text style={styles.monthTitle}>{format(new Date(), 'MMMM yyyy', { locale: language === 'id' ? idLocale : undefined })}</Text>
       
       <View style={styles.weekDaysHeader}>
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+        {(language === 'id' ? ['M', 'S', 'S', 'R', 'K', 'J', 'S'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S']).map((d, i) => (
           <Text key={`wd-${i}`} style={styles.weekDayText}>{d}</Text>
         ))}
       </View>
@@ -93,7 +96,7 @@ export default function HistoryScreen() {
     const data = last7Days.map(date => {
       const dateStr = format(date, 'yyyy-MM-dd');
       const count = sessions.filter(s => format(new Date(s.date), 'yyyy-MM-dd') === dateStr).length;
-      return { day: format(date, 'EE').charAt(0), count };
+      return { day: format(date, 'EE', { locale: language === 'id' ? idLocale : undefined }).charAt(0), count };
     });
 
     const maxCount = Math.max(...data.map(d => d.count), 3); // min scale is 3
@@ -104,7 +107,7 @@ export default function HistoryScreen() {
 
     return (
       <View style={styles.chartContainer}>
-        <Text style={styles.sectionTitle}>Weekly Activity</Text>
+        <Text style={styles.sectionTitle}>{t('weekly_activity')}</Text>
         <View style={{ alignItems: 'center', marginTop: 16 }}>
           <Svg width={chartWidth} height={chartHeight + 30}>
             {data.map((d, i) => {
@@ -114,7 +117,7 @@ export default function HistoryScreen() {
               return (
                 <React.Fragment key={`bar-${i}`}>
                   {/* Background bar to show scale */}
-                  <Rect x={x} y={0} width={barWidth} height={chartHeight} rx={6} fill={colors.card} />
+                  <Rect x={x} y={0} width={barWidth} height={chartHeight} rx={6} fill={colors.background} />
                   {/* Actual data bar */}
                   <Rect x={x} y={y} width={barWidth} height={barHeight} rx={6} fill={d.count > 0 ? colors.primary : 'transparent'} />
                   <SvgText x={x + barWidth / 2} y={chartHeight + 20} fontSize="12" fill={colors.textSecondary} textAnchor="middle" fontWeight="bold">
@@ -136,7 +139,7 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>History & Analytics</Text>
+      <Text style={styles.headerTitle}>{t('history')}</Text>
       
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {renderBarChart()}
@@ -144,48 +147,48 @@ export default function HistoryScreen() {
         {renderCalendar()}
 
         <View style={styles.statsContainer}>
-          <Text style={styles.sectionTitle}>Stats Overview</Text>
+          <Text style={styles.sectionTitle}>{t('stats_overview')}</Text>
           
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{totalWorkouts}</Text>
-              <Text style={styles.statLabel}>Total Workouts</Text>
+              <Text style={styles.statLabel}>{t('total_workouts')}</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{avgDurationMins}m</Text>
-              <Text style={styles.statLabel}>Avg Duration</Text>
+              <Text style={styles.statValue}>{avgDurationMins}{t('min_short')}</Text>
+              <Text style={styles.statLabel}>{t('avg_duration')}</Text>
             </View>
             <View style={[styles.statCard, { width: '100%', marginTop: 12 }]}>
               <Text style={styles.statValue}>{totalVolume}</Text>
-              <Text style={styles.statLabel}>Total Sets Completed</Text>
+              <Text style={styles.statLabel}>{t('total_sets_completed')}</Text>
             </View>
           </View>
         </View>
 
         <View style={styles.historyList}>
-          <Text style={styles.sectionTitle}>Recent Sessions</Text>
+          <Text style={styles.sectionTitle}>{t('recent_sessions')}</Text>
           {sessions.slice().reverse().map(session => {
-            const template = templates.find(t => t.id === session.templateId);
+            const template = templates.find(tpl => tpl.id === session.templateId);
             return (
               <View key={session.id} style={styles.historyCard}>
                 <View style={styles.historyHeader}>
                   <View>
-                    <Text style={styles.historyDate}>{format(new Date(session.date), 'MMM do, yyyy')}</Text>
-                    <Text style={styles.historyDuration}>{Math.round(session.duration / 60)} min</Text>
+                    <Text style={styles.historyDate}>{format(new Date(session.date), 'MMM do, yyyy', { locale: language === 'id' ? idLocale : undefined })}</Text>
+                    <Text style={styles.historyDuration}>{Math.round(session.duration / 60)} {t('min_short')}</Text>
                   </View>
                   <TouchableOpacity onPress={() => handleDelete(session.id)} style={styles.deleteButton}>
-                    <Trash2 color="#ef4444" size={20} />
+                    <Trash2 color={colors.danger} size={20} />
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.historyName}>{template?.name || 'Workout'}</Text>
+                <Text style={styles.historyName}>{template?.name || t('workout')}</Text>
                 <Text style={styles.historyDetails}>
-                  {session.completedExercises.length} exercises completed
+                  {session.completedExercises.length} {t('exercises_completed')}
                 </Text>
               </View>
             );
           })}
           {sessions.length === 0 && (
-            <Text style={styles.emptyText}>No history available yet.</Text>
+            <Text style={styles.emptyText}>{t('no_history_yet')}</Text>
           )}
         </View>
 
@@ -207,25 +210,44 @@ const getStyles = (colors: any) => StyleSheet.create({
     color: colors.text,
     marginHorizontal: 24,
     marginBottom: 20,
+    letterSpacing: -0.5,
   },
   scrollContent: {
     paddingHorizontal: 24,
   },
   chartContainer: {
     marginBottom: 32,
-    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    backgroundColor: colors.card,
     borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   calendarContainer: {
     backgroundColor: colors.card,
     borderRadius: 20,
-    padding: 20,
+    padding: 24,
     marginBottom: 32,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   monthTitle: {
     color: colors.text,
@@ -274,20 +296,20 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 14,
   },
   todayText: {
-    color: '#fff',
+    color: colors.textPrimaryOnVolt || '#000',
     fontWeight: 'bold',
   },
   workoutDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.success, // emerald-500
+    backgroundColor: colors.accent, // Cyber Cyan
   },
   statsContainer: {
     marginBottom: 32,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 16,
@@ -300,11 +322,20 @@ const getStyles = (colors: any) => StyleSheet.create({
   statCard: {
     width: '48%',
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 20,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   statValue: {
     fontSize: 24,
@@ -315,7 +346,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
     textTransform: 'uppercase',
   },
   historyList: {
@@ -323,11 +354,20 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   historyCard: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   historyHeader: {
     flexDirection: 'row',
@@ -353,6 +393,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   historyDetails: {
     color: colors.textSecondary,
     fontSize: 14,
+    fontWeight: '500',
   },
   emptyText: {
     color: colors.textSecondary,
@@ -362,7 +403,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   deleteButton: {
     padding: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: colors.background,
     borderRadius: 8,
   },
 });

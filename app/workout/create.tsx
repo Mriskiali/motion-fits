@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, Keyboard } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { Plus, Trash2, ArrowLeft, Save, Clock, Repeat } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useWorkoutStore, WorkoutTemplate, Exercise } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function CreateWorkoutScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
+  const { t } = useTranslation();
   
   const templates = useWorkoutStore((state) => state.templates);
   const addTemplate = useWorkoutStore((state) => state.addTemplate);
@@ -79,12 +81,12 @@ export default function CreateWorkoutScreen() {
 
   const handleSave = () => {
     if (!name.trim()) {
-      showAlert('Error', 'Please provide a name for the workout.');
+      showAlert(t('error'), t('provide_name_error'));
       return;
     }
 
     if (exercises.length === 0) {
-      showAlert('Error', 'Please add at least one exercise.');
+      showAlert(t('error'), t('add_exercise_error'));
       return;
     }
 
@@ -111,17 +113,17 @@ export default function CreateWorkoutScreen() {
     <View style={styles.container}>
       <Stack.Screen 
         options={{
-          title: id ? 'Edit Workout' : 'Create Workout',
+          title: id ? t('edit_workout') : t('create_workout'),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
-              <ArrowLeft color={colors.text} size={24} />
+              <Ionicons name="arrow-back" color={colors.text} size={24} />
             </TouchableOpacity>
           ),
           headerRight: () => (
             <TouchableOpacity onPress={handleSave}>
-              <Save color={colors.primary} size={24} />
+              <Ionicons name="save-outline" color={colors.primary} size={24} />
             </TouchableOpacity>
           ),
         }} 
@@ -132,10 +134,10 @@ export default function CreateWorkoutScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Workout Name</Text>
+          <Text style={styles.label}>{t('workout_name')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. Upper Body Power"
+            placeholder={t('workout_name_placeholder')}
             placeholderTextColor="#475569"
             value={name}
             onChangeText={setName}
@@ -143,10 +145,10 @@ export default function CreateWorkoutScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Subtitle (Optional)</Text>
+          <Text style={styles.label}>{t('subtitle_optional')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. Chest, Back, Arms focus"
+            placeholder={t('subtitle_placeholder')}
             placeholderTextColor="#475569"
             value={subtitle}
             onChangeText={setSubtitle}
@@ -154,10 +156,10 @@ export default function CreateWorkoutScreen() {
         </View>
 
         <View style={styles.exercisesHeader}>
-          <Text style={styles.sectionTitle}>Exercises</Text>
+          <Text style={styles.sectionTitle}>{t('exercises')}</Text>
           <TouchableOpacity onPress={handleAddExercise} style={styles.addExerciseButton}>
-            <Plus color="#3b82f6" size={20} />
-            <Text style={styles.addExerciseText}>Add</Text>
+            <Ionicons name="add" color="#3b82f6" size={20} />
+            <Text style={styles.addExerciseText}>{t('add')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -169,24 +171,24 @@ export default function CreateWorkoutScreen() {
               <View style={styles.exerciseHeader}>
                 <TextInput
                   style={styles.exerciseNameInput}
-                  placeholder="Exercise Name"
+                  placeholder={t('exercise_name_placeholder')}
                   placeholderTextColor="#475569"
                   value={exercise.name}
                   onChangeText={(val) => handleUpdateExercise(index, 'name', val)}
                 />
                 
                 <TouchableOpacity onPress={() => toggleExerciseType(index)} style={styles.typeToggleButton}>
-                  {isTimeBased ? <Clock color="#10b981" size={20} /> : <Repeat color="#3b82f6" size={20} />}
+                  {isTimeBased ? <Ionicons name="time-outline" color="#10b981" size={20} /> : <Ionicons name="repeat-outline" color="#3b82f6" size={20} />}
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => handleRemoveExercise(index)} style={styles.deleteButton}>
-                  <Trash2 color="#ef4444" size={20} />
+                  <Ionicons name="trash-outline" color="#ef4444" size={20} />
                 </TouchableOpacity>
               </View>
 
               <View style={styles.exerciseDetailsRow}>
                 <View style={styles.detailInputGroup}>
-                  <Text style={styles.detailLabel}>{isTimeBased ? 'Intervals / Sets' : 'Sets'}</Text>
+                  <Text style={styles.detailLabel}>{isTimeBased ? t('intervals_sets') : t('sets')}</Text>
                   <TextInput
                     style={styles.detailInput}
                     keyboardType="numeric"
@@ -197,11 +199,11 @@ export default function CreateWorkoutScreen() {
 
                 {isTimeBased ? (
                   <View style={styles.detailInputGroup}>
-                    <Text style={styles.detailLabel}>Duration (sec)</Text>
+                    <Text style={styles.detailLabel}>{t('duration_sec')}</Text>
                     <TextInput
                       style={styles.detailInput}
                       keyboardType="numeric"
-                      placeholder="e.g. 60"
+                      placeholder={t('duration_placeholder')}
                       placeholderTextColor="#475569"
                       value={exercise.duration?.toString() || '60'}
                       onChangeText={(val) => handleUpdateExercise(index, 'duration', parseInt(val) || 0)}
@@ -209,10 +211,10 @@ export default function CreateWorkoutScreen() {
                   </View>
                 ) : (
                   <View style={styles.detailInputGroup}>
-                    <Text style={styles.detailLabel}>Reps</Text>
+                    <Text style={styles.detailLabel}>{t('reps')}</Text>
                     <TextInput
                       style={styles.detailInput}
-                      placeholder="e.g. 8-12"
+                      placeholder={t('reps_placeholder')}
                       placeholderTextColor="#475569"
                       value={exercise.reps?.toString() || ''}
                       onChangeText={(val) => handleUpdateExercise(index, 'reps', val)}
@@ -226,8 +228,8 @@ export default function CreateWorkoutScreen() {
 
         {exercises.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No exercises added yet.</Text>
-            <Text style={styles.emptyStateSubtext}>Tap Add to build your routine.</Text>
+            <Text style={styles.emptyStateText}>{t('no_exercises_yet')}</Text>
+            <Text style={styles.emptyStateSubtext}>{t('tap_add_routine')}</Text>
           </View>
         )}
         

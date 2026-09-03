@@ -6,11 +6,10 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import CustomAlert from '@/components/CustomAlert';
+import { useUserStore } from '@/store/useUserStore';
+import { useColorScheme as useNativeColorScheme } from 'react-native';
 
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
+
 
 export const unstable_settings = {
   initialRouteName: '(tabs)',
@@ -43,10 +42,12 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+  const themePreference = useUserStore(state => state.theme);
+  const systemTheme = useNativeColorScheme();
+  const activeTheme = themePreference === 'system' ? (systemTheme || 'dark') : themePreference;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={activeTheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>

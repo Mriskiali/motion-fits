@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
-import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
-import { MoreVertical, Plus, Play, Calendar, X } from 'lucide-react-native';
+import { format, addDays, startOfWeek, isSameDay, isToday } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
+import { MoreVertical, Plus, Calendar, X, Edit, Trash2 } from 'lucide-react-native';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useTranslation } from '@/hooks/useTranslation';
+import * as Haptics from 'expo-haptics';
 
 export default function WorkoutScreen() {
   const router = useRouter();
@@ -17,15 +20,50 @@ export default function WorkoutScreen() {
   const { showAlert } = useAlertStore();
   const colors = useThemeColors();
   const styles = getStyles(colors);
+  const { t, language } = useTranslation();
   
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isAssigning, setIsAssigning] = useState(false);
+  const [activeTemplate, setActiveTemplate] = useState<any>(null);
+  const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
 
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
   const scheduledTemplateId = scheduledWorkouts[selectedDateStr];
   const scheduledTemplate = templates.find(t => t.id === scheduledTemplateId);
 
+  const activeSession = useWorkoutStore((state) => state.activeSession);
+
   const handleStartWorkout = (templateId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // If there's already an active session for this template, just resume it
+    if (activeSession && activeSession.templateId === templateId) {
+      router.push('/workout/active');
+      return;
+    }
+    
+    // If there's an active session for a DIFFERENT template, ask the user
+    if (activeSession) {
+      const activeTemplateName = templates.find(tmpl => tmpl.id === activeSession.templateId)?.name || t('workout');
+      showAlert(
+        t('active_workout'),
+        t('active_session_alert_msg'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('resume'), onPress: () => router.push('/workout/active') },
+          { 
+            text: t('start_new'), 
+            style: 'destructive', 
+            onPress: () => {
+              startSession(templateId);
+              router.push('/workout/active');
+            }
+          },
+        ]
+      );
+      return;
+    }
+
     startSession(templateId);
     router.push('/workout/active');
   };
@@ -39,8 +77,33 @@ export default function WorkoutScreen() {
     scheduleWorkout(selectedDateStr, null);
   };
 
+  const openBottomSheet = (template: any) => {
+    setActiveTemplate(template);
+    setBottomSheetVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const closeBottomSheet = () => {
+    setBottomSheetVisible(false);
+    setActiveTemplate(null);
+  };
+
+  const handleDeleteTemplate = () => {
+    closeBottomSheet();
+    setTimeout(() => {
+      showAlert(t('delete'), `${t('delete_confirm')} "${activeTemplate?.name}"?`, [
+        { text: t('cancel'), style: 'cancel' },
+        { text: t('delete'), style: 'destructive', onPress: () => deleteTemplate(activeTemplate.id) }
+      ]);
+    }, 300);
+  };
+
+  const handleEditTemplate = () => {
+    closeBottomSheet();
+    router.push(`/workout/create?id=${activeTemplate?.id}`);
+  };
+
   const renderWeeklyCalendar = () => {
-    // Keep it centered around the current week or the week of the selected date
     const start = startOfWeek(selectedDate, { weekStartsOn: 1 });
     const days = Array.from({ length: 7 }).map((_, i) => addDays(start, i));
 
@@ -49,24 +112,34 @@ export default function WorkoutScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.calendarScroll}>
           {days.map((date, index) => {
             const isSelected = isSameDay(date, selectedDate);
+            const isCurrentDay = isToday(date);
             const dateStr = format(date, 'yyyy-MM-dd');
             const hasWorkout = !!scheduledWorkouts[dateStr];
 
             return (
               <TouchableOpacity 
                 key={index} 
-                style={[styles.dayCard, isSelected && styles.dayCardSelected]}
-                onPress={() => setSelectedDate(date)}
+                style={[
+                  styles.dayCard, 
+                  isSelected && styles.dayCardSelected,
+                  isCurrentDay && !isSelected && styles.dayCardToday
+                ]}
+                onPress={() => {
+                  setSelectedDate(date);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
               >
                 <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>
-                  {format(date, 'EEE')}
+                  {format(date, 'EEE', { locale: language === 'id' ? idLocale : undefined })}
                 </Text>
                 <Text style={[styles.dateText, isSelected && styles.dateTextSelected]}>
                   {format(date, 'd')}
                 </Text>
-                {hasWorkout && (
-                  <View style={[styles.dot, isSelected && styles.dotSelected]} />
-                )}
+                <View style={[
+                  styles.dot,
+                  hasWorkout ? { backgroundColor: colors.primary } : { backgroundColor: 'transparent' },
+                  isSelected && hasWorkout && styles.dotSelected
+                ]} />
               </TouchableOpacity>
             );
           })}
@@ -76,8 +149,10 @@ export default function WorkoutScreen() {
   };
 
   const renderTodaysPlan = () => {
-    const isToday = isSameDay(selectedDate, new Date());
-    const titleText = isToday ? "Today's Plan" : `Plan for ${format(selectedDate, 'MMM do')}`;
+    const isCurrentDay = isSameDay(selectedDate, new Date());
+    const loc = language === 'id' ? idLocale : undefined;
+    const dateFormatted = format(selectedDate, 'd MMM', { locale: loc });
+    const titleText = isCurrentDay ? t('today_plan') : `${t('plan_for')} ${dateFormatted}`;
 
     return (
       <View style={styles.assignedContainer}>
@@ -88,46 +163,48 @@ export default function WorkoutScreen() {
             <View style={styles.assignedHeader}>
               <Text style={styles.assignedTitle}>{scheduledTemplate.name}</Text>
               <TouchableOpacity onPress={handleUnassign} style={styles.unassignButton}>
-                <X color="#94a3b8" size={20} />
+                <X color={colors.textSecondary} size={20} />
               </TouchableOpacity>
             </View>
             {scheduledTemplate.subtitle && (
               <Text style={styles.assignedSubtitle}>{scheduledTemplate.subtitle}</Text>
             )}
             <TouchableOpacity 
-              style={styles.mainStartButton}
+              style={[styles.mainStartButton, activeSession?.templateId === scheduledTemplate.id && { backgroundColor: colors.success || '#10b981' }]}
               onPress={() => handleStartWorkout(scheduledTemplate.id)}
             >
-              <Text style={styles.mainStartButtonText}>START WORKOUT</Text>
+              <Text style={styles.mainStartButtonText}>
+                {activeSession?.templateId === scheduledTemplate.id ? t('resume_workout') : t('start_workout')}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={[styles.assignedCard, styles.unassignedCard]}>
-            <Text style={styles.unassignedText}>No workout scheduled.</Text>
+            <Text style={styles.unassignedText}>{t('no_workout_scheduled')}</Text>
             <TouchableOpacity 
               style={styles.assignButton}
               onPress={() => setIsAssigning(!isAssigning)}
             >
-              <Calendar color="#fff" size={20} />
+              <Calendar color={colors.textPrimaryOnVolt || "#000"} size={20} />
               <Text style={styles.assignButtonText}>
-                {isAssigning ? "Cancel Assignment" : "Assign Workout"}
+                {isAssigning ? t('cancel') : t('assign_workout')}
               </Text>
             </TouchableOpacity>
 
             {isAssigning && (
               <View style={styles.inlinePicker}>
-                <Text style={styles.inlinePickerTitle}>Select a Template</Text>
+                <Text style={styles.inlinePickerTitle}>{t('select_template')}</Text>
                 {templates.length === 0 ? (
-                  <Text style={styles.unassignedText}>You have no templates yet.</Text>
+                  <Text style={styles.unassignedText}>{t('no_templates_yet')}</Text>
                 ) : (
-                  templates.map(t => (
+                  templates.map(tmpl => (
                     <TouchableOpacity 
-                      key={t.id} 
+                      key={tmpl.id} 
                       style={styles.inlineTemplateItem}
-                      onPress={() => handleAssign(t.id)}
+                      onPress={() => handleAssign(tmpl.id)}
                     >
-                      <Text style={styles.inlineTemplateName}>{t.name}</Text>
-                      <Plus color="#3b82f6" size={20} />
+                      <Text style={styles.inlineTemplateName}>{tmpl.name}</Text>
+                      <Plus color={colors.primary} size={20} />
                     </TouchableOpacity>
                   ))
                 )}
@@ -143,10 +220,10 @@ export default function WorkoutScreen() {
     return (
       <View style={styles.templatesContainer}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>My Templates</Text>
+          <Text style={styles.sectionTitle}>{t('templates')}</Text>
           <TouchableOpacity onPress={() => router.push('/workout/create')} style={styles.addButton}>
-            <Plus color="#3b82f6" size={20} />
-            <Text style={styles.addButtonText}>Create</Text>
+            <Plus color={colors.primary} size={20} />
+            <Text style={styles.addButtonText}>{t('create')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -159,52 +236,63 @@ export default function WorkoutScreen() {
             <View style={styles.templateInfo}>
               <Text style={styles.templateName}>{template.name}</Text>
               {template.subtitle && <Text style={styles.templateSubtitle}>{template.subtitle}</Text>}
-              <Text style={styles.exerciseCount}>{template.exercises.length} exercises</Text>
+              <Text style={styles.exerciseCount}>{template.exercises.length} {t('exercises_count')}</Text>
             </View>
             
             <View style={styles.templateActions}>
-              
               <TouchableOpacity 
                 style={styles.menuButton}
-                onPress={() => {
-                  showAlert(template.name, 'Manage this template', [
-                    { text: 'Edit', onPress: () => router.push(`/workout/create?id=${template.id}`) },
-                    { 
-                      text: 'Delete', 
-                      style: 'destructive', 
-                      onPress: () => {
-                        setTimeout(() => {
-                          showAlert('Delete Template', `Are you sure you want to delete "${template.name}"? This cannot be undone.`, [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Delete', style: 'destructive', onPress: () => deleteTemplate(template.id) }
-                          ]);
-                        }, 300);
-                      }
-                    },
-                    { text: 'Cancel', style: 'cancel' }
-                  ]);
-                }}
+                onPress={() => openBottomSheet(template)}
               >
-                <MoreVertical color="#94a3b8" size={20} />
+                <MoreVertical color={colors.textSecondary} size={24} />
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
         ))}
         
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </View>
     );
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>Workout</Text>
+      <Text style={styles.headerTitle}>{t('workout')}</Text>
       
       <ScrollView showsVerticalScrollIndicator={false}>
         {renderWeeklyCalendar()}
         {renderTodaysPlan()}
         {renderTemplates()}
       </ScrollView>
+
+      {/* Bottom Sheet for Template Actions */}
+      <Modal visible={bottomSheetVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={closeBottomSheet} />
+          <View style={styles.bottomSheet}>
+            <View style={styles.dragHandle} />
+            <Text style={styles.sheetTitle}>{activeTemplate?.name}</Text>
+            
+            <TouchableOpacity style={styles.sheetAction} onPress={handleEditTemplate}>
+              <View style={[styles.sheetIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.2)' }]}>
+                <Edit color="#3b82f6" size={20} />
+              </View>
+              <Text style={styles.sheetActionText}>{t('edit')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.sheetAction} onPress={handleDeleteTemplate}>
+              <View style={[styles.sheetIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]}>
+                <Trash2 color={colors.danger} size={20} />
+              </View>
+              <Text style={[styles.sheetActionText, { color: colors.danger }]}>{t('delete')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.sheetCancelBtn} onPress={closeBottomSheet}>
+              <Text style={styles.sheetCancelText}>{t('cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -243,6 +331,10 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
+  dayCardToday: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
   dayText: {
     color: colors.textSecondary,
     fontSize: 12,
@@ -251,7 +343,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     textTransform: 'uppercase',
   },
   dayTextSelected: {
-    color: '#dbeafe',
+    color: colors.textPrimaryOnVolt || '#000',
   },
   dateText: {
     color: colors.text,
@@ -259,17 +351,16 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontWeight: 'bold',
   },
   dateTextSelected: {
-    color: '#fff',
+    color: colors.textPrimaryOnVolt || '#000',
   },
   dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.success,
     marginTop: 4,
   },
   dotSelected: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.textPrimaryOnVolt || '#000',
   },
   assignedContainer: {
     paddingHorizontal: 24,
@@ -280,6 +371,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   assignedCard: {
     backgroundColor: colors.card,
@@ -307,7 +400,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   unassignButton: {
     padding: 4,
-    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+    backgroundColor: colors.background,
     borderRadius: 12,
   },
   assignedSubtitle: {
@@ -322,7 +415,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   assignButton: {
     backgroundColor: colors.primary,
-    borderRadius: 12,
+    borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 24,
     flexDirection: 'row',
@@ -330,7 +423,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     gap: 8,
   },
   assignButtonText: {
-    color: '#fff',
+    color: colors.textPrimaryOnVolt || '#000',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -354,6 +447,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   inlineTemplateName: {
     color: colors.text,
@@ -362,12 +457,12 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   mainStartButton: {
     backgroundColor: colors.primary,
-    borderRadius: 12,
+    borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
   },
   mainStartButtonText: {
-    color: '#fff',
+    color: colors.textPrimaryOnVolt || '#000',
     fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 1,
@@ -384,12 +479,12 @@ const getStyles = (colors: any) => StyleSheet.create({
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(204, 255, 0, 0.2)',
   },
   addButtonText: {
     color: colors.primary,
@@ -423,8 +518,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   exerciseCount: {
     fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
+    color: colors.accent,
+    fontWeight: '600',
   },
   templateActions: {
     flexDirection: 'row',
@@ -433,4 +528,68 @@ const getStyles = (colors: any) => StyleSheet.create({
   menuButton: {
     padding: 4,
   },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.overlay,
+  },
+  bottomSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingBottom: 48,
+    borderTopWidth: 1,
+    borderColor: colors.border,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  sheetAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sheetIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  sheetActionText: {
+    fontSize: 18,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  sheetCancelBtn: {
+    marginTop: 24,
+    paddingVertical: 16,
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 16,
+  },
+  sheetCancelText: {
+    color: colors.textSecondary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  }
 });

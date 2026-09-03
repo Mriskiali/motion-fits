@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View, Modal, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import { StyleSheet, Text, View, Modal, TouchableOpacity, TouchableWithoutFeedback, Platform } from 'react-native';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
@@ -43,6 +43,7 @@ export default function CustomAlert() {
                           styles.buttonText,
                           isDestructive && styles.buttonTextDestructive,
                           isCancel && styles.buttonTextCancel,
+                          (isCancel && !isDestructive && colors.background !== '#000000') && { color: colors.textSecondary }
                         ]}
                       >
                         {btn.text}
@@ -62,7 +63,7 @@ export default function CustomAlert() {
 const getStyles = (colors: any) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.8)', // Keep it dark overlay regardless of theme or use colors.overlay
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -73,13 +74,17 @@ const getStyles = (colors: any) => StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
   },
   title: {
     color: colors.text,
@@ -87,13 +92,14 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 12,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   message: {
     color: colors.textSecondary,
     fontSize: 16,
     marginBottom: 24,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -109,7 +115,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.primary,
     paddingVertical: 14,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 100,
@@ -126,9 +132,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.danger,
   },
   buttonCancel: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
   buttonText: {
     color: '#fff',
@@ -139,6 +143,6 @@ const getStyles = (colors: any) => StyleSheet.create({
     color: '#fff',
   },
   buttonTextCancel: {
-    color: colors.textSecondary,
+    color: colors.text,
   },
 });

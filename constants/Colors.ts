@@ -1,26 +1,32 @@
 export const Colors = {
   light: {
-    background: '#f8fafc',      // slate-50
-    card: '#ffffff',            // white
-    border: '#e2e8f0',          // slate-200
-    primary: '#3b82f6',         // blue-500
-    success: '#10b981',         // emerald-500
-    danger: '#ef4444',          // red-500
-    text: '#0f172a',            // slate-900
-    textSecondary: '#64748b',   // slate-500
-    tabBar: 'rgba(255, 255, 255, 0.75)',
-    overlay: 'rgba(255, 255, 255, 0.95)',
+    background: '#F2F2F7',      // iOS Light Gray Background
+    card: '#FFFFFF',            // Pure White for contrast
+    border: '#E5E5EA',          // Subtle border
+    primary: '#007AFF',         // iOS Blue
+    success: '#34C759',         // iOS Green
+    danger: '#FF3B30',          // iOS Red
+    text: '#000000',            // Black
+    textPrimaryOnVolt: '#FFFFFF', // White text on primary buttons
+    textSecondary: '#8E8E93',   // Muted Text
+    accent: '#5856D6',          // Purple
+    warning: '#FF9500',         // Orange
+    tabBar: 'rgba(255, 255, 255, 0.85)',
+    overlay: 'rgba(0, 0, 0, 0.4)',
   },
   dark: {
-    background: '#0f172a',      // slate-900
-    card: '#1e293b',            // slate-800
-    border: '#334155',          // slate-700
-    primary: '#3b82f6',         // blue-500
-    success: '#10b981',         // emerald-500
-    danger: '#ef4444',          // red-500
-    text: '#f8fafc',            // slate-50
-    textSecondary: '#94a3b8',   // slate-400
-    tabBar: 'rgba(15, 23, 42, 0.75)',
-    overlay: 'rgba(15, 23, 42, 0.98)',
+    background: '#000000',      // Pure black
+    card: '#1C1C1E',            // Elevated card color
+    border: '#2C2C2E',          // Subtle border
+    primary: '#0A84FF',         // iOS Blue Dark
+    success: '#32D74B',         // iOS Green Dark
+    danger: '#FF453A',          // iOS Red Dark
+    text: '#FFFFFF',            // White
+    textPrimaryOnVolt: '#FFFFFF', // White text on primary buttons
+    textSecondary: '#8E8E93',   // Muted Text
+    accent: '#5E5CE6',          // Purple Dark
+    warning: '#FF9F0A',         // Orange Dark
+    tabBar: 'rgba(0, 0, 0, 0.85)',
+    overlay: 'rgba(0, 0, 0, 0.6)',
   },
 };
