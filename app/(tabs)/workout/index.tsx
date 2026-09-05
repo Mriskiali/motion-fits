@@ -211,7 +211,7 @@ export default function WorkoutScreen() {
               ]}
               onPress={() => handleStartWorkout(scheduledTemplate.id)}
             >
-              <Play size={18} color={colors.textPrimaryOnVolt} fill={colors.textPrimaryOnVolt} />
+              <Play size={18} color="#FFFFFF" fill="#FFFFFF" />
               <Text style={styles.mainStartButtonText}>
                 {activeSession?.templateId === scheduledTemplate.id
                   ? t('resume_workout')
@@ -229,7 +229,7 @@ export default function WorkoutScreen() {
               style={styles.assignButton}
               onPress={() => setIsAssigning(!isAssigning)}
             >
-              <Plus color={colors.textPrimaryOnVolt} size={18} />
+              <Plus color="#FFFFFF" size={18} />
               <Text style={styles.assignButtonText}>
                 {isAssigning ? t('cancel') : t('assign_workout')}
               </Text>
@@ -549,7 +549,7 @@ const getStyles = (c: ThemeColors) =>
       fontWeight: '500',
     },
     assignButton: {
-      backgroundColor: c.accentLime,
+      backgroundColor: c.primaryAction,
       borderRadius: 16,
       paddingVertical: 12,
       paddingHorizontal: 20,
@@ -558,7 +558,7 @@ const getStyles = (c: ThemeColors) =>
       gap: 6,
     },
     assignButtonText: {
-      color: c.textPrimaryOnVolt,
+      color: '#FFFFFF',
       fontSize: 14,
       fontWeight: '800',
     },
@@ -605,7 +605,7 @@ const getStyles = (c: ThemeColors) =>
       justifyContent: 'center',
     },
     mainStartButton: {
-      backgroundColor: c.accentLime,
+      backgroundColor: c.primaryAction,
       borderRadius: 18,
       paddingVertical: 15,
       flexDirection: 'row',
@@ -614,7 +614,7 @@ const getStyles = (c: ThemeColors) =>
       gap: 8,
       ...Platform.select({
         ios: {
-          shadowColor: c.accentLime,
+          shadowColor: c.primaryAction,
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.25,
           shadowRadius: 8,
@@ -625,7 +625,7 @@ const getStyles = (c: ThemeColors) =>
       }),
     },
     mainStartButtonText: {
-      color: c.textPrimaryOnVolt,
+      color: '#FFFFFF',
       fontSize: 15,
       fontWeight: '800',
       letterSpacing: 0.3,

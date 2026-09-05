@@ -276,7 +276,7 @@ export default function DashboardScreen() {
           ]}
         >
           <View style={styles.plusIconWrapper}>
-            <Ionicons name="add" size={22} color={colors.textPrimaryOnVolt} />
+            <Ionicons name="add" size={22} color="#FFFFFF" />
           </View>
           <Text style={styles.startWorkoutButtonText}>{t('start_workout')}</Text>
         </Pressable>
@@ -594,12 +594,12 @@ const getStyles = (c: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       height: 56,
-      backgroundColor: c.accentLime,
+      backgroundColor: c.primaryAction,
       borderRadius: 20,
       gap: 8,
       ...Platform.select({
         ios: {
-          shadowColor: c.accentLime,
+          shadowColor: c.primaryAction,
           shadowOffset: { width: 0, height: 6 },
           shadowOpacity: 0.25,
           shadowRadius: 12,
@@ -613,14 +613,14 @@ const getStyles = (c: ThemeColors) =>
       width: 28,
       height: 28,
       borderRadius: 14,
-      backgroundColor: 'rgba(0, 0, 0, 0.08)',
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     startWorkoutButtonText: {
       fontSize: 16,
       fontWeight: '800',
-      color: c.textPrimaryOnVolt,
+      color: '#FFFFFF',
       letterSpacing: 0.3,
     },
   });
