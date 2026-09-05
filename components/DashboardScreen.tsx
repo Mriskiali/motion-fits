@@ -11,24 +11,21 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
-import { id as idLocale } from 'date-fns/locale';
 import { AppTheme } from '@/constants/AppTheme';
 import { useUserStore } from '@/store/useUserStore';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
-import { useTranslation } from '@/hooks/useTranslation';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const userName = useUserStore((state) => state.name);
-  const streak = useUserStore((state) => state.streak);
   const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
   const sessions = useWorkoutStore((state) => state.sessions);
-  const { t, language } = useTranslation();
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [stepCount, setStepCount] = useState<number>(8420);
+  const [isSensorActive, setIsSensorActive] = useState<boolean>(false);
 
-  // Safe Pedometer step counting
+  // Safe Pedometer integration from expo-sensors
   useEffect(() => {
     let isMounted = true;
     let subscription: any = null;
@@ -40,6 +37,7 @@ export default function DashboardScreen() {
           if (Sensors?.Pedometer) {
             const isAvailable = await Sensors.Pedometer.isAvailableAsync();
             if (isAvailable && isMounted) {
+              setIsSensorActive(true);
               const start = new Date();
               start.setHours(0, 0, 0, 0);
               const end = new Date();
@@ -57,7 +55,7 @@ export default function DashboardScreen() {
           }
         }
       } catch (err) {
-        // Safe fallback
+        // Safe fallback for environments without sensor support
       }
     };
 
@@ -71,20 +69,14 @@ export default function DashboardScreen() {
     };
   }, []);
 
+  // Compute Week Days (Mon - Sun)
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
 
-  // Compute Calories, Active Time, Distance
+  // Compute Calories, Active Time, Distance based on steps & sessions
   const caloriesBurned = Math.round(stepCount * 0.04 + (sessions.length > 0 ? 320 : 0));
   const activeTimeMinutes = Math.round(stepCount / 110 + (sessions.length > 0 ? 45 : 0));
   const distanceKm = (stepCount * 0.00078).toFixed(1);
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return t('good_morning');
-    if (hour < 18) return t('good_afternoon');
-    return t('good_evening');
-  };
 
   const handleStartWorkout = () => {
     if (hapticsEnabled) {
@@ -103,16 +95,12 @@ export default function DashboardScreen() {
         <View style={styles.headerBar}>
           <View>
             <Text style={styles.brandTitle}>FitTrack</Text>
-            <Text style={styles.brandSubtitle}>
-              {getGreeting()}, {userName || 'Athlete'}
-            </Text>
+            <Text style={styles.brandSubtitle}>Hello, {userName}</Text>
           </View>
 
           {/* Month / Year Selector */}
           <View style={styles.monthBadge}>
-            <Text style={styles.monthBadgeText}>
-              {format(selectedDate, 'MMM yyyy', { locale: language === 'id' ? idLocale : undefined })}
-            </Text>
+            <Text style={styles.monthBadgeText}>{format(selectedDate, 'MMM yyyy')}</Text>
             <Ionicons name="chevron-down" size={14} color={AppTheme.colors.textPrimary} />
           </View>
 
@@ -122,7 +110,7 @@ export default function DashboardScreen() {
               style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
               onPress={() => router.push('/(tabs)/settings')}
             >
-              <Ionicons name="settings-outline" size={18} color={AppTheme.colors.textPrimary} />
+              <Ionicons name="notifications-outline" size={18} color={AppTheme.colors.textPrimary} />
             </Pressable>
             <View style={styles.avatarBadge}>
               <Text style={styles.avatarText}>{userName ? userName.charAt(0).toUpperCase() : 'A'}</Text>
@@ -138,14 +126,12 @@ export default function DashboardScreen() {
               <Pressable
                 key={idx}
                 onPress={() => {
-                  if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setSelectedDate(date);
                 }}
                 style={styles.dayColumn}
               >
-                <Text style={styles.dayAbbr}>
-                  {format(date, 'EEE', { locale: language === 'id' ? idLocale : undefined }).toUpperCase()}
-                </Text>
+                <Text style={styles.dayAbbr}>{format(date, 'EEE').toUpperCase()}</Text>
                 <View
                   style={[
                     styles.dayNumberBadge,
@@ -168,7 +154,7 @@ export default function DashboardScreen() {
 
         {/* 2.2 Hero Status Card (Recovery / Readiness) */}
         <View style={styles.heroCard}>
-          {/* Left Recovery Ring / Percent */}
+          {/* Left Arc / Stat */}
           <View style={styles.heroLeft}>
             <View style={styles.recoveryRingContainer}>
               <Text style={styles.recoveryValue}>88%</Text>
@@ -176,12 +162,10 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Right Status Info */}
+          {/* Right Status Column */}
           <View style={styles.heroRight}>
             <Text style={styles.heroStatusHeading}>Ready for Upper Body</Text>
-            <Text style={styles.heroStatusSub}>
-              {streak > 0 ? `${streak} ${t('day_streak')} • ` : ''}Fatigue: Low
-            </Text>
+            <Text style={styles.heroStatusSub}>Fatigue: Low • Optimal Readiness</Text>
 
             <View style={styles.windowBadge}>
               <Ionicons name="sparkles" size={12} color={AppTheme.colors.accentPrimary} />
@@ -215,7 +199,7 @@ export default function DashboardScreen() {
                 ]}
               />
             </View>
-            <Text style={styles.bentoSubtext}>Target: 10,000</Text>
+            <Text style={styles.bentoSubtext}>Target: 10,000 steps</Text>
           </View>
 
           {/* Bento 2: Calories */}
@@ -290,10 +274,11 @@ export default function DashboardScreen() {
           <View style={styles.plusIconWrapper}>
             <Ionicons name="add" size={22} color={AppTheme.colors.textPrimary} />
           </View>
-          <Text style={styles.startWorkoutButtonText}>{t('start_workout')}</Text>
+          <Text style={styles.startWorkoutButtonText}>Start Workout</Text>
         </Pressable>
 
-        <View style={{ height: 120 }} />
+        {/* Bottom spacer for floating bottom navigation bar */}
+        <View style={{ height: 110 }} />
       </ScrollView>
     </View>
   );
@@ -310,7 +295,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
 
-  // Header Bar
+  // 2.1 Header Bar
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -375,7 +360,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Date Scroller
+  // Weekly Date Scroller
   dateScrollerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -420,7 +405,7 @@ const styles = StyleSheet.create({
     color: AppTheme.colors.accentSecondary,
   },
 
-  // Hero Card
+  // 2.2 Hero Status Card
   heroCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -506,7 +491,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // 2x2 Bento Grid
+  // 2.3 2x2 Bento Activity Grid
   bentoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -567,7 +552,7 @@ const styles = StyleSheet.create({
     color: AppTheme.colors.textSecondary,
   },
 
-  // Primary Action Button (Start Workout)
+  // 2.4 Primary Action Button (Start Workout)
   startWorkoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
