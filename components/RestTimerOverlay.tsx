@@ -277,7 +277,7 @@ export default function RestTimerOverlay({
                   </View>
                   <TouchableOpacity
                     activeOpacity={0.7}
-                    onPress={onClose}
+                    onPress={handleCancelSet}
                     style={styles.popupCloseBtn}
                   >
                     <Ionicons name="close" size={18} color={colors.textSecondary} />
@@ -355,7 +355,7 @@ export default function RestTimerOverlay({
                   <TouchableOpacity
                     activeOpacity={0.8}
                     style={styles.setupCancelBtn}
-                    onPress={onClose}
+                    onPress={handleCancelSet}
                   >
                     <Text style={styles.setupCancelBtnText}>{t('cancel')}</Text>
                   </TouchableOpacity>
