@@ -143,5 +143,6 @@
   "select_rest_duration": "Select Rest Duration",
   "start_rest": "Start Rest",
   "rest_timer_hint": "Choose a duration or enter seconds to begin",
-  "rest_now": "Rest"
+  "rest_now": "Rest",
+  "selected_duration": "Selected Duration"
 }

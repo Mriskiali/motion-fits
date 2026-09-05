@@ -143,5 +143,6 @@
   "select_rest_duration": "Pilih Waktu Istirahat",
   "start_rest": "Mulai Istirahat",
   "rest_timer_hint": "Pilih durasi atau masukkan detik untuk memulai",
-  "rest_now": "Istirahat"
+  "rest_now": "Istirahat",
+  "selected_duration": "Durasi Terpilih"
 }

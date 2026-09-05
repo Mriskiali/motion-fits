@@ -252,6 +252,12 @@ export default function RestTimerOverlay({
   const gradEnd = isDark ? '#818CF8' : '#22C55E';
   const ringTrackColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
 
+  const parsedManual = parseInt(manualInput, 10);
+  const activeChosenSeconds = !isNaN(parsedManual) && parsedManual > 0 ? parsedManual : selectedDuration;
+  const previewMinutes = Math.floor(activeChosenSeconds / 60);
+  const previewSeconds = activeChosenSeconds % 60;
+  const previewFormatted = `${previewMinutes}:${previewSeconds.toString().padStart(2, '0')}`;
+
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={styles.overlay}>
@@ -259,101 +265,125 @@ export default function RestTimerOverlay({
           style={styles.keyboardContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          {/* Top Header Pill & Subtitle */}
-          <View style={styles.header}>
-            <View style={styles.badgePill}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.badgeText}>{t('rest_period').toUpperCase()}</Text>
-            </View>
-            <Text style={styles.subtitle}>
-              {isConfiguring ? t('rest_timer_hint') : t('catch_breath')}
-            </Text>
-          </View>
-
-          {/* If user needs to choose rest time before starting */}
+          {/* If user needs to choose rest time before starting (Modern Popup Card) */}
           {isConfiguring ? (
-            <View style={styles.setupCard}>
-              <Text style={styles.setupTitle}>{t('select_rest_duration')}</Text>
+            <View style={styles.popupWrapper}>
+              <View style={styles.popupCard}>
+                {/* Popup Top Row */}
+                <View style={styles.popupHeaderRow}>
+                  <View style={styles.popupBadge}>
+                    <Ionicons name="timer" size={15} color={colors.primaryAction} />
+                    <Text style={styles.popupBadgeText}>{t('rest_period').toUpperCase()}</Text>
+                  </View>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={onClose}
+                    style={styles.popupCloseBtn}
+                  >
+                    <Ionicons name="close" size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
 
-              {/* Presets Grid */}
-              <View style={styles.presetGrid}>
-                {[30, 45, 60, 90, 120, 180].map((preset) => {
-                  const isSelected = selectedDuration === preset && !manualInput;
-                  return (
-                    <TouchableOpacity
-                      key={preset}
-                      activeOpacity={0.75}
-                      style={[
-                        styles.setupPresetPill,
-                        isSelected && styles.setupPresetPillActive,
-                      ]}
-                      onPress={() => {
-                        if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setSelectedDuration(preset);
-                        setManualInput('');
-                      }}
-                    >
-                      <Text
+                {/* Title & Subtitle */}
+                <Text style={styles.popupTitle}>{t('select_rest_duration')}</Text>
+                <Text style={styles.popupSubtitle}>{t('rest_timer_hint')}</Text>
+
+                {/* Big Visual Preview Box of Chosen Time */}
+                <View style={styles.previewContainer}>
+                  <Text style={styles.previewLabel}>{t('selected_duration')}</Text>
+                  <Text style={styles.previewDigits}>{previewFormatted}</Text>
+                  <Text style={styles.previewSubtext}>
+                    {activeChosenSeconds} {t('seconds')}
+                  </Text>
+                </View>
+
+                {/* Presets Grid */}
+                <View style={styles.presetGrid}>
+                  {[30, 45, 60, 90, 120, 180].map((preset) => {
+                    const isSelected = selectedDuration === preset && !manualInput;
+                    return (
+                      <TouchableOpacity
+                        key={preset}
+                        activeOpacity={0.75}
                         style={[
-                          styles.setupPresetText,
-                          isSelected && styles.setupPresetTextActive,
+                          styles.setupPresetPill,
+                          isSelected && styles.setupPresetPillActive,
                         ]}
+                        onPress={() => {
+                          if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setSelectedDuration(preset);
+                          setManualInput('');
+                        }}
                       >
-                        {preset}
-                        {t('seconds_short')}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                        <Text
+                          style={[
+                            styles.setupPresetText,
+                            isSelected && styles.setupPresetTextActive,
+                          ]}
+                        >
+                          {preset}
+                          {t('seconds_short')}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
-              <Text style={styles.sheetSubtitle}>{t('or_enter_seconds')}</Text>
+                <Text style={styles.sheetSubtitle}>{t('or_enter_seconds')}</Text>
 
-              {/* Custom Input */}
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.sheetInput}
-                  keyboardType="number-pad"
-                  placeholder={t('rest_timer_input_placeholder')}
-                  placeholderTextColor={colors.textMuted}
-                  value={manualInput}
-                  onChangeText={(val) => {
-                    setManualInput(val);
-                    const parsed = parseInt(val, 10);
-                    if (!isNaN(parsed) && parsed > 0) {
-                      setSelectedDuration(parsed);
-                    }
-                  }}
-                  maxLength={4}
-                />
-              </View>
+                {/* Custom Numeric Input */}
+                <View style={styles.inputRow}>
+                  <TextInput
+                    style={styles.sheetInput}
+                    keyboardType="number-pad"
+                    placeholder={t('rest_timer_input_placeholder')}
+                    placeholderTextColor={colors.textMuted}
+                    value={manualInput}
+                    onChangeText={(val) => {
+                      setManualInput(val);
+                      const parsed = parseInt(val, 10);
+                      if (!isNaN(parsed) && parsed > 0) {
+                        setSelectedDuration(parsed);
+                      }
+                    }}
+                    maxLength={4}
+                  />
+                </View>
 
-              {/* Action Buttons for Setup */}
-              <View style={styles.setupActions}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={styles.setupCancelBtn}
-                  onPress={onClose}
-                >
-                  <Text style={styles.setupCancelBtnText}>{t('cancel')}</Text>
-                </TouchableOpacity>
+                {/* Action Buttons */}
+                <View style={styles.setupActions}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.setupCancelBtn}
+                    onPress={onClose}
+                  >
+                    <Text style={styles.setupCancelBtnText}>{t('cancel')}</Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={styles.setupStartBtn}
-                  onPress={() => {
-                    const parsed = parseInt(manualInput, 10);
-                    const durationToStart = !isNaN(parsed) && parsed > 0 ? parsed : selectedDuration;
-                    startCustomTimer(durationToStart);
-                  }}
-                >
-                  <Ionicons name="play" size={18} color="#FFFFFF" />
-                  <Text style={styles.setupStartBtnText}>{t('start_rest')}</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={styles.setupStartBtn}
+                    onPress={() => {
+                      startCustomTimer(activeChosenSeconds);
+                    }}
+                  >
+                    <Ionicons name="play" size={18} color="#FFFFFF" />
+                    <Text style={styles.setupStartBtnText}>{t('start_rest')}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           ) : (
             <>
+              {/* Top Header Pill & Subtitle (during active timer) */}
+              <View style={styles.header}>
+                <View style={styles.badgePill}>
+                  <View style={styles.pulseDot} />
+                  <Text style={styles.badgeText}>{t('rest_period').toUpperCase()}</Text>
+                </View>
+                <Text style={styles.subtitle}>{t('catch_breath')}</Text>
+              </View>
+
               {/* Hero Circular Progress Ring */}
               <View style={styles.heroSection}>
                 <View style={styles.ringContainer}>
@@ -841,32 +871,107 @@ const getStyles = (c: any) =>
       fontWeight: '800',
       color: '#FFFFFF',
     },
-    setupCard: {
+    popupWrapper: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: '100%',
+    },
+    popupCard: {
       width: '100%',
       backgroundColor: c.cardSurface,
-      borderRadius: 28,
+      borderRadius: 32,
       padding: 24,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: c.borderSubtle,
-      marginVertical: 'auto',
       ...Platform.select({
         ios: {
           shadowColor: c.shadowColor,
-          shadowOffset: { width: 0, height: 8 },
+          shadowOffset: { width: 0, height: 12 },
           shadowOpacity: c.shadowOpacity,
-          shadowRadius: 16,
+          shadowRadius: 20,
         },
         android: {
-          elevation: c.elevation || 4,
+          elevation: c.elevation ? c.elevation + 4 : 6,
         },
       }),
     },
-    setupTitle: {
-      fontSize: 20,
+    popupHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    popupBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: c.surfaceHighlight,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    popupBadgeText: {
+      fontSize: 11,
       fontWeight: '800',
+      letterSpacing: 1,
+      color: c.primaryAction,
+    },
+    popupCloseBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: c.surfaceHighlight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    popupTitle: {
+      fontSize: 22,
+      fontWeight: '900',
       color: c.textPrimary,
-      textAlign: 'center',
-      marginBottom: 20,
+      marginBottom: 4,
+    },
+    popupSubtitle: {
+      fontSize: 13,
+      color: c.textSecondary,
+      lineHeight: 18,
+      marginBottom: 18,
+    },
+    previewContainer: {
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 20,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 18,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    previewLabel: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: c.textSecondary,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      marginBottom: 2,
+    },
+    previewDigits: {
+      fontSize: 42,
+      fontWeight: '900',
+      color: c.textPrimary,
+      fontVariant: ['tabular-nums'],
+      letterSpacing: -1.5,
+    },
+    previewSubtext: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.primaryAction,
+      marginTop: 2,
     },
     setupPresetPill: {
       flexBasis: '30%',
@@ -884,7 +989,7 @@ const getStyles = (c: any) =>
       borderColor: c.primaryAction,
     },
     setupPresetText: {
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '800',
       color: c.textPrimary,
     },
@@ -894,7 +999,7 @@ const getStyles = (c: any) =>
     setupActions: {
       flexDirection: 'row',
       gap: 12,
-      marginTop: 24,
+      marginTop: 20,
     },
     setupCancelBtn: {
       flex: 1,
@@ -903,6 +1008,8 @@ const getStyles = (c: any) =>
       borderRadius: 18,
       alignItems: 'center',
       justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
     setupCancelBtnText: {
       fontSize: 15,
