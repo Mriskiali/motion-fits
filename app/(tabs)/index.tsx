@@ -25,7 +25,6 @@ export default function DashboardScreen() {
   const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
   const sessions = useWorkoutStore((state) => state.sessions);
   const templates = useWorkoutStore((state) => state.templates);
-  const scheduledWorkouts = useWorkoutStore((state) => state.scheduledWorkouts);
   const colors = useThemeColors();
   const styles = getStyles(colors);
   const { t, language } = useTranslation();
@@ -57,11 +56,6 @@ export default function DashboardScreen() {
     return Math.round(totalSecs / sessions.length / 60);
   }, [sessions]);
 
-  // Today's Scheduled Template
-  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  const todayTemplateId = scheduledWorkouts[selectedDateStr];
-  const todayScheduledTemplate = templates.find((t) => t.id === todayTemplateId);
-
   // Last Completed Session
   const lastSession = sessions.length > 0 ? sessions[sessions.length - 1] : null;
   const lastSessionTemplate = lastSession
@@ -75,7 +69,7 @@ export default function DashboardScreen() {
     return t('good_evening');
   };
 
-  const handleStartWorkout = (templateId?: string) => {
+  const handleStartWorkout = () => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -91,28 +85,17 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Header (Clean Greeting & Date) */}
+        {/* 1. Header (Clean Greeting & Full Date, No Month Button, No Avatar) */}
         <View style={styles.headerBar}>
-          <View>
-            <Text style={styles.greetingTitle}>{getGreeting()}</Text>
-            <Text style={styles.dateSubtitle}>
-              {format(selectedDate, 'EEEE, d MMMM yyyy', {
-                locale: language === 'id' ? idLocale : undefined,
-              })}
-            </Text>
-          </View>
-
-          {/* Month Badge */}
-          <View style={styles.monthBadge}>
-            <Text style={styles.monthBadgeText}>
-              {format(selectedDate, 'MMM yyyy', {
-                locale: language === 'id' ? idLocale : undefined,
-              })}
-            </Text>
-          </View>
+          <Text style={styles.greetingTitle}>{getGreeting()}</Text>
+          <Text style={styles.dateSubtitle}>
+            {format(selectedDate, 'EEEE, d MMMM yyyy', {
+              locale: language === 'id' ? idLocale : undefined,
+            })}
+          </Text>
         </View>
 
-        {/* 2. Weekly Date Scroller */}
+        {/* 2. Weekly Date Scroller with High-Contrast Text */}
         <View style={styles.dateScrollerRow}>
           {weekDays.map((date, idx) => {
             const isSelected = isSameDay(date, selectedDate);
@@ -248,31 +231,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* 5. Today's Plan / Scheduled Workout */}
-        {todayScheduledTemplate && (
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>{t('today_plan')}</Text>
-            <View style={styles.activityCard}>
-              <View style={styles.activityIconBox}>
-                <Ionicons name="fitness" size={22} color={colors.primaryAction} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.activityTitle}>{todayScheduledTemplate.name}</Text>
-                <Text style={styles.activitySub}>
-                  {todayScheduledTemplate.exercises?.length || 0} {t('exercises_count')}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => handleStartWorkout(todayScheduledTemplate.id)}
-                style={({ pressed }) => [styles.quickStartBtn, pressed && { opacity: 0.8 }]}
-              >
-                <Text style={styles.quickStartBtnText}>{t('start_workout')}</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        {/* 6. Recent Session Activity */}
+        {/* 5. Recent Session Activity */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>{t('recent_activity')}</Text>
           {lastSession ? (
@@ -300,9 +259,9 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {/* 7. Start Workout CTA Button */}
+        {/* 6. Start Workout CTA Button */}
         <Pressable
-          onPress={() => handleStartWorkout()}
+          onPress={handleStartWorkout}
           style={({ pressed }) => [
             styles.startWorkoutButton,
             pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 },
@@ -334,46 +293,19 @@ const getStyles = (c: ThemeColors) =>
 
     // Header Bar
     headerBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
       marginBottom: 20,
     },
     greetingTitle: {
-      fontSize: 26,
+      fontSize: 28,
       fontWeight: '800',
       color: c.textPrimary,
       letterSpacing: -0.6,
     },
     dateSubtitle: {
-      fontSize: 13,
+      fontSize: 14,
       color: c.textSecondary,
       fontWeight: '500',
-      marginTop: 2,
-    },
-    monthBadge: {
-      backgroundColor: c.cardSurface,
-      paddingVertical: 8,
-      paddingHorizontal: 14,
-      borderRadius: 9999,
-      borderWidth: 1,
-      borderColor: c.borderSubtle,
-      ...Platform.select({
-        ios: {
-          shadowColor: c.shadowColor,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: c.shadowOpacity,
-          shadowRadius: c.shadowRadius,
-        },
-        android: {
-          elevation: c.elevation,
-        },
-      }),
-    },
-    monthBadgeText: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: c.textPrimary,
+      marginTop: 4,
     },
 
     // Date Scroller
@@ -408,7 +340,7 @@ const getStyles = (c: ThemeColors) =>
     dayAbbr: {
       fontSize: 11,
       fontWeight: '600',
-      color: c.textMuted,
+      color: c.textSecondary,
       letterSpacing: 0.3,
     },
     dayAbbrToday: {
@@ -416,23 +348,24 @@ const getStyles = (c: ThemeColors) =>
       fontWeight: '700',
     },
     dayNumberBadge: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: 'transparent',
     },
     dayNumberBadgeSelected: {
       backgroundColor: c.dateBadgeSelected,
     },
     dayNumberText: {
-      fontSize: 14,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
       color: c.textPrimary,
     },
     dayNumberTextSelected: {
       fontWeight: '800',
-      color: c.primaryAction,
+      color: c.dateTextSelected,
     },
 
     // Hero Goal Card
@@ -624,17 +557,6 @@ const getStyles = (c: ThemeColors) =>
       fontSize: 12,
       color: c.textSecondary,
       fontWeight: '500',
-    },
-    quickStartBtn: {
-      backgroundColor: c.primaryAction,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 12,
-    },
-    quickStartBtnText: {
-      color: '#FFFFFF',
-      fontSize: 12,
-      fontWeight: '700',
     },
     emptyCard: {
       alignItems: 'center',

@@ -37,6 +37,7 @@ export interface ThemeColors {
   tabBar: string;
   overlay: string;
   dateBadgeSelected: string;
+  dateTextSelected: string;
   heroBackground: string;
   heroTextSecondary: string;
 
@@ -49,7 +50,7 @@ export interface ThemeColors {
 }
 
 export const darkTheme: ThemeColors = {
-  // Core Surfaces
+  // Core Surfaces (Deep Contrast Obsidian)
   background: '#0B0C0E',
   cardSurface: '#16181D',
   surfaceHighlight: '#20232B',
@@ -82,6 +83,7 @@ export const darkTheme: ThemeColors = {
   tabBar: 'rgba(22, 24, 29, 0.95)',
   overlay: 'rgba(0, 0, 0, 0.75)',
   dateBadgeSelected: '#3B82F6',
+  dateTextSelected: '#FFFFFF',
   heroBackground: '#132A1E',
   heroTextSecondary: '#A7F3D0',
 
@@ -97,7 +99,7 @@ export const warmLightTheme: ThemeColors = {
   // Core Surfaces (Warm Wellness & Sage Tinted)
   background: '#F4F6F2',
   cardSurface: '#FFFFFF',
-  surfaceHighlight: '#EFECE4',
+  surfaceHighlight: '#EAE5D9',
   inputSurface: '#F1EFEA',
   borderSubtle: '#E6E1D7',
 
@@ -126,7 +128,8 @@ export const warmLightTheme: ThemeColors = {
   actionIconBg: 'rgba(27, 77, 62, 0.06)',
   tabBar: 'rgba(255, 255, 255, 0.95)',
   overlay: 'rgba(19, 42, 30, 0.4)',
-  dateBadgeSelected: '#EAE5D9',
+  dateBadgeSelected: '#1B4D3E',
+  dateTextSelected: '#FFFFFF',
   heroBackground: '#132A1E',
   heroTextSecondary: '#A7F3D0',
 

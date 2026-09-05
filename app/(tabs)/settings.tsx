@@ -1,7 +1,16 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Switch, Platform, TextInput } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  Platform,
+  TextInput,
+} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useUserStore, Language } from '@/store/useUserStore';
+import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
@@ -13,17 +22,49 @@ try {
 } catch (e) {
   console.warn('expo-document-picker is not available');
 }
-import { Minus, Plus, Moon, Download, Bell, Clock, Globe, Timer, Activity, Vibrate, Volume2 } from 'lucide-react-native';
-import { requestPermissionsAsync, scheduleDailyReminder, cancelAllReminders } from '@/utils/notifications';
+import {
+  Minus,
+  Plus,
+  Moon,
+  Sun,
+  Download,
+  Bell,
+  Clock,
+  Globe,
+  Timer,
+  Activity,
+  Volume2,
+  Target,
+} from 'lucide-react-native';
+import {
+  requestPermissionsAsync,
+  scheduleDailyReminder,
+  cancelAllReminders,
+} from '@/utils/notifications';
 import { useTranslation } from '@/hooks/useTranslation';
+import { ThemeColors } from '@/constants/theme';
+import * as Haptics from 'expo-haptics';
 
 export default function SettingsScreen() {
-  const { 
-    name, weeklyGoal, theme, setWeeklyGoal, setTheme, 
-    remindersEnabled, reminderTime, setRemindersEnabled, setReminderTime,
-    language, setLanguage, defaultRestTimer, setDefaultRestTimer,
-    autoStartTimer, setAutoStartTimer, hapticsEnabled, setHapticsEnabled,
-    audioNotification, setAudioNotification
+  const {
+    weeklyGoal,
+    theme,
+    setWeeklyGoal,
+    setTheme,
+    remindersEnabled,
+    reminderTime,
+    setRemindersEnabled,
+    setReminderTime,
+    language,
+    setLanguage,
+    defaultRestTimer,
+    setDefaultRestTimer,
+    autoStartTimer,
+    setAutoStartTimer,
+    hapticsEnabled,
+    setHapticsEnabled,
+    audioNotification,
+    setAudioNotification,
   } = useUserStore();
   const { showAlert } = useAlertStore();
   const colors = useThemeColors();
@@ -32,13 +73,17 @@ export default function SettingsScreen() {
 
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const handleIncrementGoal = () => setWeeklyGoal(Math.min(7, weeklyGoal + 1));
-  const handleDecrementGoal = () => setWeeklyGoal(Math.max(1, weeklyGoal - 1));
-
-  const handleIncrementTimer = () => setDefaultRestTimer(Math.min(300, defaultRestTimer + 15));
-  const handleDecrementTimer = () => setDefaultRestTimer(Math.max(15, defaultRestTimer - 15));
+  const handleIncrementGoal = () => {
+    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setWeeklyGoal(Math.min(7, weeklyGoal + 1));
+  };
+  const handleDecrementGoal = () => {
+    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setWeeklyGoal(Math.max(1, weeklyGoal - 1));
+  };
 
   const toggleReminders = async (value: boolean) => {
+    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (value) {
       const granted = await requestPermissionsAsync();
       if (granted) {
@@ -74,6 +119,7 @@ export default function SettingsScreen() {
   };
 
   const handleExport = async () => {
+    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const data = {
         user: useUserStore.getState(),
@@ -82,7 +128,7 @@ export default function SettingsScreen() {
       const jsonStr = JSON.stringify(data, null, 2);
       const fileUri = `${FileSystem.documentDirectory}FitTrackPro_Export.json`;
       await FileSystem.writeAsStringAsync(fileUri, jsonStr);
-      
+
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri);
       } else {
@@ -91,12 +137,6 @@ export default function SettingsScreen() {
     } catch (error) {
       showAlert(t('error'), t('export_error'), [{ text: t('ok'), style: 'cancel' }]);
     }
-  };
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   const handlePickAudio = async () => {
@@ -112,89 +152,173 @@ export default function SettingsScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setAudioNotification(result.assets[0].uri);
-      } else {
-        // If they cancel, revert to default if they had nothing selected before
-        // or just do nothing and let them click another button.
       }
     } catch (error) {
-      console.error('Error picking audio:', error);
       showAlert(t('error'), t('pick_audio_error'), [{ text: t('ok') }]);
     }
   };
 
+  const isDarkMode = theme === 'dark';
+
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>{t('settings')}</Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.headerBar}>
+          <Text style={styles.headerTitle}>{t('settings')}</Text>
+          <Text style={styles.headerSub}>{t('settings_subtitle') || 'Preferences & app configuration'}</Text>
+        </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
+        {/* 1. Weekly Goal Card */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('weekly_goal')}</Text>
-          <View style={styles.card}>
-            <Text style={styles.cardDescription}>{t('weekly_goal_desc')}</Text>
-            
+          <View style={styles.goalCard}>
+            <View style={styles.goalTopRow}>
+              <View style={styles.goalIconBox}>
+                <Target size={20} color={colors.primaryAction} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.goalCardTitle}>{t('weekly_goal')}</Text>
+                <Text style={styles.cardDescription}>{t('weekly_goal_desc')}</Text>
+              </View>
+            </View>
+
             <View style={styles.stepperContainer}>
-              <TouchableOpacity onPress={handleDecrementGoal} style={styles.stepperButton}>
-                <Minus color={colors.textPrimaryOnVolt || "#000"} size={24} />
+              <TouchableOpacity
+                onPress={handleDecrementGoal}
+                style={styles.stepperButton}
+                activeOpacity={0.7}
+              >
+                <Minus color={colors.textPrimary} size={20} />
               </TouchableOpacity>
-              
+
               <View style={styles.stepperValueContainer}>
                 <Text style={styles.stepperValue}>{weeklyGoal}</Text>
                 <Text style={styles.stepperLabel}>{t('days_per_week')}</Text>
               </View>
-              
-              <TouchableOpacity onPress={handleIncrementGoal} style={styles.stepperButton}>
-                <Plus color={colors.textPrimaryOnVolt || "#000"} size={24} />
+
+              <TouchableOpacity
+                onPress={handleIncrementGoal}
+                style={styles.stepperButton}
+                activeOpacity={0.7}
+              >
+                <Plus color={colors.textPrimary} size={20} />
               </TouchableOpacity>
             </View>
           </View>
         </View>
 
+        {/* 2. Preferences & Options List */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings')}</Text>
-          
-          <View style={styles.settingsList}>
+          <Text style={styles.sectionTitle}>{t('preferences') || 'Preferences'}</Text>
 
+          <View style={styles.settingsGroup}>
             {/* Language */}
             <View style={styles.settingItem}>
               <View style={styles.settingItemLeft}>
                 <View style={styles.iconBox}>
-                  <Globe color={colors.primary} size={20} />
+                  <Globe color={colors.primaryAction} size={18} />
                 </View>
                 <Text style={styles.settingText}>{t('language')}</Text>
               </View>
               <View style={styles.segmentedControl}>
-                <TouchableOpacity 
-                  style={[styles.segmentBtn, language === 'id' && styles.segmentBtnActive]}
-                  onPress={() => setLanguage('id')}
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    language === 'id' && styles.segmentBtnActive,
+                  ]}
+                  onPress={() => {
+                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setLanguage('id');
+                  }}
                 >
-                  <Text style={[styles.segmentText, language === 'id' && styles.segmentTextActive]}>ID</Text>
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      language === 'id' && styles.segmentTextActive,
+                    ]}
+                  >
+                    ID
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.segmentBtn, language === 'en' && styles.segmentBtnActive]}
-                  onPress={() => setLanguage('en')}
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    language === 'en' && styles.segmentBtnActive,
+                  ]}
+                  onPress={() => {
+                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setLanguage('en');
+                  }}
                 >
-                  <Text style={[styles.segmentText, language === 'en' && styles.segmentTextActive]}>EN</Text>
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      language === 'en' && styles.segmentTextActive,
+                    ]}
+                  >
+                    EN
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             <View style={styles.settingSeparator} />
 
-            {/* Theme */}
+            {/* Theme Selector */}
             <View style={styles.settingItem}>
               <View style={styles.settingItemLeft}>
                 <View style={styles.iconBox}>
-                  <Moon color="#3b82f6" size={20} />
+                  {isDarkMode ? (
+                    <Moon color="#3b82f6" size={18} />
+                  ) : (
+                    <Sun color="#f59e0b" size={18} />
+                  )}
                 </View>
                 <Text style={styles.settingText}>{t('theme')}</Text>
               </View>
-              <Switch 
-                value={theme === 'dark' || theme === 'system'} 
-                onValueChange={(val) => setTheme(val ? 'dark' : 'light')} 
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#fff"
-              />
+              <View style={styles.segmentedControl}>
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    !isDarkMode && styles.segmentBtnActive,
+                  ]}
+                  onPress={() => {
+                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTheme('light');
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      !isDarkMode && styles.segmentTextActive,
+                    ]}
+                  >
+                    Light
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    isDarkMode && styles.segmentBtnActive,
+                  ]}
+                  onPress={() => {
+                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTheme('dark');
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      isDarkMode && styles.segmentTextActive,
+                    ]}
+                  >
+                    Dark
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.settingSeparator} />
@@ -203,14 +327,17 @@ export default function SettingsScreen() {
             <View style={styles.settingItem}>
               <View style={styles.settingItemLeft}>
                 <View style={styles.iconBox}>
-                  <Activity color={colors.warning} size={20} />
+                  <Activity color={colors.warning} size={18} />
                 </View>
                 <Text style={styles.settingText}>{t('haptics')}</Text>
               </View>
-              <Switch 
-                value={hapticsEnabled} 
-                onValueChange={setHapticsEnabled} 
-                trackColor={{ false: colors.border, true: colors.primary }}
+              <Switch
+                value={hapticsEnabled}
+                onValueChange={(val) => {
+                  if (val) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setHapticsEnabled(val);
+                }}
+                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
                 thumbColor="#fff"
               />
             </View>
@@ -219,28 +346,33 @@ export default function SettingsScreen() {
 
             {/* Default Rest Timer */}
             <View style={styles.settingItemCol}>
-              <View style={[styles.settingItemLeft, { justifyContent: 'space-between', flex: 1 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={styles.settingRowBetween}>
+                <View style={styles.settingItemLeft}>
                   <View style={styles.iconBox}>
-                    <Timer color={colors.success} size={20} />
+                    <Timer color={colors.successBadge} size={18} />
                   </View>
-                  <Text style={styles.settingText}>{t('default_prefix')} {t('rest_timer')}</Text>
+                  <Text style={styles.settingText}>
+                    {t('default_prefix')} {t('rest_timer')}
+                  </Text>
                 </View>
-                <Switch 
-                  value={autoStartTimer} 
-                  onValueChange={setAutoStartTimer} 
-                  trackColor={{ false: colors.border, true: colors.primary }}
+                <Switch
+                  value={autoStartTimer}
+                  onValueChange={(val) => {
+                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setAutoStartTimer(val);
+                  }}
+                  trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
                   thumbColor="#fff"
                 />
               </View>
-              
+
               {autoStartTimer && (
-                <View style={[styles.manualInputContainer, { marginTop: 16, paddingHorizontal: 16 }]}>
+                <View style={styles.manualInputContainer}>
                   <TextInput
-                    style={[styles.manualInput, { height: 48, backgroundColor: colors.background }]}
+                    style={styles.manualInput}
                     keyboardType="numeric"
                     placeholder="e.g. 90"
-                    placeholderTextColor={colors.textSecondary}
+                    placeholderTextColor={colors.textMuted}
                     value={String(defaultRestTimer)}
                     onChangeText={(val) => {
                       const parsed = parseInt(val);
@@ -251,7 +383,7 @@ export default function SettingsScreen() {
                       }
                     }}
                   />
-                  <Text style={styles.settingText}>{t('seconds')}</Text>
+                  <Text style={styles.unitText}>{t('seconds')}</Text>
                 </View>
               )}
             </View>
@@ -262,29 +394,72 @@ export default function SettingsScreen() {
             <View style={styles.settingItemCol}>
               <View style={styles.settingItemLeft}>
                 <View style={styles.iconBox}>
-                  <Volume2 color={colors.accent} size={20} />
+                  <Volume2 color={colors.accent} size={18} />
                 </View>
                 <Text style={styles.settingText}>{t('audio_notification')}</Text>
               </View>
-              
-              <View style={[styles.segmentedControl, { marginTop: 16, alignSelf: 'stretch', justifyContent: 'center' }]}>
-                <TouchableOpacity 
-                  style={[styles.segmentBtn, audioNotification === 'default_notification' && styles.segmentBtnActive, { flex: 1, alignItems: 'center' }]}
-                  onPress={() => setAudioNotification('default_notification')}
+
+              <View style={styles.audioSegmentedControl}>
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    audioNotification === 'default_notification' && styles.segmentBtnActive,
+                    { flex: 1, alignItems: 'center' },
+                  ]}
+                  onPress={() => {
+                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setAudioNotification('default_notification');
+                  }}
                 >
-                  <Text style={[styles.segmentText, audioNotification === 'default_notification' && styles.segmentTextActive]}>{t('default')}</Text>
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      audioNotification === 'default_notification' && styles.segmentTextActive,
+                    ]}
+                  >
+                    {t('default')}
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.segmentBtn, audioNotification === 'library_bell' && styles.segmentBtnActive, { flex: 1, alignItems: 'center' }]}
-                  onPress={() => setAudioNotification('library_bell')}
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    audioNotification === 'library_bell' && styles.segmentBtnActive,
+                    { flex: 1, alignItems: 'center' },
+                  ]}
+                  onPress={() => {
+                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setAudioNotification('library_bell');
+                  }}
                 >
-                  <Text style={[styles.segmentText, audioNotification === 'library_bell' && styles.segmentTextActive]}>{t('bell')}</Text>
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      audioNotification === 'library_bell' && styles.segmentTextActive,
+                    ]}
+                  >
+                    {t('bell')}
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.segmentBtn, (audioNotification !== 'default_notification' && audioNotification !== 'library_bell') && styles.segmentBtnActive, { flex: 1, alignItems: 'center' }]}
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    audioNotification !== 'default_notification' &&
+                      audioNotification !== 'library_bell' &&
+                      styles.segmentBtnActive,
+                    { flex: 1, alignItems: 'center' },
+                  ]}
                   onPress={handlePickAudio}
                 >
-                  <Text style={[styles.segmentText, (audioNotification !== 'default_notification' && audioNotification !== 'library_bell') && styles.segmentTextActive]}>{t('custom')}</Text>
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      audioNotification !== 'default_notification' &&
+                        audioNotification !== 'library_bell' &&
+                        styles.segmentTextActive,
+                    ]}
+                  >
+                    {t('custom')}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -295,14 +470,14 @@ export default function SettingsScreen() {
             <View style={styles.settingItem}>
               <View style={styles.settingItemLeft}>
                 <View style={styles.iconBox}>
-                  <Bell color={colors.primary} size={20} />
+                  <Bell color={colors.primaryAction} size={18} />
                 </View>
                 <Text style={styles.settingText}>{t('workout_reminders')}</Text>
               </View>
-              <Switch 
-                value={remindersEnabled} 
-                onValueChange={toggleReminders} 
-                trackColor={{ false: colors.border, true: colors.primary }}
+              <Switch
+                value={remindersEnabled}
+                onValueChange={toggleReminders}
+                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
                 thumbColor="#fff"
               />
             </View>
@@ -310,10 +485,13 @@ export default function SettingsScreen() {
             {remindersEnabled && (
               <>
                 <View style={styles.settingSeparator} />
-                <TouchableOpacity style={styles.settingItem} onPress={() => setShowTimePicker(true)}>
+                <TouchableOpacity
+                  style={styles.settingItem}
+                  onPress={() => setShowTimePicker(true)}
+                >
                   <View style={styles.settingItemLeft}>
                     <View style={styles.iconBox}>
-                      <Clock color="#3b82f6" size={20} />
+                      <Clock color="#3b82f6" size={18} />
                     </View>
                     <Text style={styles.settingText}>{t('reminder_time')}</Text>
                   </View>
@@ -334,10 +512,11 @@ export default function SettingsScreen() {
 
             <View style={styles.settingSeparator} />
 
+            {/* Export Data */}
             <TouchableOpacity style={styles.settingItem} onPress={handleExport}>
               <View style={styles.settingItemLeft}>
                 <View style={styles.iconBox}>
-                  <Download color="#f97316" size={20} />
+                  <Download color="#f97316" size={18} />
                 </View>
                 <Text style={styles.settingText}>{t('export_data')}</Text>
               </View>
@@ -345,180 +524,265 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 110 }} />
       </ScrollView>
     </View>
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    paddingTop: 60,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginHorizontal: 24,
-    marginBottom: 20,
-    letterSpacing: -0.5,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-  },
-  section: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 24,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  cardDescription: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    marginBottom: 24,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  stepperContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 24,
-  },
-  stepperButton: {
-    backgroundColor: colors.primary,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperValueContainer: {
-    alignItems: 'center',
-    minWidth: 100,
-  },
-  stepperValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  stepperLabel: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  settingsList: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    paddingVertical: 20,
-  },
-  settingItemCol: {
-    padding: 16,
-    paddingVertical: 20,
-  },
-  settingItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-    backgroundColor: colors.background,
-  },
-  settingText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  settingSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginLeft: 68,
-  },
-  timeValueText: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    padding: 4,
-  },
-  segmentBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  segmentBtnActive: {
-    backgroundColor: colors.primary,
-  },
-  segmentText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  segmentTextActive: {
-    color: colors.textPrimaryOnVolt || '#000',
-  },
-  manualInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  manualInput: {
-    width: 150,
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-});
+const getStyles = (c: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    scrollContent: {
+      paddingTop: Platform.OS === 'ios' ? 60 : 44,
+      paddingHorizontal: 20,
+      paddingBottom: 24,
+    },
+    headerBar: {
+      marginBottom: 20,
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: '800',
+      color: c.textPrimary,
+      letterSpacing: -0.6,
+    },
+    headerSub: {
+      fontSize: 14,
+      color: c.textSecondary,
+      fontWeight: '500',
+      marginTop: 4,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: c.textPrimary,
+      letterSpacing: -0.3,
+      marginBottom: 12,
+    },
+
+    // Goal Card
+    goalCard: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 22,
+      padding: 20,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: c.shadowColor,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: c.shadowOpacity,
+          shadowRadius: c.shadowRadius,
+        },
+        android: {
+          elevation: c.elevation,
+        },
+      }),
+    },
+    goalTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 18,
+    },
+    goalIconBox: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: c.surfaceHighlight,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    goalCardTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: c.textPrimary,
+      marginBottom: 2,
+    },
+    cardDescription: {
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: '500',
+    },
+    stepperContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 20,
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 18,
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+    },
+    stepperButton: {
+      backgroundColor: c.cardSurface,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    stepperValueContainer: {
+      alignItems: 'center',
+      minWidth: 110,
+    },
+    stepperValue: {
+      fontSize: 32,
+      fontWeight: '800',
+      color: c.textPrimary,
+      letterSpacing: -0.5,
+    },
+    stepperLabel: {
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: '600',
+      marginTop: 2,
+    },
+
+    // Settings Group
+    settingsGroup: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      overflow: 'hidden',
+      ...Platform.select({
+        ios: {
+          shadowColor: c.shadowColor,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: c.shadowOpacity,
+          shadowRadius: c.shadowRadius,
+        },
+        android: {
+          elevation: c.elevation,
+        },
+      }),
+    },
+    settingItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 18,
+      paddingVertical: 16,
+    },
+    settingItemCol: {
+      paddingHorizontal: 18,
+      paddingVertical: 16,
+    },
+    settingRowBetween: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    settingItemLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    iconBox: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.surfaceHighlight,
+    },
+    settingText: {
+      color: c.textPrimary,
+      fontSize: 15,
+      fontWeight: '600',
+    },
+    settingSeparator: {
+      height: 1,
+      backgroundColor: c.borderSubtle,
+      marginLeft: 66,
+    },
+    timeValueText: {
+      color: c.primaryAction,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+
+    // Segmented Controls
+    segmentedControl: {
+      flexDirection: 'row',
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 12,
+      padding: 3,
+    },
+    audioSegmentedControl: {
+      flexDirection: 'row',
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 12,
+      padding: 3,
+      marginTop: 14,
+    },
+    segmentBtn: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 9,
+    },
+    segmentBtnActive: {
+      backgroundColor: c.cardSurface,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 2,
+        },
+        android: {
+          elevation: 1,
+        },
+      }),
+    },
+    segmentText: {
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    segmentTextActive: {
+      color: c.textPrimary,
+      fontWeight: '800',
+    },
+
+    // Manual input for rest timer
+    manualInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      marginTop: 14,
+      backgroundColor: c.surfaceHighlight,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 14,
+    },
+    manualInput: {
+      width: 90,
+      height: 40,
+      backgroundColor: c.cardSurface,
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: '800',
+      textAlign: 'center',
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    unitText: {
+      fontSize: 13,
+      color: c.textSecondary,
+      fontWeight: '600',
+    },
+  });
+

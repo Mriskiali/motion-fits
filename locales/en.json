@@ -123,5 +123,10 @@
   "steps_goal_label": "steps",
   "step_counter": "Step Counter",
   "daily_step_goal_desc": "Set your daily step goal.",
-  "minimize": "Minimize"
+  "minimize": "Minimize",
+  "manage_routines_subtitle": "Plan & track your routines",
+  "history_subtitle": "Review your progress & past logs",
+  "settings_subtitle": "Preferences & app configuration",
+  "completed": "Completed",
+  "preferences": "Preferences"
 }

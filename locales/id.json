@@ -123,5 +123,10 @@
   "steps_goal_label": "langkah",
   "step_counter": "Penghitung Langkah",
   "daily_step_goal_desc": "Atur target langkah harian kamu.",
-  "minimize": "Minimalkan"
+  "minimize": "Minimalkan",
+  "manage_routines_subtitle": "Rencanakan & pantau rutinitas latihan",
+  "history_subtitle": "Tinjau progres & riwayat latihan kamu",
+  "settings_subtitle": "Preferensi & konfigurasi aplikasi",
+  "completed": "Selesai",
+  "preferences": "Preferensi"
 }
