@@ -116,6 +116,8 @@
   "provide_name_error": "Harap berikan nama untuk latihan ini.",
   "add_exercise_error": "Harap tambahkan setidaknya satu latihan.",
   "exercise_name_empty_error": "Harap isi nama latihan untuk semua latihan.",
+  "exercise_sets_empty_error": "Harap isi jumlah set/interval untuk semua latihan.",
+  "exercise_reps_duration_empty_error": "Harap isi repetisi atau durasi untuk semua latihan.",
   "sets_placeholder": "cth. 3",
   "steps_today": "Langkah Hari Ini",
   "steps_goal_label": "langkah",

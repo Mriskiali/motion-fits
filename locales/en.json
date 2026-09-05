@@ -116,6 +116,8 @@
   "provide_name_error": "Please provide a name for the workout.",
   "add_exercise_error": "Please add at least one exercise.",
   "exercise_name_empty_error": "Please provide a name for all exercises.",
+  "exercise_sets_empty_error": "Please provide the number of sets/intervals for all exercises.",
+  "exercise_reps_duration_empty_error": "Please provide reps or duration for all exercises.",
   "sets_placeholder": "e.g. 3",
   "steps_today": "Steps Today",
   "steps_goal_label": "steps",

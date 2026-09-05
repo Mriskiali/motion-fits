@@ -96,20 +96,40 @@ export default function CreateWorkoutScreen() {
       return;
     }
 
+    const hasInvalidSets = exercises.some((e) => {
+      const setsNum = typeof e.sets === 'number' ? e.sets : parseInt(e.sets as any, 10);
+      return isNaN(setsNum) || setsNum <= 0;
+    });
+    if (hasInvalidSets) {
+      showAlert(t('error'), t('exercise_sets_empty_error'));
+      return;
+    }
+
+    const hasInvalidRepsOrDuration = exercises.some((e) => {
+      if (e.type === 'time') {
+        const durNum = typeof e.duration === 'number' ? e.duration : parseInt(e.duration as any, 10);
+        return isNaN(durNum) || durNum <= 0;
+      } else {
+        return !e.reps || !e.reps.toString().trim();
+      }
+    });
+    if (hasInvalidRepsOrDuration) {
+      showAlert(t('error'), t('exercise_reps_duration_empty_error'));
+      return;
+    }
+
     const processedExercises: Exercise[] = exercises.map((e) => {
       const isTime = e.type === 'time';
-      const parsedSets = typeof e.sets === 'number' ? e.sets : (parseInt(e.sets as any, 10) || 3);
+      const parsedSets = typeof e.sets === 'number' ? e.sets : parseInt(e.sets as any, 10);
       const parsedDuration = isTime
-        ? (typeof e.duration === 'number' ? e.duration : (parseInt(e.duration as any, 10) || 60))
+        ? (typeof e.duration === 'number' ? e.duration : parseInt(e.duration as any, 10))
         : undefined;
-      const parsedReps = !isTime
-        ? (e.reps && e.reps.toString().trim() ? e.reps.toString().trim() : '10')
-        : undefined;
+      const parsedReps = !isTime ? (e.reps ? e.reps.toString().trim() : '') : undefined;
 
       return {
         ...e,
         name: e.name.trim(),
-        sets: parsedSets > 0 ? parsedSets : 3,
+        sets: parsedSets,
         ...(isTime ? { duration: parsedDuration } : { reps: parsedReps }),
       };
     });
