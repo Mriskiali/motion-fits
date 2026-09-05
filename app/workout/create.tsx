@@ -53,9 +53,9 @@ export default function CreateWorkoutScreen() {
       id: Date.now().toString(),
       name: '',
       type: 'reps',
-      sets: 3,
-      reps: '10',
-      duration: 60, // default 60s for time based
+      sets: '' as any,
+      reps: '',
+      duration: '' as any,
     };
     setExercises([...exercises, newExercise]);
   };
@@ -90,13 +90,37 @@ export default function CreateWorkoutScreen() {
       return;
     }
 
+    const hasEmptyName = exercises.some((e) => !e.name || !e.name.trim());
+    if (hasEmptyName) {
+      showAlert(t('error'), t('exercise_name_empty_error'));
+      return;
+    }
+
+    const processedExercises: Exercise[] = exercises.map((e) => {
+      const isTime = e.type === 'time';
+      const parsedSets = typeof e.sets === 'number' ? e.sets : (parseInt(e.sets as any, 10) || 3);
+      const parsedDuration = isTime
+        ? (typeof e.duration === 'number' ? e.duration : (parseInt(e.duration as any, 10) || 60))
+        : undefined;
+      const parsedReps = !isTime
+        ? (e.reps && e.reps.toString().trim() ? e.reps.toString().trim() : '10')
+        : undefined;
+
+      return {
+        ...e,
+        name: e.name.trim(),
+        sets: parsedSets > 0 ? parsedSets : 3,
+        ...(isTime ? { duration: parsedDuration } : { reps: parsedReps }),
+      };
+    });
+
     const template: WorkoutTemplate = {
       id: id || Date.now().toString(),
-      name,
-      subtitle,
+      name: name.trim(),
+      subtitle: subtitle.trim(),
       icon: 'dumbbell',
       color: '#3b82f6',
-      exercises,
+      exercises: processedExercises,
       defaultRestTime: 90,
     };
 
@@ -192,8 +216,10 @@ export default function CreateWorkoutScreen() {
                   <TextInput
                     style={styles.detailInput}
                     keyboardType="numeric"
-                    value={exercise.sets.toString()}
-                    onChangeText={(val) => handleUpdateExercise(index, 'sets', parseInt(val) || 0)}
+                    placeholder={t('sets_placeholder')}
+                    placeholderTextColor="#475569"
+                    value={exercise.sets !== undefined && exercise.sets !== null && exercise.sets !== ('' as any) ? exercise.sets.toString() : ''}
+                    onChangeText={(val) => handleUpdateExercise(index, 'sets', val.replace(/[^0-9]/g, ''))}
                   />
                 </View>
 
@@ -205,8 +231,8 @@ export default function CreateWorkoutScreen() {
                       keyboardType="numeric"
                       placeholder={t('duration_placeholder')}
                       placeholderTextColor="#475569"
-                      value={exercise.duration?.toString() || '60'}
-                      onChangeText={(val) => handleUpdateExercise(index, 'duration', parseInt(val) || 0)}
+                      value={exercise.duration !== undefined && exercise.duration !== null && exercise.duration !== ('' as any) ? exercise.duration.toString() : ''}
+                      onChangeText={(val) => handleUpdateExercise(index, 'duration', val.replace(/[^0-9]/g, ''))}
                     />
                   </View>
                 ) : (
@@ -216,7 +242,7 @@ export default function CreateWorkoutScreen() {
                       style={styles.detailInput}
                       placeholder={t('reps_placeholder')}
                       placeholderTextColor="#475569"
-                      value={exercise.reps?.toString() || ''}
+                      value={exercise.reps ? exercise.reps.toString() : ''}
                       onChangeText={(val) => handleUpdateExercise(index, 'reps', val)}
                     />
                   </View>

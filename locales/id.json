@@ -115,6 +115,8 @@
   "plus_15s": "+ 15d",
   "provide_name_error": "Harap berikan nama untuk latihan ini.",
   "add_exercise_error": "Harap tambahkan setidaknya satu latihan.",
+  "exercise_name_empty_error": "Harap isi nama latihan untuk semua latihan.",
+  "sets_placeholder": "cth. 3",
   "steps_today": "Langkah Hari Ini",
   "steps_goal_label": "langkah",
   "step_counter": "Penghitung Langkah",

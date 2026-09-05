@@ -12,7 +12,6 @@ export default function PreviewWorkoutScreen() {
   const { t } = useTranslation();
   
   const templates = useWorkoutStore((state) => state.templates);
-  const startSession = useWorkoutStore((state) => state.startSession);
   const template = templates.find(t => t.id === id);
 
   const colors = useThemeColors();
@@ -26,11 +25,6 @@ export default function PreviewWorkoutScreen() {
       </View>
     );
   }
-
-  const handleStart = () => {
-    startSession(template.id);
-    router.push('/workout/active');
-  };
 
   return (
     <View style={styles.container}>
@@ -77,15 +71,8 @@ export default function PreviewWorkoutScreen() {
             </View>
           );
         })}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.startButton} onPress={handleStart}>
-          <Ionicons name="play" color="#fff" size={20} />
-          <Text style={styles.startButtonText}>{t('start_workout')}</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -181,36 +168,5 @@ const getStyles = (colors: any) => StyleSheet.create({
     color: colors.text,
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 24,
-    paddingBottom: 48,
-    backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  startButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    paddingVertical: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  startButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    marginLeft: 8,
   },
 });

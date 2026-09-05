@@ -115,6 +115,8 @@
   "plus_15s": "+ 15s",
   "provide_name_error": "Please provide a name for the workout.",
   "add_exercise_error": "Please add at least one exercise.",
+  "exercise_name_empty_error": "Please provide a name for all exercises.",
+  "sets_placeholder": "e.g. 3",
   "steps_today": "Steps Today",
   "steps_goal_label": "steps",
   "step_counter": "Step Counter",
