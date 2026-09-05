@@ -170,7 +170,7 @@ export default function DashboardScreen() {
             />
           </View>
 
-          <View style={styles.heroBottomMeta}>
+          <View style={styles.heroBottomMeta}>  
             <Text style={styles.heroProgressLabel}>{goalPercent}% {t('exercises_completed')}</Text>
             <Text style={styles.heroTargetLabel}>
               {weeklyGoal - thisWeekSessionsCount > 0

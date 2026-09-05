@@ -158,7 +158,7 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="workout/index"
+          name="workout"
           options={{
             title: t('workout'),
           }}

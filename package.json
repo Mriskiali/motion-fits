@@ -19,7 +19,6 @@
     "expo-haptics": "~56.0.3",
     "expo-linear-gradient": "~56.0.4",
     "expo-linking": "~56.0.14",
-    "expo-modules-core": "^56.0.17",
     "expo-router": "~56.2.20",
     "expo-sharing": "~56.0.26",
     "expo-splash-screen": "~56.0.15",
@@ -50,6 +49,13 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["expo-av"]
+      }
+    }
   },
   "private": true
 }
