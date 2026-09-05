@@ -87,56 +87,22 @@ function CustomFloatingTabBar({ state, descriptors, navigation }: CustomTabBarPr
             });
           };
 
-          const isWorkoutTab = route.name === 'workout/index' || route.name.includes('workout');
-
-          // Center Workout Tab Button
-          if (isWorkoutTab) {
-            const centerBg = isFocused
-              ? (isDark ? '#B7F34D' : '#1B4D3E')
-              : (isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)');
-            const centerIconColor = isFocused
-              ? (isDark ? '#0B0E0C' : '#FFFFFF')
-              : inactiveTabColor;
-
-            return (
-              <TouchableOpacity
-                key={route.key}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                accessibilityLabel={options.tabBarAccessibilityLabel || options.title}
-                testID={options.tabBarButtonTestID}
-                onPress={onPress}
-                onLongPress={onLongPress}
-                activeOpacity={0.8}
-                style={styles.centerActionWrapper}
-              >
-                <View
-                  style={[
-                    styles.centerActionButton,
-                    { backgroundColor: centerBg },
-                    isFocused && (isDark ? styles.centerActiveGlowDark : styles.centerActiveGlowLight),
-                  ]}
-                >
-                  <Dumbbell color={centerIconColor} size={22} strokeWidth={isFocused ? 2.6 : 2.2} />
-                </View>
-              </TouchableOpacity>
-            );
-          }
-
-          // Regular Tab Icons
           const iconColor = isFocused ? activeTabColor : inactiveTabColor;
 
           const renderIcon = () => {
             if (route.name === 'index') {
-              return <Home color={iconColor} size={22} strokeWidth={isFocused ? 2.5 : 2} />;
+              return <Home color={iconColor} size={24} strokeWidth={isFocused ? 2.5 : 2} />;
+            }
+            if (route.name === 'workout/index' || route.name.includes('workout')) {
+              return <Dumbbell color={iconColor} size={24} strokeWidth={isFocused ? 2.5 : 2} />;
             }
             if (route.name === 'history') {
-              return <History color={iconColor} size={22} strokeWidth={isFocused ? 2.5 : 2} />;
+              return <History color={iconColor} size={24} strokeWidth={isFocused ? 2.5 : 2} />;
             }
             if (route.name === 'settings') {
-              return <Settings color={iconColor} size={22} strokeWidth={isFocused ? 2.5 : 2} />;
+              return <Settings color={iconColor} size={24} strokeWidth={isFocused ? 2.5 : 2} />;
             }
-            return <Home color={iconColor} size={22} strokeWidth={2} />;
+            return <Home color={iconColor} size={24} strokeWidth={2} />;
           };
 
           return (
@@ -268,44 +234,6 @@ const styles = StyleSheet.create({
       },
       android: {
         elevation: 2,
-      },
-    }),
-  },
-  centerActionWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  centerActionButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerActiveGlowDark: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#B7F34D',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.45,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
-  centerActiveGlowLight: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1B4D3E',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
       },
     }),
   },
