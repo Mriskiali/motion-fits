@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { format, addDays, startOfWeek, isSameDay, isToday } from 'date-fns';
-import { id as idLocale } from 'date-fns/locale';
+import { id as idLocale } from 'date-fns/locale/id';
 import { MoreVertical, Plus, Calendar, X, Edit3, Trash2, Dumbbell, Play } from 'lucide-react-native';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';

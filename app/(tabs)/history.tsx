@@ -4,7 +4,7 @@ import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, subDays } from 'date-fns';
-import { id as idLocale } from 'date-fns/locale';
+import { id as idLocale } from 'date-fns/locale/id';
 import { Trash2, Calendar as CalendarIcon, BarChart3, Clock, CheckCircle2, Dumbbell } from 'lucide-react-native';
 import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { useTranslation } from '@/hooks/useTranslation';

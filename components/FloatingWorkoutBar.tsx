@@ -10,8 +10,13 @@ import { useTranslation } from '@/hooks/useTranslation';
 
 export default function FloatingWorkoutBar() {
   const router = useRouter();
-  const pathname = usePathname();
-  const { activeSession, templates } = useWorkoutStore();
+  let pathname = '';
+  try {
+    pathname = usePathname() || '';
+  } catch (e) {
+    pathname = '';
+  }
+  const { activeSession, templates = [] } = useWorkoutStore();
   const { hapticsEnabled } = useUserStore();
   const { t } = useTranslation();
   const colors = useThemeColors();
@@ -34,11 +39,11 @@ export default function FloatingWorkoutBar() {
   }, [activeSession?.startTime]);
 
   // Hide if no active session or already on the active workout screen
-  if (!activeSession || pathname === '/workout/active') {
+  if (!activeSession || pathname === '/workout/active' || pathname.includes('active')) {
     return null;
   }
 
-  const template = templates.find((t) => t.id === activeSession.templateId);
+  const template = (templates || []).find((t) => t.id === activeSession.templateId);
   const workoutName = template?.name || t('custom_workout');
 
   // Compute total sets & completed sets count

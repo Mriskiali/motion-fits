@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { format, startOfWeek, addDays, isSameDay, subDays } from 'date-fns';
-import { id as idLocale } from 'date-fns/locale';
+import { id as idLocale } from 'date-fns/locale/id';
 import { useUserStore } from '@/store/useUserStore';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
