@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, usePathname } from 'expo-router';
 import { Platform, StyleSheet, View, TouchableOpacity } from 'react-native';
 import { Home, Dumbbell, History, Settings } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -22,10 +22,45 @@ interface CustomTabBarProps {
 
 function CustomFloatingTabBar({ state, descriptors, navigation }: CustomTabBarProps) {
   const { hapticsEnabled } = useUserStore();
+  const colors = useThemeColors();
+  const pathname = usePathname();
+
+  // Hide tab bar completely during active workout session for uninterrupted focus
+  if (pathname === '/workout/active' || pathname.includes('active')) {
+    return null;
+  }
+
+  const isDark = colors.background === '#0B0C0E';
+
+  // Dynamic Theme Colors for Floating Pill
+  const pillBg = isDark ? '#141A16' : 'rgba(255, 255, 255, 0.96)';
+  const pillBorder = isDark ? 'rgba(255, 255, 255, 0.1)' : '#E6E1D7';
+  const shadowColor = isDark ? '#000000' : '#1A2E20';
+  const shadowOpacity = isDark ? 0.4 : 0.09;
+
+  const activeTabColor = isDark ? '#B7F34D' : '#1B4D3E';
+  const inactiveTabColor = isDark ? '#6B7280' : '#9CA3AF';
 
   return (
     <View style={styles.tabBarContainer} pointerEvents="box-none">
-      <View style={styles.tabBarPill}>
+      <View
+        style={[
+          styles.tabBarPill,
+          {
+            backgroundColor: pillBg,
+            borderColor: pillBorder,
+            ...Platform.select({
+              ios: {
+                shadowColor: shadowColor,
+                shadowOpacity: shadowOpacity,
+              },
+              android: {
+                elevation: isDark ? 10 : 6,
+              },
+            }),
+          },
+        ]}
+      >
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
@@ -54,7 +89,15 @@ function CustomFloatingTabBar({ state, descriptors, navigation }: CustomTabBarPr
 
           const isWorkoutTab = route.name === 'workout/index' || route.name.includes('workout');
 
+          // Center Workout Tab Button
           if (isWorkoutTab) {
+            const centerBg = isFocused
+              ? (isDark ? '#B7F34D' : '#1B4D3E')
+              : (isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)');
+            const centerIconColor = isFocused
+              ? (isDark ? '#0B0E0C' : '#FFFFFF')
+              : inactiveTabColor;
+
             return (
               <TouchableOpacity
                 key={route.key}
@@ -67,25 +110,31 @@ function CustomFloatingTabBar({ state, descriptors, navigation }: CustomTabBarPr
                 activeOpacity={0.8}
                 style={styles.centerActionWrapper}
               >
-                <View style={[styles.centerActionButton, isFocused && styles.centerActionButtonFocused]}>
-                  <Dumbbell color="#0B0E0C" size={22} strokeWidth={2.4} />
+                <View
+                  style={[
+                    styles.centerActionButton,
+                    { backgroundColor: centerBg },
+                    isFocused && (isDark ? styles.centerActiveGlowDark : styles.centerActiveGlowLight),
+                  ]}
+                >
+                  <Dumbbell color={centerIconColor} size={22} strokeWidth={isFocused ? 2.6 : 2.2} />
                 </View>
               </TouchableOpacity>
             );
           }
 
-          // Regular Tab Icons: Active = #B7F34D, Inactive = #6B7280
-          const iconColor = isFocused ? '#B7F34D' : '#6B7280';
+          // Regular Tab Icons
+          const iconColor = isFocused ? activeTabColor : inactiveTabColor;
 
           const renderIcon = () => {
             if (route.name === 'index') {
-              return <Home color={iconColor} size={22} strokeWidth={isFocused ? 2.4 : 2} />;
+              return <Home color={iconColor} size={22} strokeWidth={isFocused ? 2.5 : 2} />;
             }
             if (route.name === 'history') {
-              return <History color={iconColor} size={22} strokeWidth={isFocused ? 2.4 : 2} />;
+              return <History color={iconColor} size={22} strokeWidth={isFocused ? 2.5 : 2} />;
             }
             if (route.name === 'settings') {
-              return <Settings color={iconColor} size={22} strokeWidth={isFocused ? 2.4 : 2} />;
+              return <Settings color={iconColor} size={22} strokeWidth={isFocused ? 2.5 : 2} />;
             }
             return <Home color={iconColor} size={22} strokeWidth={2} />;
           };
@@ -104,7 +153,15 @@ function CustomFloatingTabBar({ state, descriptors, navigation }: CustomTabBarPr
             >
               <View style={styles.iconWrapper}>
                 {renderIcon()}
-                {isFocused && <View style={styles.activeDot} />}
+                {isFocused && (
+                  <View
+                    style={[
+                      styles.activeDot,
+                      { backgroundColor: activeTabColor },
+                      isDark && styles.activeDotGlowDark,
+                    ]}
+                  />
+                )}
               </View>
             </TouchableOpacity>
           );
@@ -174,20 +231,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     width: '100%',
     height: 68,
-    backgroundColor: '#141A16',
     borderRadius: 36,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 12,
     ...Platform.select({
       ios: {
-        shadowColor: '#000000',
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.35,
         shadowRadius: 18,
-      },
-      android: {
-        elevation: 10,
       },
     }),
   },
@@ -206,8 +256,9 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#B7F34D',
     marginTop: 4,
+  },
+  activeDotGlowDark: {
     ...Platform.select({
       ios: {
         shadowColor: '#B7F34D',
@@ -229,25 +280,34 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#B7F34D',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  centerActiveGlowDark: {
     ...Platform.select({
       ios: {
         shadowColor: '#B7F34D',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
+        shadowOpacity: 0.45,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  centerActiveGlowLight: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1B4D3E',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
         shadowRadius: 8,
       },
       android: {
         elevation: 4,
       },
     }),
-  },
-  centerActionButtonFocused: {
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    transform: [{ scale: 1.05 }],
   },
 });
 
