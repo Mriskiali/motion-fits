@@ -52,7 +52,7 @@ function RootLayoutNav() {
   useWorkoutBackgroundTracker();
   const themePreference = useUserStore(state => state.theme);
   const systemTheme = useNativeColorScheme();
-  const activeTheme = themePreference === 'system' ? (systemTheme || 'dark') : themePreference;
+  const activeTheme = themePreference === 'light' ? 'light' : (themePreference === 'dark' ? 'dark' : (systemTheme === 'light' ? 'light' : 'dark'));
 
   return (
     <ThemeProvider value={activeTheme === 'dark' ? DarkTheme : DefaultTheme}>

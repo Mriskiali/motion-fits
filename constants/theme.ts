@@ -1,6 +1,6 @@
 /**
- * FitTrack Pro / Workout Tracker Design System Tokens
- * Inspired by Fitbod & Hevy (Modern Dark & Warm Light Themes)
+ * Bionic Health & Warm Wellness Design Tokens
+ * Full Dynamic Dual-Theme Architecture (Modern Dark & Warm Light)
  */
 
 export interface ThemeColors {
@@ -13,6 +13,8 @@ export interface ThemeColors {
 
   // Actions & Brand
   primaryAction: string;
+  accentLime: string;
+  accentSecondary: string;
   successBadge: string;
   danger: string;
   warning: string;
@@ -27,13 +29,18 @@ export interface ThemeColors {
   // Shadows & Elevation
   shadowColor: string;
   shadowOpacity: number;
+  shadowRadius: number;
+  elevation: number;
 
   // Components & Interactions
   actionIconBg: string;
   tabBar: string;
   overlay: string;
+  dateBadgeSelected: string;
+  heroBackground: string;
+  heroTextSecondary: string;
 
-  // Backward-compatibility aliases with existing screens
+  // Backward-compatibility aliases
   card: string;
   border: string;
   primary: string;
@@ -51,6 +58,8 @@ export const darkTheme: ThemeColors = {
 
   // Actions & Brand
   primaryAction: '#3B82F6',
+  accentLime: '#B7F34D',
+  accentSecondary: '#22C55E',
   successBadge: '#22C55E',
   danger: '#EF4444',
   warning: '#F59E0B',
@@ -60,16 +69,21 @@ export const darkTheme: ThemeColors = {
   textPrimary: '#FFFFFF',
   textSecondary: '#94A3B8',
   textMuted: '#64748B',
-  textPrimaryOnVolt: '#FFFFFF',
+  textPrimaryOnVolt: '#0B0C0E',
 
   // Shadows & Elevation
   shadowColor: 'transparent',
   shadowOpacity: 0,
+  shadowRadius: 0,
+  elevation: 0,
 
   // Components & Interactions
-  actionIconBg: 'rgba(255, 255, 255, 0.04)',
+  actionIconBg: 'rgba(255, 255, 255, 0.06)',
   tabBar: 'rgba(22, 24, 29, 0.95)',
-  overlay: 'rgba(0, 0, 0, 0.7)',
+  overlay: 'rgba(0, 0, 0, 0.75)',
+  dateBadgeSelected: '#3B82F6',
+  heroBackground: '#132A1E',
+  heroTextSecondary: '#A7F3D0',
 
   // Aliases for seamless backward compatibility
   card: '#16181D',
@@ -80,41 +94,48 @@ export const darkTheme: ThemeColors = {
 };
 
 export const warmLightTheme: ThemeColors = {
-  // Core Surfaces
-  background: '#F8F6F0',
+  // Core Surfaces (Warm Wellness & Sage Tinted)
+  background: '#F4F6F2',
   cardSurface: '#FFFFFF',
   surfaceHighlight: '#EFECE4',
   inputSurface: '#F1EFEA',
   borderSubtle: '#E6E1D7',
 
   // Actions & Brand
-  primaryAction: '#2563EB',
+  primaryAction: '#1B4D3E', // Forest Emerald Primary
+  accentLime: '#9EE837', // High Energy Lime
+  accentSecondary: '#1B4D3E',
   successBadge: '#15803D',
   danger: '#DC2626',
   warning: '#D97706',
   accent: '#4F46E5',
 
   // Typography
-  textPrimary: '#1C1917',
-  textSecondary: '#78716C',
-  textMuted: '#A8A29E',
-  textPrimaryOnVolt: '#FFFFFF',
+  textPrimary: '#111827',
+  textSecondary: '#6B7280',
+  textMuted: '#9CA3AF',
+  textPrimaryOnVolt: '#111827',
 
   // Shadows & Elevation
-  shadowColor: '#4A3B32',
+  shadowColor: '#1A2E20',
   shadowOpacity: 0.06,
+  shadowRadius: 12,
+  elevation: 2,
 
   // Components & Interactions
-  actionIconBg: 'rgba(0, 0, 0, 0.04)',
+  actionIconBg: 'rgba(27, 77, 62, 0.06)',
   tabBar: 'rgba(255, 255, 255, 0.95)',
-  overlay: 'rgba(28, 25, 23, 0.5)',
+  overlay: 'rgba(19, 42, 30, 0.4)',
+  dateBadgeSelected: '#EAE5D9',
+  heroBackground: '#132A1E',
+  heroTextSecondary: '#A7F3D0',
 
   // Aliases for seamless backward compatibility
   card: '#FFFFFF',
   border: '#E6E1D7',
-  primary: '#2563EB',
+  primary: '#1B4D3E',
   success: '#15803D',
-  text: '#1C1917',
+  text: '#111827',
 };
 
 export const theme = {
