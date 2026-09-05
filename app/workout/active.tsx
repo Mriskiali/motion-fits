@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useUserStore } from '@/store/useUserStore';
@@ -12,7 +13,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 export default function ActiveWorkoutScreen() {
   const router = useRouter();
   const { activeSession, templates, logSession, clearActiveSession, updateActiveSession } = useWorkoutStore();
-  const { autoStartTimer, defaultRestTimer } = useUserStore();
+  const { autoStartTimer, defaultRestTimer, hapticsEnabled } = useUserStore();
   const { t } = useTranslation();
   
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -153,6 +154,17 @@ export default function ActiveWorkoutScreen() {
     );
   };
 
+  const handleMinimize = () => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/workout');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Stack.Screen 
@@ -161,9 +173,24 @@ export default function ActiveWorkoutScreen() {
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
           headerLeft: () => (
-            <TouchableOpacity onPress={handleCancelWorkout} style={{ marginLeft: 8 }}>
-              <Ionicons name="close" color={colors.danger} size={24} />
-            </TouchableOpacity>
+            <View style={styles.headerActionGroup}>
+              <TouchableOpacity
+                onPress={handleMinimize}
+                accessibilityLabel={t('minimize')}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={styles.headerIconButton}
+              >
+                <Ionicons name="chevron-down" color={colors.text} size={26} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleCancelWorkout}
+                accessibilityLabel={t('cancel_workout')}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={styles.headerIconButton}
+              >
+                <Ionicons name="close" color={colors.danger} size={22} />
+              </TouchableOpacity>
+            </View>
           ),
           headerRight: () => (
             <Text style={styles.elapsedTime}>{formatTime(elapsedTime)}</Text>
@@ -393,5 +420,14 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 1,
+  },
+  headerActionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginLeft: 4,
+  },
+  headerIconButton: {
+    padding: 4,
   },
 });

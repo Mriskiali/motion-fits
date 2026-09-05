@@ -122,5 +122,6 @@
   "steps_today": "Steps Today",
   "steps_goal_label": "steps",
   "step_counter": "Step Counter",
-  "daily_step_goal_desc": "Set your daily step goal."
+  "daily_step_goal_desc": "Set your daily step goal.",
+  "minimize": "Minimize"
 }
