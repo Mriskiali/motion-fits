@@ -5,6 +5,8 @@ import { Home, Dumbbell, History, Settings } from 'lucide-react-native';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 
+import FloatingWorkoutBar from '@/components/FloatingWorkoutBar';
+
 export default function TabLayout() {
   const colors = useThemeColors();
   const styles = getStyles(colors);
@@ -12,45 +14,48 @@ export default function TabLayout() {
   const { t } = useTranslation();
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarShowLabel: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarHideOnKeyboard: true,
-      }}
-      safeAreaInsets={{ bottom: 0 }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t('dashboard'),
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarShowLabel: false,
+          tabBarStyle: styles.tabBar,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textSecondary,
+          tabBarHideOnKeyboard: true,
         }}
-      />
-      <Tabs.Screen
-        name="workout/index"
-        options={{
-          title: t('workout'),
-          tabBarIcon: ({ color, size }) => <Dumbbell color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: t('history'),
-          tabBarIcon: ({ color, size }) => <History color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: t('settings'),
-          tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
-        }}
-      />
-    </Tabs>
+        safeAreaInsets={{ bottom: 0 }}>
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: t('dashboard'),
+            tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+          }}
+        />
+        <Tabs.Screen
+          name="workout/index"
+          options={{
+            title: t('workout'),
+            tabBarIcon: ({ color, size }) => <Dumbbell color={color} size={size} />,
+          }}
+        />
+        <Tabs.Screen
+          name="history"
+          options={{
+            title: t('history'),
+            tabBarIcon: ({ color, size }) => <History color={color} size={size} />,
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: t('settings'),
+            tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
+          }}
+        />
+      </Tabs>
+      <FloatingWorkoutBar />
+    </View>
   );
 }
 

@@ -11,6 +11,8 @@ import { useColorScheme as useNativeColorScheme } from 'react-native';
 
 
 
+import { useWorkoutBackgroundTracker } from '@/hooks/useWorkoutBackgroundTracker';
+
 export {
   // Catch any errors thrown by the Layout component.
   ErrorBoundary,
@@ -47,6 +49,7 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
+  useWorkoutBackgroundTracker();
   const themePreference = useUserStore(state => state.theme);
   const systemTheme = useNativeColorScheme();
   const activeTheme = themePreference === 'system' ? (systemTheme || 'dark') : themePreference;
