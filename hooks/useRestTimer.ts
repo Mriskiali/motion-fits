@@ -6,7 +6,7 @@ export function useRestTimer() {
   const { defaultRestTimer, hapticsEnabled } = useUserStore();
   const [isActive, setIsActive] = useState(false);
   const [timeLeft, setTimeLeft] = useState(defaultRestTimer);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startTimer = (duration?: number) => {
     setTimeLeft(duration ?? defaultRestTimer);

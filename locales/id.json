@@ -114,5 +114,9 @@
   "minus_15s": "- 15d",
   "plus_15s": "+ 15d",
   "provide_name_error": "Harap berikan nama untuk latihan ini.",
-  "add_exercise_error": "Harap tambahkan setidaknya satu latihan."
+  "add_exercise_error": "Harap tambahkan setidaknya satu latihan.",
+  "steps_today": "Langkah Hari Ini",
+  "steps_goal_label": "langkah",
+  "step_counter": "Penghitung Langkah",
+  "daily_step_goal_desc": "Atur target langkah harian kamu."
 }

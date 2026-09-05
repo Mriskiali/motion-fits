@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, Text, View, Modal, TouchableOpacity, Animated, TextInput, KeyboardAvoidingView, Platform, Keyboard, Vibration } from 'react-native';
+import { StyleSheet, Text, View, Modal, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,9 +30,8 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
   const notificationIdRef = useRef<string | null>(null);
   const setupNotificationIdRef = useRef<number>(0);
   const targetEndTimeRef = useRef<number | null>(null);
-  const animationValue = useRef(new Animated.Value(1)).current;
   const { audioNotification, hapticsEnabled } = useUserStore();
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const soundRef = useRef<any | null>(null);
 
   useEffect(() => {
     return () => {
@@ -72,46 +71,19 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
         setTimeLeft(initialTime);
         setMaxTime(initialTime);
         setIsEditing(false);
-        
-        // Reset and start animation
-        animationValue.stopAnimation();
-        animationValue.setValue(1);
-        
-        // Slight delay to ensure the modal is visible before animating
-        setTimeout(() => {
-          Animated.timing(animationValue, {
-            toValue: 0,
-            duration: initialTime * 1000,
-            useNativeDriver: false, 
-          }).start();
-        }, 100);
-
         setupNotification(initialTime);
       } else {
         setTimeLeft(0);
         setMaxTime(1);
         setIsEditing(true);
-        animationValue.stopAnimation();
-        animationValue.setValue(0);
       }
     } else {
       // Reset state when hiding to prevent race condition on next open
       targetEndTimeRef.current = null;
       setTimeLeft(initialTime);
-      animationValue.stopAnimation();
       if (notificationIdRef.current) cancelNotification(notificationIdRef.current);
     }
   }, [visible, initialTime]);
-
-  const startAnimation = (duration: number) => {
-    animationValue.stopAnimation();
-    animationValue.setValue(1);
-    Animated.timing(animationValue, {
-      toValue: 0,
-      duration: duration * 1000,
-      useNativeDriver: false, 
-    }).start();
-  };
 
   const playNotificationSound = async () => {
     if (!Audio) return;
@@ -176,17 +148,7 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
       const newTime = Math.max(0, prev + amount);
       targetEndTimeRef.current = Date.now() + newTime * 1000;
       setMaxTime((currentMax) => {
-        const newMax = newTime > currentMax ? newTime : currentMax;
-        
-        animationValue.stopAnimation();
-        animationValue.setValue(newTime / newMax);
-        Animated.timing(animationValue, {
-          toValue: 0,
-          duration: newTime * 1000,
-          useNativeDriver: false,
-        }).start();
-
-        return newMax;
+        return newTime > currentMax ? newTime : currentMax;
       });
       setTimeout(() => setupNotification(newTime), 0);
       return newTime;
@@ -198,7 +160,6 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
     setTimeLeft(seconds);
     setMaxTime(seconds);
     setIsEditing(false);
-    startAnimation(seconds);
     setupNotification(seconds);
     Keyboard.dismiss();
   };
@@ -210,7 +171,6 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
       setTimeLeft(parsed);
       setMaxTime(parsed);
       setIsEditing(false);
-      startAnimation(parsed);
       setupNotification(parsed);
     } else {
       setIsEditing(false);
@@ -233,12 +193,9 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
   const strokeWidth = 15;
   const circumference = 2 * Math.PI * radius;
   
-  const strokeDashoffset = animationValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [circumference, 0],
-  });
-
-  const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+  // Compute progress directly from timeLeft/maxTime — works on all platforms
+  const progress = maxTime > 0 ? timeLeft / maxTime : 0;
+  const computedStrokeDashoffset = circumference * (1 - progress);
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -253,10 +210,10 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
             <View style={styles.timerContainer}>
               <Svg width={300} height={300} viewBox="0 0 300 300">
                 <Circle cx="150" cy="150" r={radius} stroke={colors.border} strokeWidth={strokeWidth} fill="none" />
-                <AnimatedCircle
+                <Circle
                   cx="150" cy="150" r={radius} stroke={colors.primary} strokeWidth={strokeWidth}
-                  fill="none" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
-                  strokeLinecap="round" rotation="-90" origin="150, 150"
+                  fill="none" strokeDasharray={`${circumference}`} strokeDashoffset={`${computedStrokeDashoffset}`}
+                  strokeLinecap="round" transform="rotate(-90 150 150)"
                 />
               </Svg>
               

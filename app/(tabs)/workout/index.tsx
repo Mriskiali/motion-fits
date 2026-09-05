@@ -533,7 +533,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as any),
     backgroundColor: colors.overlay,
   },
   bottomSheet: {

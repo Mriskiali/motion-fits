@@ -114,5 +114,9 @@
   "minus_15s": "- 15s",
   "plus_15s": "+ 15s",
   "provide_name_error": "Please provide a name for the workout.",
-  "add_exercise_error": "Please add at least one exercise."
+  "add_exercise_error": "Please add at least one exercise.",
+  "steps_today": "Steps Today",
+  "steps_goal_label": "steps",
+  "step_counter": "Step Counter",
+  "daily_step_goal_desc": "Set your daily step goal."
 }
