@@ -135,5 +135,9 @@
   "total_time_trained": "Total Waktu Berlatih",
   "hours_short": "jam",
   "avg_per_session": "Rata-rata / Sesi",
-  "workouts_completed": "Latihan Selesai"
+  "workouts_completed": "Latihan Selesai",
+  "plus_30s": "+ 30d",
+  "rest_period": "Waktu Istirahat",
+  "catch_breath": "Tarik napas & pulihkan tenaga sebelum set berikutnya",
+  "undo_last_set": "Batalkan Set Terakhir"
 }

@@ -25,7 +25,6 @@ export default function DashboardScreen() {
   const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
   const sessions = useWorkoutStore((state) => state.sessions);
   const templates = useWorkoutStore((state) => state.templates);
-  const scheduledWorkouts = useWorkoutStore((state) => state.scheduledWorkouts);
   const colors = useThemeColors();
   const styles = getStyles(colors);
   const { t, language } = useTranslation();
@@ -102,16 +101,11 @@ export default function DashboardScreen() {
           </Text>
         </View>
 
-        {/* 2. Weekly Date Scroller with High-Contrast Text & Workout Dot */}
+        {/* 2. Weekly Date Scroller with High-Contrast Text */}
         <View style={styles.dateScrollerRow}>
           {weekDays.map((date, idx) => {
             const isSelected = isSameDay(date, selectedDate);
             const isCurrentToday = isSameDay(date, new Date());
-            const dateStr = format(date, 'yyyy-MM-dd');
-            const hasWorkout =
-              !!scheduledWorkouts[dateStr] ||
-              sessions.some((s) => format(new Date(s.date), 'yyyy-MM-dd') === dateStr);
-
             return (
               <Pressable
                 key={idx}
@@ -141,17 +135,6 @@ export default function DashboardScreen() {
                     {format(date, 'd')}
                   </Text>
                 </View>
-                <View
-                  style={[
-                    styles.dot,
-                    hasWorkout && {
-                      backgroundColor: isSelected
-                        ? colors.dateBadgeSelected
-                        : colors.primaryAction,
-                    },
-                    !hasWorkout && { backgroundColor: 'transparent' },
-                  ]}
-                />
               </Pressable>
             );
           })}
@@ -391,11 +374,6 @@ const getStyles = (c: ThemeColors) =>
     dayNumberTextSelected: {
       fontWeight: '800',
       color: c.dateTextSelected,
-    },
-    dot: {
-      width: 5,
-      height: 5,
-      borderRadius: 2.5,
     },
 
     // Hero Goal Card

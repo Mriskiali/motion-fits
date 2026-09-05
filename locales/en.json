@@ -135,5 +135,9 @@
   "total_time_trained": "Total Time Trained",
   "hours_short": "hrs",
   "avg_per_session": "Avg / Session",
-  "workouts_completed": "Workouts"
+  "workouts_completed": "Workouts",
+  "plus_30s": "+ 30s",
+  "rest_period": "Rest Period",
+  "catch_breath": "Catch your breath before the next set",
+  "undo_last_set": "Undo Last Set"
 }
