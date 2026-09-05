@@ -48,6 +48,7 @@ export default function WorkoutScreen() {
 
     // If there's already an active session for this template, just resume it
     if (activeSession && activeSession.templateId === templateId) {
+      scheduleWorkout(selectedDateStr, templateId);
       router.push('/workout/active');
       return;
     }
@@ -59,11 +60,20 @@ export default function WorkoutScreen() {
         t('active_session_alert_msg'),
         [
           { text: t('cancel'), style: 'cancel' },
-          { text: t('resume'), onPress: () => router.push('/workout/active') },
+          {
+            text: t('resume'),
+            onPress: () => {
+              if (activeSession.templateId) {
+                scheduleWorkout(selectedDateStr, activeSession.templateId);
+              }
+              router.push('/workout/active');
+            },
+          },
           {
             text: t('start_new'),
             style: 'destructive',
             onPress: () => {
+              scheduleWorkout(selectedDateStr, templateId);
               startSession(templateId);
               router.push('/workout/active');
             },
@@ -73,6 +83,7 @@ export default function WorkoutScreen() {
       return;
     }
 
+    scheduleWorkout(selectedDateStr, templateId);
     startSession(templateId);
     router.push('/workout/active');
   };
