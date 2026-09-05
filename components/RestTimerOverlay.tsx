@@ -199,8 +199,8 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.overlay}>
@@ -209,30 +209,53 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
           {!isEditing ? (
             <View style={styles.timerContainer}>
               <Svg width={300} height={300} viewBox="0 0 300 300">
-                <Circle cx="150" cy="150" r={radius} stroke={colors.border} strokeWidth={strokeWidth} fill="none" />
                 <Circle
-                  cx="150" cy="150" r={radius} stroke={colors.primary} strokeWidth={strokeWidth}
-                  fill="none" strokeDasharray={`${circumference}`} strokeDashoffset={`${computedStrokeDashoffset}`}
-                  strokeLinecap="round" transform="rotate(-90 150 150)"
+                  cx="150"
+                  cy="150"
+                  r={radius}
+                  stroke={colors.surfaceHighlight}
+                  strokeWidth={strokeWidth}
+                  fill="none"
+                />
+                <Circle
+                  cx="150"
+                  cy="150"
+                  r={radius}
+                  stroke={colors.primaryAction}
+                  strokeWidth={strokeWidth}
+                  fill="none"
+                  strokeDasharray={`${circumference}`}
+                  strokeDashoffset={`${computedStrokeDashoffset}`}
+                  strokeLinecap="round"
+                  transform="rotate(-90 150 150)"
                 />
               </Svg>
-              
+
               <View style={styles.timeTextContainer}>
                 <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editableTimeBox}>
                   <Text style={styles.timeText}>
                     {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
                   </Text>
-                  <Ionicons name="pencil-outline" color={colors.textSecondary} size={24} style={{ position: 'absolute', right: -40 }} />
+                  <Ionicons
+                    name="pencil-outline"
+                    color={colors.textSecondary}
+                    size={22}
+                    style={{ position: 'absolute', right: -36 }}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
             <View style={styles.editingContainer}>
               <Text style={styles.editingTitle}>{t('edit')} {t('rest_timer')}</Text>
-              
+
               <View style={styles.presetsGrid}>
                 {[30, 60, 90, 120].map((preset) => (
-                  <TouchableOpacity key={preset} style={styles.presetButton} onPress={() => handleApplyPreset(preset)}>
+                  <TouchableOpacity
+                    key={preset}
+                    style={styles.presetButton}
+                    onPress={() => handleApplyPreset(preset)}
+                  >
                     <Text style={styles.presetText}>{preset}{t('seconds_short')}</Text>
                   </TouchableOpacity>
                 ))}
@@ -245,16 +268,19 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
                   style={styles.manualInput}
                   keyboardType="numeric"
                   placeholder={t('rest_timer_input_placeholder')}
-                  placeholderTextColor="#475569"
+                  placeholderTextColor={colors.textMuted}
                   value={manualInput}
                   onChangeText={setManualInput}
                   autoFocus
                 />
-                <TouchableOpacity style={[styles.applyButton, { backgroundColor: colors.danger, marginRight: 8 }]} onPress={() => setIsEditing(false)}>
-                  <Ionicons name="close" color="#fff" size={24} />
+                <TouchableOpacity
+                  style={[styles.applyButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', marginRight: 8 }]}
+                  onPress={() => setIsEditing(false)}
+                >
+                  <Ionicons name="close" color={colors.danger} size={22} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.applyButton} onPress={handleManualApply}>
-                  <Ionicons name="checkmark-outline" color={colors.textPrimaryOnVolt || '#000'} size={24} />
+                  <Ionicons name="checkmark-outline" color="#FFFFFF" size={22} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -287,187 +313,195 @@ export default function RestTimerOverlay({ visible, initialTime, onClose, onCanc
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: colors.background, // Make it opaque instead of transparent overlay
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  title: {
-    color: colors.textSecondary,
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 40,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-  },
-  timerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 40,
-  },
-  timeTextContainer: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editableTimeBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  timeText: {
-    color: colors.text,
-    fontSize: 72,
-    fontWeight: 'bold',
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -2,
-  },
-  controls: {
-    flexDirection: 'row',
-    gap: 24,
-    marginBottom: 40,
-  },
-  adjustButton: {
-    backgroundColor: colors.card,
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 30,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  adjustText: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  footerButtons: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 'auto',
-    marginBottom: 20,
-  },
-  skipButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    paddingVertical: 18,
-    borderRadius: 30,
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  skipText: {
-    color: colors.textPrimaryOnVolt || '#000',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-  },
-  cancelSetButton: {
-    flex: 1,
-    backgroundColor: colors.card,
-    paddingVertical: 18,
-    borderRadius: 30,
-    alignItems: 'center',
-  },
-  cancelSetText: {
-    color: colors.danger,
-    fontSize: 16,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-  },
-  editingContainer: {
-    width: '100%',
-    backgroundColor: colors.card,
-    borderRadius: 30,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 40,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 5,
-      },
-    }),
-  },
-  editingTitle: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 24,
-  },
-  presetsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  presetButton: {
-    backgroundColor: colors.background,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  presetText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  orText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    letterSpacing: 1,
-  },
-  manualInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  manualInput: {
-    flex: 1,
-    backgroundColor: colors.background,
-    color: colors.text,
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    borderRadius: 16,
-    paddingVertical: 16,
-  },
-  applyButton: {
-    backgroundColor: colors.primary,
-    padding: 16,
-    borderRadius: 16,
-  },
-});
+const getStyles = (c: any) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: c.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+    },
+    title: {
+      color: c.textSecondary,
+      fontSize: 20,
+      fontWeight: '800',
+      marginBottom: 36,
+      textTransform: 'uppercase',
+      letterSpacing: 2,
+    },
+    timerContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 36,
+    },
+    timeTextContainer: {
+      position: 'absolute',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editableTimeBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+    },
+    timeText: {
+      color: c.textPrimary,
+      fontSize: 72,
+      fontWeight: '800',
+      fontVariant: ['tabular-nums'],
+      letterSpacing: -2,
+    },
+    controls: {
+      flexDirection: 'row',
+      gap: 16,
+      marginBottom: 36,
+    },
+    adjustButton: {
+      backgroundColor: c.cardSurface,
+      paddingVertical: 14,
+      paddingHorizontal: 24,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: c.shadowColor,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: c.shadowOpacity,
+          shadowRadius: c.shadowRadius,
+        },
+        android: {
+          elevation: c.elevation,
+        },
+      }),
+    },
+    adjustText: {
+      color: c.textPrimary,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    footerButtons: {
+      width: '100%',
+      flexDirection: 'row',
+      gap: 14,
+      marginTop: 'auto',
+      marginBottom: 20,
+    },
+    skipButton: {
+      flex: 1,
+      backgroundColor: c.primaryAction,
+      paddingVertical: 16,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...Platform.select({
+        ios: {
+          shadowColor: c.primaryAction,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.25,
+          shadowRadius: 10,
+        },
+        android: {
+          elevation: 4,
+        },
+      }),
+    },
+    skipText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+    },
+    cancelSetButton: {
+      flex: 1,
+      backgroundColor: c.surfaceHighlight,
+      paddingVertical: 16,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cancelSetText: {
+      color: c.danger,
+      fontSize: 16,
+      fontWeight: '800',
+    },
+    editingContainer: {
+      width: '100%',
+      backgroundColor: c.cardSurface,
+      borderRadius: 24,
+      padding: 24,
+      alignItems: 'center',
+      marginBottom: 36,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: c.shadowColor,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.12,
+          shadowRadius: 16,
+        },
+        android: {
+          elevation: 5,
+        },
+      }),
+    },
+    editingTitle: {
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: '800',
+      marginBottom: 20,
+    },
+    presetsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      justifyContent: 'center',
+      marginBottom: 20,
+    },
+    presetButton: {
+      backgroundColor: c.surfaceHighlight,
+      paddingVertical: 12,
+      paddingHorizontal: 18,
+      borderRadius: 14,
+      minWidth: 70,
+      alignItems: 'center',
+    },
+    presetText: {
+      color: c.textPrimary,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    orText: {
+      color: c.textSecondary,
+      fontSize: 11,
+      fontWeight: '700',
+      marginBottom: 14,
+      letterSpacing: 0.5,
+    },
+    manualInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    manualInput: {
+      flex: 1,
+      backgroundColor: c.surfaceHighlight,
+      color: c.textPrimary,
+      fontSize: 22,
+      fontWeight: '800',
+      textAlign: 'center',
+      borderRadius: 14,
+      paddingVertical: 12,
+    },
+    applyButton: {
+      backgroundColor: c.primaryAction,
+      padding: 14,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
 
