@@ -128,5 +128,12 @@
   "history_subtitle": "Review your progress & past logs",
   "settings_subtitle": "Preferences & app configuration",
   "completed": "Completed",
-  "preferences": "Preferences"
+  "preferences": "Preferences",
+  "this_week_summary": "This Week's Summary",
+  "all_time_stats": "All-Time Achievements",
+  "active_time": "Training Time",
+  "total_time_trained": "Total Time Trained",
+  "hours_short": "hrs",
+  "avg_per_session": "Avg / Session",
+  "workouts_completed": "Workouts"
 }

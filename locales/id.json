@@ -128,5 +128,12 @@
   "history_subtitle": "Tinjau progres & riwayat latihan kamu",
   "settings_subtitle": "Preferensi & konfigurasi aplikasi",
   "completed": "Selesai",
-  "preferences": "Preferensi"
+  "preferences": "Preferensi",
+  "this_week_summary": "Ringkasan Minggu Ini",
+  "all_time_stats": "Pencapaian Keseluruhan",
+  "active_time": "Waktu Latihan",
+  "total_time_trained": "Total Waktu Berlatih",
+  "hours_short": "jam",
+  "avg_per_session": "Rata-rata / Sesi",
+  "workouts_completed": "Latihan Selesai"
 }

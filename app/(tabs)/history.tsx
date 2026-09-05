@@ -214,11 +214,12 @@ export default function HistoryScreen() {
         {renderBarChart()}
         {renderCalendar()}
 
-        {/* Stats Bento Overview */}
+        {/* All-Time Achievements Grid */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>{t('stats_overview')}</Text>
+          <Text style={styles.sectionTitle}>{t('all_time_stats')}</Text>
 
           <View style={styles.statsGrid}>
+            {/* Tile 1: Total Lifetime Workouts */}
             <View style={styles.statCard}>
               <View style={styles.statTopRow}>
                 <Text style={styles.statLabel}>{t('total_workouts')}</Text>
@@ -227,23 +228,25 @@ export default function HistoryScreen() {
                 </View>
               </View>
               <Text style={styles.statValue}>{totalWorkouts}</Text>
-              <Text style={styles.statSubtext}>{t('completed') || 'Completed'}</Text>
+              <Text style={styles.statSubtext}>{t('completed')}</Text>
             </View>
 
+            {/* Tile 2: Total Lifetime Training Hours */}
             <View style={styles.statCard}>
               <View style={styles.statTopRow}>
-                <Text style={styles.statLabel}>{t('avg_duration')}</Text>
+                <Text style={styles.statLabel}>{t('total_time_trained')}</Text>
                 <View style={[styles.statIconBadge, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
                   <Clock size={16} color="#F59E0B" />
                 </View>
               </View>
               <Text style={styles.statValue}>
-                {avgDurationMins} <Text style={styles.statUnit}>{t('min_short')}</Text>
+                {(totalDurationSeconds / 3600).toFixed(1)} <Text style={styles.statUnit}>{t('hours_short')}</Text>
               </Text>
-              <Text style={styles.statSubtext}>per {t('workout')}</Text>
+              <Text style={styles.statSubtext}>{t('total')}</Text>
             </View>
 
-            <View style={[styles.statCard, { width: '100%', marginTop: 12 }]}>
+            {/* Tile 3: Total Lifetime Sets */}
+            <View style={styles.statCard}>
               <View style={styles.statTopRow}>
                 <Text style={styles.statLabel}>{t('total_sets_completed')}</Text>
                 <View style={[styles.statIconBadge, { backgroundColor: 'rgba(34, 197, 94, 0.12)' }]}>
@@ -252,6 +255,20 @@ export default function HistoryScreen() {
               </View>
               <Text style={styles.statValue}>{totalVolume}</Text>
               <Text style={styles.statSubtext}>{t('sets')}</Text>
+            </View>
+
+            {/* Tile 4: Lifetime Avg Duration */}
+            <View style={styles.statCard}>
+              <View style={styles.statTopRow}>
+                <Text style={styles.statLabel}>{t('avg_duration')}</Text>
+                <View style={[styles.statIconBadge, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
+                  <BarChart3 size={16} color="#6366F1" />
+                </View>
+              </View>
+              <Text style={styles.statValue}>
+                {avgDurationMins} <Text style={styles.statUnit}>{t('min_short')}</Text>
+              </Text>
+              <Text style={styles.statSubtext}>per {t('workout')}</Text>
             </View>
           </View>
         </View>
@@ -455,7 +472,7 @@ const getStyles = (c: ThemeColors) =>
     statsGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      justifyContent: 'space-between',
+      gap: 12,
     },
     statCard: {
       width: '48%',

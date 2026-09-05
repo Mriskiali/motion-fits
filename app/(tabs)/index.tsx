@@ -35,26 +35,32 @@ export default function DashboardScreen() {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
 
-  // Compute Real Workout Stats
-  const thisWeekSessionsCount = useMemo(() => {
-    return sessions.filter((s) => new Date(s.date) > subDays(new Date(), 7)).length;
+  // Compute Real This-Week Workout Stats
+  const thisWeekSessions = useMemo(() => {
+    return sessions.filter((s) => new Date(s.date) > subDays(new Date(), 7));
   }, [sessions]);
 
-  const totalSetsCount = useMemo(() => {
-    return sessions.reduce((acc, s) => {
+  const thisWeekSessionsCount = thisWeekSessions.length;
+
+  const thisWeekTotalMinutes = useMemo(() => {
+    const totalSecs = thisWeekSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
+    return Math.round(totalSecs / 60);
+  }, [thisWeekSessions]);
+
+  const thisWeekSetsCount = useMemo(() => {
+    return thisWeekSessions.reduce((acc, s) => {
       const exerciseSets = s.completedExercises?.reduce(
         (sub, ex) => sub + (ex.completedSets?.length || 0),
         0
       ) || 0;
       return acc + exerciseSets;
     }, 0);
-  }, [sessions]);
+  }, [thisWeekSessions]);
 
-  const avgDurationMinutes = useMemo(() => {
-    if (sessions.length === 0) return 0;
-    const totalSecs = sessions.reduce((acc, s) => acc + (s.duration || 0), 0);
-    return Math.round(totalSecs / sessions.length / 60);
-  }, [sessions]);
+  const thisWeekAvgDuration = useMemo(() => {
+    if (thisWeekSessionsCount === 0) return 0;
+    return Math.round(thisWeekTotalMinutes / thisWeekSessionsCount);
+  }, [thisWeekTotalMinutes, thisWeekSessionsCount]);
 
   // Last Completed Session
   const lastSession = sessions.length > 0 ? sessions[sessions.length - 1] : null;
@@ -174,60 +180,62 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* 4. Real Stats Overview (Bento Tiles) */}
+        {/* 4. This Week's Snapshot (Bento Tiles) */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('stats_overview')}</Text>
+          <Text style={styles.sectionTitle}>{t('this_week_summary')}</Text>
         </View>
 
         <View style={styles.bentoGrid}>
-          {/* Tile 1: Total Workouts */}
+          {/* Tile 1: Workouts This Week */}
           <View style={styles.bentoTile}>
             <View style={styles.bentoHeader}>
-              <Text style={styles.bentoCategory}>{t('total_workouts')}</Text>
+              <Text style={styles.bentoCategory}>{t('this_week')}</Text>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
                 <Ionicons name="barbell-outline" size={16} color="#3B82F6" />
               </View>
             </View>
-            <Text style={styles.bentoValue}>{sessions.length}</Text>
-            <Text style={styles.bentoSubtext}>{thisWeekSessionsCount} {t('this_week')}</Text>
+            <Text style={styles.bentoValue}>{thisWeekSessionsCount}</Text>
+            <Text style={styles.bentoSubtext}>/ {weeklyGoal} {t('days_per_week')}</Text>
           </View>
 
-          {/* Tile 2: Total Sets */}
+          {/* Tile 2: Active Training Time This Week */}
           <View style={styles.bentoTile}>
             <View style={styles.bentoHeader}>
-              <Text style={styles.bentoCategory}>{t('total_sets_completed')}</Text>
+              <Text style={styles.bentoCategory}>{t('active_time')}</Text>
+              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                <Ionicons name="time-outline" size={16} color="#F59E0B" />
+              </View>
+            </View>
+            <Text style={styles.bentoValue}>
+              {thisWeekTotalMinutes} <Text style={styles.bentoUnit}>{t('min_short')}</Text>
+            </Text>
+            <Text style={styles.bentoSubtext}>{t('this_week')}</Text>
+          </View>
+
+          {/* Tile 3: Total Sets This Week */}
+          <View style={styles.bentoTile}>
+            <View style={styles.bentoHeader}>
+              <Text style={styles.bentoCategory}>{t('sets')}</Text>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(34, 197, 94, 0.12)' }]}>
                 <Ionicons name="checkmark-done-outline" size={16} color="#22C55E" />
               </View>
             </View>
-            <Text style={styles.bentoValue}>{totalSetsCount}</Text>
-            <Text style={styles.bentoSubtext}>{t('sets')}</Text>
+            <Text style={styles.bentoValue}>{thisWeekSetsCount}</Text>
+            <Text style={styles.bentoSubtext}>{t('total_sets_completed')}</Text>
           </View>
 
-          {/* Tile 3: Avg Duration */}
+          {/* Tile 4: Avg Duration Per Session This Week */}
           <View style={styles.bentoTile}>
             <View style={styles.bentoHeader}>
-              <Text style={styles.bentoCategory}>{t('avg_duration')}</Text>
-              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                <Ionicons name="timer-outline" size={16} color="#F59E0B" />
+              <Text style={styles.bentoCategory}>{t('avg_per_session')}</Text>
+              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
+                <Ionicons name="timer-outline" size={16} color="#6366F1" />
               </View>
             </View>
             <Text style={styles.bentoValue}>
-              {avgDurationMinutes} <Text style={styles.bentoUnit}>{t('min_short')}</Text>
+              {thisWeekAvgDuration} <Text style={styles.bentoUnit}>{t('min_short')}</Text>
             </Text>
             <Text style={styles.bentoSubtext}>per {t('workout')}</Text>
-          </View>
-
-          {/* Tile 4: Available Templates */}
-          <View style={styles.bentoTile}>
-            <View style={styles.bentoHeader}>
-              <Text style={styles.bentoCategory}>{t('templates')}</Text>
-              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
-                <Ionicons name="albums-outline" size={16} color="#6366F1" />
-              </View>
-            </View>
-            <Text style={styles.bentoValue}>{templates.length}</Text>
-            <Text style={styles.bentoSubtext}>{t('custom')}</Text>
           </View>
         </View>
 
