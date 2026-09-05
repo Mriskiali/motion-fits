@@ -342,6 +342,7 @@ export default function WorkoutScreen() {
         {renderWeeklyCalendar()}
         {renderTodaysPlan()}
         {renderTemplates()}
+        <View style={{ height: 110 }} />
       </ScrollView>
 
       {/* Bottom Sheet for Template Actions */}

@@ -118,9 +118,9 @@ const getStyles = (colors: any) =>
   StyleSheet.create({
     wrapper: {
       position: 'absolute',
-      bottom: 68, // Positions directly above the 60px bottom tab bar
-      left: 16,
-      right: 16,
+      bottom: 104, // Positions nicely above the 68px floating pill bottom bar
+      left: 20,
+      right: 20,
       zIndex: 9999,
       elevation: 9999,
     },
