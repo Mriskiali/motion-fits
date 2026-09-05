@@ -139,5 +139,9 @@
   "plus_30s": "+ 30s",
   "rest_period": "Rest Period",
   "catch_breath": "Catch your breath before the next set",
-  "undo_last_set": "Undo Last Set"
+  "undo_last_set": "Undo Last Set",
+  "select_rest_duration": "Select Rest Duration",
+  "start_rest": "Start Rest",
+  "rest_timer_hint": "Choose a duration or enter seconds to begin",
+  "rest_now": "Rest"
 }

@@ -86,14 +86,18 @@ export default function ActiveWorkoutScreen() {
         [exerciseId]: exerciseSets.filter(i => i !== setIndex),
       };
     } else {
-      // Log set and trigger Rest Timer
+      // Log set
       newCompletedSets = {
         ...completedSets,
         [exerciseId]: [...exerciseSets, setIndex],
       };
-      setCurrentRestTime(autoStartTimer ? defaultRestTimer : 0);
       setLastLoggedSet({ exerciseId, setIndex });
-      setRestTimerVisible(true);
+
+      // Only auto start rest timer if autoStartTimer is enabled and defaultRestTimer > 0
+      if (autoStartTimer && defaultRestTimer > 0) {
+        setCurrentRestTime(defaultRestTimer);
+        setRestTimerVisible(true);
+      }
     }
     
     updateActiveSession(newCompletedSets, actualValues);
@@ -193,7 +197,22 @@ export default function ActiveWorkoutScreen() {
             </View>
           ),
           headerRight: () => (
-            <Text style={styles.elapsedTime}>{formatTime(elapsedTime)}</Text>
+            <View style={styles.headerRightGroup}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setCurrentRestTime(autoStartTimer ? defaultRestTimer : 0);
+                  setRestTimerVisible(true);
+                }}
+                accessibilityLabel={t('rest_timer')}
+                style={styles.restHeaderBtn}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="timer-outline" size={15} color={colors.primaryAction} />
+                <Text style={styles.restHeaderBtnText}>{t('rest_now')}</Text>
+              </TouchableOpacity>
+              <Text style={styles.elapsedTime}>{formatTime(elapsedTime)}</Text>
+            </View>
           ),
         }} 
       />
@@ -429,5 +448,27 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   headerIconButton: {
     padding: 4,
+  },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginRight: 4,
+  },
+  restHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.surfaceHighlight,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  restHeaderBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.primaryAction,
   },
 });

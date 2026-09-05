@@ -42,8 +42,11 @@ export default function RestTimerOverlay({
 }: RestTimerOverlayProps) {
   const { t } = useTranslation();
   const [timeLeft, setTimeLeft] = useState(initialTime);
+  const [isConfiguring, setIsConfiguring] = useState(initialTime <= 0);
+  const [selectedDuration, setSelectedDuration] = useState(60);
   const [isEditing, setIsEditing] = useState(false);
   const [manualInput, setManualInput] = useState('');
+  const [isRunning, setIsRunning] = useState(false);
   const notificationIdRef = useRef<string | null>(null);
   const setupNotificationIdRef = useRef<number>(0);
   const targetEndTimeRef = useRef<number | null>(null);
@@ -59,7 +62,7 @@ export default function RestTimerOverlay({
   }, []);
 
   // Track max time to correctly render the SVG progress ring
-  const [maxTime, setMaxTime] = useState(initialTime);
+  const [maxTime, setMaxTime] = useState(initialTime > 0 ? initialTime : 60);
   const colors = useThemeColors();
   const styles = getStyles(colors);
 
@@ -87,17 +90,26 @@ export default function RestTimerOverlay({
         targetEndTimeRef.current = Date.now() + initialTime * 1000;
         setTimeLeft(initialTime);
         setMaxTime(initialTime);
+        setIsConfiguring(false);
+        setIsRunning(true);
         setIsEditing(false);
         setupNotification(initialTime);
       } else {
+        // User opened timer manually without default time: Prompt duration first
+        targetEndTimeRef.current = null;
         setTimeLeft(0);
-        setMaxTime(1);
-        setIsEditing(true);
+        setMaxTime(60);
+        setSelectedDuration(60);
+        setIsConfiguring(true);
+        setIsRunning(false);
+        setIsEditing(false);
       }
     } else {
-      // Reset state when hiding to prevent race condition on next open
+      // Reset state when hiding
       targetEndTimeRef.current = null;
       setTimeLeft(initialTime);
+      setIsConfiguring(false);
+      setIsRunning(false);
       setIsEditing(false);
       if (notificationIdRef.current) cancelNotification(notificationIdRef.current);
     }
@@ -132,7 +144,7 @@ export default function RestTimerOverlay({
   };
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || isConfiguring || !isRunning) return;
 
     if (timeLeft <= 0) {
       if (hapticsEnabled) {
@@ -140,6 +152,7 @@ export default function RestTimerOverlay({
       }
       playNotificationSound();
       if (notificationIdRef.current) cancelNotification(notificationIdRef.current);
+      setIsRunning(false);
       onClose();
       return;
     }
@@ -156,7 +169,20 @@ export default function RestTimerOverlay({
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [timeLeft, visible]);
+  }, [timeLeft, visible, isConfiguring, isRunning]);
+
+  const startCustomTimer = (seconds: number) => {
+    if (seconds <= 0) return;
+    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    targetEndTimeRef.current = Date.now() + seconds * 1000;
+    setTimeLeft(seconds);
+    setMaxTime(seconds);
+    setIsConfiguring(false);
+    setIsRunning(true);
+    setIsEditing(false);
+    setupNotification(seconds);
+    Keyboard.dismiss();
+  };
 
   const adjustTime = (amount: number) => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -169,7 +195,7 @@ export default function RestTimerOverlay({
     });
   };
 
-  const handleApplyPreset = (seconds: number) => {
+  const handleApplyPresetInModal = (seconds: number) => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     targetEndTimeRef.current = Date.now() + seconds * 1000;
     setTimeLeft(seconds);
@@ -179,7 +205,7 @@ export default function RestTimerOverlay({
     Keyboard.dismiss();
   };
 
-  const handleManualApply = () => {
+  const handleManualApplyInModal = () => {
     const parsed = parseInt(manualInput, 10);
     if (!isNaN(parsed) && parsed > 0) {
       if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -198,12 +224,14 @@ export default function RestTimerOverlay({
   const handleSkip = async () => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (notificationIdRef.current) await cancelNotification(notificationIdRef.current);
+    setIsRunning(false);
     onClose();
   };
 
   const handleCancelSet = async () => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (notificationIdRef.current) await cancelNotification(notificationIdRef.current);
+    setIsRunning(false);
     if (onCancelSet) onCancelSet();
   };
 
@@ -237,129 +265,217 @@ export default function RestTimerOverlay({
               <View style={styles.pulseDot} />
               <Text style={styles.badgeText}>{t('rest_period').toUpperCase()}</Text>
             </View>
-            <Text style={styles.subtitle}>{t('catch_breath')}</Text>
+            <Text style={styles.subtitle}>
+              {isConfiguring ? t('rest_timer_hint') : t('catch_breath')}
+            </Text>
           </View>
 
-          {/* Hero Circular Progress Ring */}
-          <View style={styles.heroSection}>
-            <View style={styles.ringContainer}>
-              <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-                <Defs>
-                  <LinearGradient id="restTimerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <Stop offset="0%" stopColor={gradStart} />
-                    <Stop offset="100%" stopColor={gradEnd} />
-                  </LinearGradient>
-                </Defs>
-                {/* Background Ring Track */}
-                <Circle
-                  cx={size / 2}
-                  cy={size / 2}
-                  r={radius}
-                  stroke={ringTrackColor}
-                  strokeWidth={strokeWidth}
-                  fill="none"
-                />
-                {/* Active Progress Ring */}
-                <Circle
-                  cx={size / 2}
-                  cy={size / 2}
-                  r={radius}
-                  stroke="url(#restTimerGrad)"
-                  strokeWidth={strokeWidth}
-                  strokeDasharray={`${circumference}`}
-                  strokeDashoffset={`${strokeDashoffset}`}
-                  strokeLinecap="round"
-                  fill="none"
-                  transform={`rotate(-90 ${size / 2} ${size / 2})`}
-                />
-              </Svg>
+          {/* If user needs to choose rest time before starting */}
+          {isConfiguring ? (
+            <View style={styles.setupCard}>
+              <Text style={styles.setupTitle}>{t('select_rest_duration')}</Text>
 
-              {/* Center Countdown Display */}
-              <View style={styles.centerContent}>
+              {/* Presets Grid */}
+              <View style={styles.presetGrid}>
+                {[30, 45, 60, 90, 120, 180].map((preset) => {
+                  const isSelected = selectedDuration === preset && !manualInput;
+                  return (
+                    <TouchableOpacity
+                      key={preset}
+                      activeOpacity={0.75}
+                      style={[
+                        styles.setupPresetPill,
+                        isSelected && styles.setupPresetPillActive,
+                      ]}
+                      onPress={() => {
+                        if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setSelectedDuration(preset);
+                        setManualInput('');
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.setupPresetText,
+                          isSelected && styles.setupPresetTextActive,
+                        ]}
+                      >
+                        {preset}
+                        {t('seconds_short')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.sheetSubtitle}>{t('or_enter_seconds')}</Text>
+
+              {/* Custom Input */}
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.sheetInput}
+                  keyboardType="number-pad"
+                  placeholder={t('rest_timer_input_placeholder')}
+                  placeholderTextColor={colors.textMuted}
+                  value={manualInput}
+                  onChangeText={(val) => {
+                    setManualInput(val);
+                    const parsed = parseInt(val, 10);
+                    if (!isNaN(parsed) && parsed > 0) {
+                      setSelectedDuration(parsed);
+                    }
+                  }}
+                  maxLength={4}
+                />
+              </View>
+
+              {/* Action Buttons for Setup */}
+              <View style={styles.setupActions}>
                 <TouchableOpacity
-                  activeOpacity={0.7}
+                  activeOpacity={0.8}
+                  style={styles.setupCancelBtn}
+                  onPress={onClose}
+                >
+                  <Text style={styles.setupCancelBtnText}>{t('cancel')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.setupStartBtn}
+                  onPress={() => {
+                    const parsed = parseInt(manualInput, 10);
+                    const durationToStart = !isNaN(parsed) && parsed > 0 ? parsed : selectedDuration;
+                    startCustomTimer(durationToStart);
+                  }}
+                >
+                  <Ionicons name="play" size={18} color="#FFFFFF" />
+                  <Text style={styles.setupStartBtnText}>{t('start_rest')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <>
+              {/* Hero Circular Progress Ring */}
+              <View style={styles.heroSection}>
+                <View style={styles.ringContainer}>
+                  <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                    <Defs>
+                      <LinearGradient id="restTimerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <Stop offset="0%" stopColor={gradStart} />
+                        <Stop offset="100%" stopColor={gradEnd} />
+                      </LinearGradient>
+                    </Defs>
+                    {/* Background Ring Track */}
+                    <Circle
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={radius}
+                      stroke={ringTrackColor}
+                      strokeWidth={strokeWidth}
+                      fill="none"
+                    />
+                    {/* Active Progress Ring */}
+                    <Circle
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={radius}
+                      stroke="url(#restTimerGrad)"
+                      strokeWidth={strokeWidth}
+                      strokeDasharray={`${circumference}`}
+                      strokeDashoffset={`${strokeDashoffset}`}
+                      strokeLinecap="round"
+                      fill="none"
+                      transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                    />
+                  </Svg>
+
+                  {/* Center Countdown Display */}
+                  <View style={styles.centerContent}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setIsEditing(true);
+                      }}
+                      style={styles.timerTouchTarget}
+                    >
+                      <Text style={styles.timerDigits}>{formattedTime}</Text>
+                      <View style={styles.editBadge}>
+                        <Ionicons name="pencil-sharp" size={12} color={colors.textSecondary} />
+                        <Text style={styles.editBadgeText}>{t('edit')}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              {/* Quick Adjustment Chips Row */}
+              <View style={styles.chipsRow}>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={styles.chipButton}
+                  onPress={() => adjustTime(-15)}
+                >
+                  <Ionicons name="remove" size={16} color={colors.textPrimary} />
+                  <Text style={styles.chipText}>15{t('seconds_short')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={styles.chipButton}
+                  onPress={() => adjustTime(15)}
+                >
+                  <Ionicons name="add" size={16} color={colors.textPrimary} />
+                  <Text style={styles.chipText}>15{t('seconds_short')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={styles.chipButton}
+                  onPress={() => adjustTime(30)}
+                >
+                  <Ionicons name="add" size={16} color={colors.textPrimary} />
+                  <Text style={styles.chipText}>30{t('seconds_short')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={[styles.chipButton, styles.customChipButton]}
                   onPress={() => {
                     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setIsEditing(true);
                   }}
-                  style={styles.timerTouchTarget}
                 >
-                  <Text style={styles.timerDigits}>{formattedTime}</Text>
-                  <View style={styles.editBadge}>
-                    <Ionicons name="pencil-sharp" size={12} color={colors.textSecondary} />
-                    <Text style={styles.editBadgeText}>{t('edit')}</Text>
-                  </View>
+                  <Ionicons name="options-outline" size={16} color={colors.textPrimary} />
+                  <Text style={styles.chipText}>{t('custom')}</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          </View>
 
-          {/* Quick Adjustment Chips Row */}
-          <View style={styles.chipsRow}>
-            <TouchableOpacity
-              activeOpacity={0.75}
-              style={styles.chipButton}
-              onPress={() => adjustTime(-15)}
-            >
-              <Ionicons name="remove" size={16} color={colors.textPrimary} />
-              <Text style={styles.chipText}>15{t('seconds_short')}</Text>
-            </TouchableOpacity>
+              {/* Bottom Action Dock */}
+              <View style={styles.actionDock}>
+                {onCancelSet && (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.undoButton}
+                    onPress={handleCancelSet}
+                  >
+                    <Ionicons name="arrow-undo-outline" size={18} color={colors.danger} />
+                    <Text style={styles.undoButtonText}>{t('undo_last_set')}</Text>
+                  </TouchableOpacity>
+                )}
 
-            <TouchableOpacity
-              activeOpacity={0.75}
-              style={styles.chipButton}
-              onPress={() => adjustTime(15)}
-            >
-              <Ionicons name="add" size={16} color={colors.textPrimary} />
-              <Text style={styles.chipText}>15{t('seconds_short')}</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.skipButton}
+                  onPress={handleSkip}
+                >
+                  <Text style={styles.skipButtonText}>{t('skip')}</Text>
+                  <Ionicons name="play-forward" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
 
-            <TouchableOpacity
-              activeOpacity={0.75}
-              style={styles.chipButton}
-              onPress={() => adjustTime(30)}
-            >
-              <Ionicons name="add" size={16} color={colors.textPrimary} />
-              <Text style={styles.chipText}>30{t('seconds_short')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.75}
-              style={[styles.chipButton, styles.customChipButton]}
-              onPress={() => {
-                if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setIsEditing(true);
-              }}
-            >
-              <Ionicons name="options-outline" size={16} color={colors.textPrimary} />
-              <Text style={styles.chipText}>{t('custom')}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Bottom Action Dock */}
-          <View style={styles.actionDock}>
-            {onCancelSet && (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.undoButton}
-                onPress={handleCancelSet}
-              >
-                <Ionicons name="arrow-undo-outline" size={18} color={colors.danger} />
-                <Text style={styles.undoButtonText}>{t('undo_last_set')}</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.skipButton}
-              onPress={handleSkip}
-            >
-              <Text style={styles.skipButtonText}>{t('skip')}</Text>
-              <Ionicons name="play-forward" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Custom Duration Sheet Modal */}
+          {/* Custom Duration Sheet Modal (when editing during active timer) */}
           {isEditing && (
             <Modal visible={isEditing} transparent animationType="fade">
               <TouchableOpacity
@@ -392,7 +508,7 @@ export default function RestTimerOverlay({
                           styles.presetPill,
                           timeLeft === preset && styles.presetPillActive,
                         ]}
-                        onPress={() => handleApplyPreset(preset)}
+                        onPress={() => handleApplyPresetInModal(preset)}
                       >
                         <Text
                           style={[
@@ -421,7 +537,7 @@ export default function RestTimerOverlay({
                     />
                     <TouchableOpacity
                       style={styles.sheetApplyButton}
-                      onPress={handleManualApply}
+                      onPress={handleManualApplyInModal}
                     >
                       <Ionicons
                         name="checkmark"
@@ -724,6 +840,101 @@ const getStyles = (c: any) =>
       fontSize: 15,
       fontWeight: '800',
       color: '#FFFFFF',
+    },
+    setupCard: {
+      width: '100%',
+      backgroundColor: c.cardSurface,
+      borderRadius: 28,
+      padding: 24,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      marginVertical: 'auto',
+      ...Platform.select({
+        ios: {
+          shadowColor: c.shadowColor,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: c.shadowOpacity,
+          shadowRadius: 16,
+        },
+        android: {
+          elevation: c.elevation || 4,
+        },
+      }),
+    },
+    setupTitle: {
+      fontSize: 20,
+      fontWeight: '800',
+      color: c.textPrimary,
+      textAlign: 'center',
+      marginBottom: 20,
+    },
+    setupPresetPill: {
+      flexBasis: '30%',
+      flexGrow: 1,
+      backgroundColor: c.surfaceHighlight,
+      paddingVertical: 14,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    setupPresetPillActive: {
+      backgroundColor: c.primaryAction,
+      borderColor: c.primaryAction,
+    },
+    setupPresetText: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: c.textPrimary,
+    },
+    setupPresetTextActive: {
+      color: '#FFFFFF',
+    },
+    setupActions: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 24,
+    },
+    setupCancelBtn: {
+      flex: 1,
+      backgroundColor: c.surfaceHighlight,
+      paddingVertical: 16,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    setupCancelBtnText: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: c.textSecondary,
+    },
+    setupStartBtn: {
+      flex: 2,
+      flexDirection: 'row',
+      backgroundColor: c.primaryAction,
+      paddingVertical: 16,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      ...Platform.select({
+        ios: {
+          shadowColor: c.primaryAction,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 10,
+        },
+        android: {
+          elevation: 4,
+        },
+      }),
+    },
+    setupStartBtnText: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
     },
   });
 

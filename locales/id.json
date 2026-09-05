@@ -139,5 +139,9 @@
   "plus_30s": "+ 30d",
   "rest_period": "Waktu Istirahat",
   "catch_breath": "Tarik napas & pulihkan tenaga sebelum set berikutnya",
-  "undo_last_set": "Batalkan Set Terakhir"
+  "undo_last_set": "Batalkan Set Terakhir",
+  "select_rest_duration": "Pilih Waktu Istirahat",
+  "start_rest": "Mulai Istirahat",
+  "rest_timer_hint": "Pilih durasi atau masukkan detik untuk memulai",
+  "rest_now": "Istirahat"
 }
