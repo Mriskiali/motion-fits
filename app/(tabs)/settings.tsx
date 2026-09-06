@@ -4,6 +4,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { useAlertStore } from "@/store/useAlertStore";
 import { useUserStore } from "@/store/useUserStore";
 import { useWorkoutStore } from "@/store/useWorkoutStore";
+import { useStepStore } from "@/store/useStepStore";
 import {
   cancelAllReminders,
   requestPermissionsAsync,
@@ -19,6 +20,7 @@ import {
   Bell,
   Clock,
   Download,
+  Footprints,
   Globe,
   Info,
   Minus,
@@ -75,6 +77,12 @@ export default function SettingsScreen() {
     setAudioNotification,
     customAudioName,
   } = useUserStore();
+  const {
+    dailyStepGoal,
+    setDailyStepGoal,
+    stepTrackingEnabled,
+    setStepTrackingEnabled,
+  } = useStepStore();
   const { showAlert } = useAlertStore();
   const colors = useThemeColors();
   const styles = getStyles(colors);
@@ -97,6 +105,15 @@ export default function SettingsScreen() {
   const handleDecrementGoal = () => {
     triggerHaptic();
     setWeeklyGoal(Math.max(1, weeklyGoal - 1));
+  };
+
+  const handleIncrementStepGoal = () => {
+    triggerHaptic();
+    setDailyStepGoal(Math.min(50000, dailyStepGoal + 1000));
+  };
+  const handleDecrementStepGoal = () => {
+    triggerHaptic();
+    setDailyStepGoal(Math.max(1000, dailyStepGoal - 1000));
   };
 
   const toggleReminders = async (value: boolean) => {
@@ -146,6 +163,7 @@ export default function SettingsScreen() {
       const data = {
         user: useUserStore.getState(),
         workout: useWorkoutStore.getState(),
+        step: useStepStore.getState(),
       };
       const jsonStr = JSON.stringify(data, null, 2);
       const fileUri = `${FileSystem.documentDirectory}MotionFit_Export.json`;
@@ -182,7 +200,7 @@ export default function SettingsScreen() {
         const fileContent = await FileSystem.readAsStringAsync(fileUri);
         const parsed = JSON.parse(fileContent);
 
-        if (!parsed || (!parsed.user && !parsed.workout)) {
+        if (!parsed || (!parsed.user && !parsed.workout && !parsed.step)) {
           showAlert(t("error"), t("invalid_backup_file"), [{ text: t("ok") }]);
           return;
         }
@@ -198,6 +216,9 @@ export default function SettingsScreen() {
               }
               if (parsed.workout) {
                 useWorkoutStore.setState(parsed.workout);
+              }
+              if (parsed.step) {
+                useStepStore.setState(parsed.step);
               }
               triggerHaptic();
               showAlert(t("completed"), t("import_success"), [
@@ -332,7 +353,48 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* 2. Preferences & Options List */}
+        {/* 2. Daily Step Goal Card */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("step_goal")}</Text>
+          <View style={styles.goalCard}>
+            <View style={styles.goalTopRow}>
+              <View style={[styles.goalIconBox, { backgroundColor: "rgba(59, 130, 246, 0.12)" }]}>
+                <Footprints size={20} color={colors.primaryAction} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.goalCardTitle}>{t("step_goal")}</Text>
+                <Text style={styles.cardDescription}>
+                  {t("step_goal_desc")}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.stepperContainer}>
+              <TouchableOpacity
+                onPress={handleDecrementStepGoal}
+                style={styles.stepperButton}
+                activeOpacity={0.7}
+              >
+                <Minus color={colors.textPrimary} size={20} />
+              </TouchableOpacity>
+
+              <View style={styles.stepperValueContainer}>
+                <Text style={styles.stepperValue}>{dailyStepGoal.toLocaleString()}</Text>
+                <Text style={styles.stepperLabel}>{t("steps")}</Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={handleIncrementStepGoal}
+                style={styles.stepperButton}
+                activeOpacity={0.7}
+              >
+                <Plus color={colors.textPrimary} size={20} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* 3. Preferences & Options List */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
             {t("preferences") || "Preferences"}
@@ -447,6 +509,30 @@ export default function SettingsScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
+            </View>
+
+            <View style={styles.settingSeparator} />
+
+            {/* Step Tracking */}
+            <View style={styles.settingItem}>
+              <View style={styles.settingItemLeft}>
+                <View style={styles.iconBox}>
+                  <Footprints color="#3B82F6" size={18} />
+                </View>
+                <Text style={styles.settingText}>{t("step_tracking")}</Text>
+              </View>
+              <Switch
+                value={stepTrackingEnabled}
+                onValueChange={(val) => {
+                  triggerHaptic();
+                  setStepTrackingEnabled(val);
+                }}
+                trackColor={{
+                  false: colors.borderSubtle,
+                  true: colors.primaryAction,
+                }}
+                thumbColor="#fff"
+              />
             </View>
 
             <View style={styles.settingSeparator} />

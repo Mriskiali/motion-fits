@@ -9,11 +9,21 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  Footprints,
+  Flame,
+  MapPin,
+  Target,
+  CheckCircle2,
+  ChevronRight,
+  Info,
+} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { format, startOfWeek, addDays, isSameDay, subDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale/id';
 import { useUserStore } from '@/store/useUserStore';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
+import { usePedometerTracker } from '@/hooks/usePedometerTracker';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { ThemeColors } from '@/constants/theme';
@@ -25,6 +35,15 @@ export default function DashboardScreen() {
   const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
   const sessions = useWorkoutStore((state) => state.sessions);
   const templates = useWorkoutStore((state) => state.templates);
+  const {
+    todaySteps,
+    dailyStepGoal,
+    distanceKm,
+    caloriesBurned,
+    goalPercent: stepGoalPercent,
+    isPedometerAvailable,
+    stepTrackingEnabled,
+  } = usePedometerTracker();
   const colors = useThemeColors();
   const styles = getStyles(colors);
   const { t, language } = useTranslation();
@@ -180,7 +199,156 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* 4. This Week's Snapshot (Bento Tiles) */}
+        {/* 4. Daily Steps Activity Card */}
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionHeaderTitleGroup}>
+            <Footprints size={18} color={colors.primaryAction} />
+            <Text style={styles.sectionTitleNoMargin}>{t('daily_steps')}</Text>
+          </View>
+          <Pressable
+            onPress={() => {
+              if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/settings');
+            }}
+            style={styles.sectionHeaderAction}
+          >
+            <Text style={styles.sectionHeaderActionText}>
+              {dailyStepGoal.toLocaleString()} {t('steps_goal_label')}
+            </Text>
+            <ChevronRight size={14} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <View style={styles.stepsCard}>
+          {/* Top Row: Current Steps / Goal */}
+          <View style={styles.stepsTopRow}>
+            <View>
+              <Text style={styles.stepsLargeCount}>
+                {todaySteps.toLocaleString()}
+              </Text>
+              <Text style={styles.stepsTargetSub}>
+                / {dailyStepGoal.toLocaleString()} {t('steps')}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.stepsGoalBadge,
+                todaySteps >= dailyStepGoal
+                  ? styles.stepsGoalBadgeSuccess
+                  : styles.stepsGoalBadgeActive,
+              ]}
+            >
+              {todaySteps >= dailyStepGoal ? (
+                <>
+                  <CheckCircle2 size={14} color="#10B981" />
+                  <Text style={[styles.stepsGoalBadgeText, { color: '#10B981' }]}>
+                    {t('target_achieved')}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Target size={14} color={colors.primaryAction} />
+                  <Text style={styles.stepsGoalBadgeText}>
+                    {stepGoalPercent}%
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+
+          {/* Progress Track */}
+          <View style={styles.stepsProgressTrack}>
+            <View
+              style={[
+                styles.stepsProgressFill,
+                {
+                  width: `${Math.min(100, stepGoalPercent)}%`,
+                  backgroundColor:
+                    todaySteps >= dailyStepGoal ? '#10B981' : colors.primaryAction,
+                },
+              ]}
+            />
+          </View>
+
+          {/* Sub Metrics: Distance, Calories, Steps Left */}
+          <View style={styles.stepsStatsRow}>
+            <View style={styles.stepsStatItem}>
+              <View
+                style={[
+                  styles.stepsStatIconBox,
+                  { backgroundColor: 'rgba(59, 130, 246, 0.12)' },
+                ]}
+              >
+                <MapPin size={14} color="#3B82F6" />
+              </View>
+              <Text style={styles.stepsStatValue} numberOfLines={1}>
+                {distanceKm} <Text style={styles.stepsStatUnit}>{t('km')}</Text>
+              </Text>
+              <Text style={styles.stepsStatLabel} numberOfLines={1}>
+                {t('distance')}
+              </Text>
+            </View>
+
+            <View style={styles.stepsStatDivider} />
+
+            <View style={styles.stepsStatItem}>
+              <View
+                style={[
+                  styles.stepsStatIconBox,
+                  { backgroundColor: 'rgba(239, 68, 68, 0.12)' },
+                ]}
+              >
+                <Flame size={14} color="#EF4444" />
+              </View>
+              <Text style={styles.stepsStatValue} numberOfLines={1}>
+                {caloriesBurned} <Text style={styles.stepsStatUnit}>{t('kcal')}</Text>
+              </Text>
+              <Text style={styles.stepsStatLabel} numberOfLines={1}>
+                {t('calories')}
+              </Text>
+            </View>
+
+            <View style={styles.stepsStatDivider} />
+
+            <View style={styles.stepsStatItem}>
+              <View
+                style={[
+                  styles.stepsStatIconBox,
+                  { backgroundColor: 'rgba(16, 185, 129, 0.12)' },
+                ]}
+              >
+                <Target size={14} color="#10B981" />
+              </View>
+              <Text style={styles.stepsStatValue} numberOfLines={1}>
+                {Math.max(0, dailyStepGoal - todaySteps).toLocaleString()}
+              </Text>
+              <Text style={styles.stepsStatLabel} numberOfLines={1}>
+                {t('steps_left')}
+              </Text>
+            </View>
+          </View>
+
+          {!isPedometerAvailable && (
+            <View style={styles.pedometerNotice}>
+              <Info size={13} color={colors.textSecondary} />
+              <Text style={styles.pedometerNoticeText}>
+                {t('sensor_not_available')}
+              </Text>
+            </View>
+          )}
+
+          {!stepTrackingEnabled && isPedometerAvailable && (
+            <View style={styles.pedometerNotice}>
+              <Info size={13} color={colors.textSecondary} />
+              <Text style={styles.pedometerNoticeText}>
+                {t('step_tracking_disabled')}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* 5. This Week's Snapshot (Bento Tiles) */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t('this_week_summary')}</Text>
         </View>
@@ -448,6 +616,33 @@ const getStyles = (c: ThemeColors) =>
     sectionHeader: {
       marginBottom: 12,
     },
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    sectionHeaderTitleGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    sectionTitleNoMargin: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: c.textPrimary,
+      letterSpacing: -0.3,
+    },
+    sectionHeaderAction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+    },
+    sectionHeaderActionText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.textSecondary,
+    },
     sectionContainer: {
       marginBottom: 20,
     },
@@ -457,6 +652,134 @@ const getStyles = (c: ThemeColors) =>
       color: c.textPrimary,
       letterSpacing: -0.3,
       marginBottom: 12,
+    },
+
+    // Daily Steps Card
+    stepsCard: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 24,
+      padding: 18,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: c.shadowColor,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: c.shadowOpacity,
+          shadowRadius: c.shadowRadius,
+        },
+        android: {
+          elevation: c.elevation,
+        },
+      }),
+    },
+    stepsTopRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 14,
+    },
+    stepsLargeCount: {
+      fontSize: 28,
+      fontWeight: '800',
+      color: c.textPrimary,
+      letterSpacing: -0.5,
+    },
+    stepsTargetSub: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+    stepsGoalBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 20,
+    },
+    stepsGoalBadgeActive: {
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    },
+    stepsGoalBadgeSuccess: {
+      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    },
+    stepsGoalBadgeText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.primaryAction,
+    },
+    stepsProgressTrack: {
+      height: 8,
+      backgroundColor: c.borderSubtle,
+      borderRadius: 4,
+      overflow: 'hidden',
+      marginBottom: 16,
+    },
+    stepsProgressFill: {
+      height: '100%',
+      borderRadius: 4,
+    },
+    stepsStatsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: c.background,
+      borderRadius: 16,
+      paddingVertical: 14,
+      paddingHorizontal: 8,
+    },
+    stepsStatItem: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepsStatIconBox: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 6,
+    },
+    stepsStatValue: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.textPrimary,
+      textAlign: 'center',
+    },
+    stepsStatUnit: {
+      fontSize: 11,
+      fontWeight: '500',
+      color: c.textSecondary,
+    },
+    stepsStatLabel: {
+      fontSize: 11,
+      fontWeight: '500',
+      color: c.textMuted,
+      marginTop: 2,
+      textAlign: 'center',
+    },
+    stepsStatDivider: {
+      width: 1,
+      height: 32,
+      backgroundColor: c.borderSubtle,
+    },
+    pedometerNotice: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 12,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: c.borderSubtle,
+    },
+    pedometerNoticeText: {
+      fontSize: 12,
+      color: c.textSecondary,
+      fontWeight: '500',
     },
 
     // Bento Grid
