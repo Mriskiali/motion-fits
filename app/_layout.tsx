@@ -12,7 +12,8 @@ import { useColorScheme as useNativeColorScheme } from 'react-native';
 
 
 import { useWorkoutBackgroundTracker } from '@/hooks/useWorkoutBackgroundTracker';
-import { setupNotificationChannels } from '@/utils/notifications';
+import { setupNotificationChannels, requestPermissionsAsync } from '@/utils/notifications';
+import { setAudioModeAsync } from 'expo-audio';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -35,6 +36,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     setupNotificationChannels().catch(() => {});
+    requestPermissionsAsync().catch(() => {});
+    // Configure audio mode to respect phone volume and silent/vibrate switches
+    setAudioModeAsync({
+      playsInSilentMode: false,
+      interruptionMode: 'mixWithOthers',
+      shouldPlayInBackground: true,
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {

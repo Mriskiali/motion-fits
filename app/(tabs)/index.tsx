@@ -175,7 +175,7 @@ export default function DashboardScreen() {
             <Text style={styles.heroTargetLabel}>
               {weeklyGoal - thisWeekSessionsCount > 0
                 ? `${weeklyGoal - thisWeekSessionsCount} ${t('days_per_week')} left`
-                : 'Target achieved! 🎉'}
+                : t('target_achieved')}
             </Text>
           </View>
         </View>

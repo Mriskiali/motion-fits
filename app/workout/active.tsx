@@ -1,5 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard, Vibration } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  Vibration,
+  AppState,
+  AppStateStatus,
+} from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -8,12 +21,15 @@ import { useAlertStore } from '@/store/useAlertStore';
 import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import RestTimerOverlay from '@/components/RestTimerOverlay';
+import WorkoutSummaryModal from '@/components/WorkoutSummaryModal';
 import { useTranslation } from '@/hooks/useTranslation';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { dismissActiveWorkoutNotification } from '@/utils/notifications';
 
 export default function ActiveWorkoutScreen() {
   const router = useRouter();
   const { activeSession, templates, logSession, clearActiveSession, updateActiveSession } = useWorkoutStore();
-  const { autoStartTimer, defaultRestTimer, hapticsEnabled } = useUserStore();
+  const { autoStartTimer, defaultRestTimer, hapticsEnabled, keepScreenAwake, streak } = useUserStore();
   const { t } = useTranslation();
   
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -26,9 +42,52 @@ export default function ActiveWorkoutScreen() {
   
   const [lastLoggedSet, setLastLoggedSet] = useState<{ exerciseId: string; setIndex: number } | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [summaryData, setSummaryData] = useState<{
+    visible: boolean;
+    workoutName: string;
+    duration: number;
+    exercises: { name: string; setsCount: number; weight?: number }[];
+    totalVolume: number;
+    streak: number;
+  }>({
+    visible: false,
+    workoutName: '',
+    duration: 0,
+    exercises: [],
+    totalVolume: 0,
+    streak: 0,
+  });
+
   const colors = useThemeColors();
   const styles = getStyles(colors);
   const showAlert = useAlertStore(state => state.showAlert);
+
+  // Keep screen awake ONLY while this workout screen is open in foreground (releases when minimized or backgrounded)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && keepScreenAwake) {
+        activateKeepAwakeAsync('active-workout').catch(() => {});
+      } else {
+        deactivateKeepAwake('active-workout').catch(() => {});
+        deactivateKeepAwake().catch(() => {});
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    if (AppState.currentState === 'active' && keepScreenAwake) {
+      activateKeepAwakeAsync('active-workout').catch(() => {});
+    } else {
+      deactivateKeepAwake('active-workout').catch(() => {});
+      deactivateKeepAwake().catch(() => {});
+    }
+
+    return () => {
+      subscription.remove();
+      deactivateKeepAwake('active-workout').catch(() => {});
+      deactivateKeepAwake().catch(() => {});
+    };
+  }, [keepScreenAwake]);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
@@ -45,10 +104,10 @@ export default function ActiveWorkoutScreen() {
   }, []);
 
   useEffect(() => {
-    if (!activeSession) {
+    if (!activeSession && !summaryData.visible) {
       router.replace('/(tabs)/workout');
     }
-  }, [activeSession]);
+  }, [activeSession, summaryData.visible]);
 
   const template = templates.find((tData) => tData.id === activeSession?.templateId);
 
@@ -71,7 +130,7 @@ export default function ActiveWorkoutScreen() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (!activeSession || !template) {
+  if (!activeSession && !summaryData.visible) {
     return null; // Will redirect
   }
 
@@ -83,7 +142,7 @@ export default function ActiveWorkoutScreen() {
       // Undo log
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        Vibration.vibrate(30);
+        Vibration.vibrate(60);
       }
       newCompletedSets = {
         ...completedSets,
@@ -92,8 +151,8 @@ export default function ActiveWorkoutScreen() {
     } else {
       // Log set and trigger Rest Timer
       if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-        Vibration.vibrate(40);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+        Vibration.vibrate(100);
       }
       newCompletedSets = {
         ...completedSets,
@@ -117,13 +176,33 @@ export default function ActiveWorkoutScreen() {
           text: t('finish'), 
           style: 'default',
           onPress: () => {
+            if (!activeSession || !template) return;
+
+            // Calculate volume and exercise summaries for share card
+            let calculatedVolume = 0;
+            const exercisesSummary = template.exercises.map((ex) => {
+              const sets = completedSets[ex.id] || [];
+              const setsCount = sets.length;
+              sets.forEach((setIndex) => {
+                const reps = actualValues[ex.id]?.[setIndex] ? parseInt(actualValues[ex.id][setIndex], 10) : 0;
+                const weight = ex.weight || 0;
+                calculatedVolume += reps * weight;
+              });
+              return {
+                name: ex.name,
+                setsCount,
+                weight: ex.weight,
+              };
+            }).filter((ex) => ex.setsCount > 0);
+
+            // Log to store
             logSession({
               ...activeSession,
               duration: elapsedTime,
               completedExercises: Object.entries(completedSets).map(([exerciseId, sets]) => {
                 const actualRepsArray = sets.map(setIndex => {
                   const val = actualValues[exerciseId]?.[setIndex];
-                  return val ? parseInt(val) : 0;
+                  return val ? parseInt(val, 10) : 0;
                 });
                 return {
                   exerciseId,
@@ -131,13 +210,25 @@ export default function ActiveWorkoutScreen() {
                 };
               }),
             });
+
             // Auto unassign if they just finished today's scheduled workout
             const { scheduledWorkouts, scheduleWorkout } = useWorkoutStore.getState();
             const todayStr = new Date().toISOString().split('T')[0];
             if (scheduledWorkouts[todayStr] === activeSession.templateId) {
               scheduleWorkout(todayStr, null);
             }
-            router.replace('/(tabs)/history');
+
+            dismissActiveWorkoutNotification().catch(() => {});
+
+            // Show summary celebration modal
+            setSummaryData({
+              visible: true,
+              workoutName: template.name,
+              duration: elapsedTime,
+              exercises: exercisesSummary,
+              totalVolume: calculatedVolume,
+              streak: Math.max(1, streak),
+            });
           }
         }
       ]
@@ -154,6 +245,15 @@ export default function ActiveWorkoutScreen() {
           text: t('yes'), 
           style: 'destructive',
           onPress: () => {
+            // Auto unassign scheduled workout when cancelled
+            if (activeSession?.templateId) {
+              const { scheduledWorkouts, scheduleWorkout } = useWorkoutStore.getState();
+              const todayStr = new Date().toISOString().split('T')[0];
+              if (scheduledWorkouts[todayStr] === activeSession.templateId) {
+                scheduleWorkout(todayStr, null);
+              }
+            }
+            dismissActiveWorkoutNotification().catch(() => {});
             clearActiveSession();
             router.replace('/(tabs)/workout');
           }
@@ -177,7 +277,7 @@ export default function ActiveWorkoutScreen() {
     <View style={styles.container}>
       <Stack.Screen 
         options={{
-          title: template.name,
+          title: template?.name || summaryData.workoutName || 'Workout',
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
           headerLeft: () => (
@@ -210,7 +310,7 @@ export default function ActiveWorkoutScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {template.exercises.map((exercise, index) => {
+        {template?.exercises.map((exercise, index) => {
           const exerciseSets = completedSets[exercise.id] || [];
           
           return (
@@ -295,6 +395,20 @@ export default function ActiveWorkoutScreen() {
              toggleLogSet(lastLoggedSet.exerciseId, lastLoggedSet.setIndex);
              setLastLoggedSet(null);
           }
+        }}
+      />
+
+      <WorkoutSummaryModal
+        visible={summaryData.visible}
+        workoutName={summaryData.workoutName}
+        duration={summaryData.duration}
+        exercises={summaryData.exercises}
+        totalVolume={summaryData.totalVolume}
+        streak={summaryData.streak}
+        onClose={() => {
+          setSummaryData(prev => ({ ...prev, visible: false }));
+          clearActiveSession();
+          router.replace('/(tabs)/history');
         }}
       />
     </View>

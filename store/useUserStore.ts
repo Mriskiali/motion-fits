@@ -17,6 +17,8 @@ interface UserState {
   remindersEnabled: boolean;
   reminderTime: string; // ISO time or 'HH:mm'
   audioNotification: string;
+  customAudioName: string;
+  keepScreenAwake: boolean;
   setName: (name: string) => void;
   setWeeklyGoal: (goal: number) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -24,9 +26,11 @@ interface UserState {
   setDefaultRestTimer: (seconds: number) => void;
   setAutoStartTimer: (enabled: boolean) => void;
   setHapticsEnabled: (enabled: boolean) => void;
+  setKeepScreenAwake: (enabled: boolean) => void;
   setRemindersEnabled: (enabled: boolean) => void;
   setReminderTime: (time: string) => void;
-  setAudioNotification: (val: string) => void;
+  setAudioNotification: (val: string, customName?: string) => void;
+  setCustomAudioName: (name: string) => void;
   updateStreak: (date: string) => void;
 }
 
@@ -40,11 +44,13 @@ export const useUserStore = create<UserState>()(
       defaultRestTimer: 90, // 1m30s
       autoStartTimer: true,
       hapticsEnabled: true,
+      keepScreenAwake: true,
       streak: 0,
       lastWorkoutDate: null,
       remindersEnabled: false,
       reminderTime: '09:00', // Default 9 AM
       audioNotification: 'default_notification',
+      customAudioName: 'Custom Sound',
       setName: (name) => set({ name }),
       setWeeklyGoal: (goal) => set({ weeklyGoal: goal }),
       setTheme: (theme) => set({ theme }),
@@ -52,9 +58,11 @@ export const useUserStore = create<UserState>()(
       setDefaultRestTimer: (seconds) => set({ defaultRestTimer: seconds }),
       setAutoStartTimer: (enabled) => set({ autoStartTimer: enabled }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
+      setKeepScreenAwake: (enabled) => set({ keepScreenAwake: enabled }),
       setRemindersEnabled: (enabled) => set({ remindersEnabled: enabled }),
       setReminderTime: (time) => set({ reminderTime: time }),
-      setAudioNotification: (val) => set({ audioNotification: val }),
+      setAudioNotification: (val, customName) => set((state) => ({ audioNotification: val, customAudioName: customName || state.customAudioName })),
+      setCustomAudioName: (name) => set({ customAudioName: name }),
       updateStreak: (date) => {
         const { lastWorkoutDate, streak } = get();
         if (!lastWorkoutDate) {

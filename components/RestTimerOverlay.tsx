@@ -15,10 +15,19 @@ import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { scheduleRestTimerNotification, cancelNotification } from '@/utils/notifications';
-import { useTranslation } from '@/hooks/useTranslation';
 import { useUserStore } from '@/store/useUserStore';
-import { createAudioPlayer } from 'expo-audio';
+import {
+  scheduleRestTimerNotification,
+  cancelNotification,
+  showRestTimerFinishedNotification,
+} from '@/utils/notifications';
+import { useTranslation } from '@/hooks/useTranslation';
+import {
+  playTimerSound,
+  triggerTimerFinishedVibration,
+  triggerCountdownTickVibration,
+  triggerButtonVibration,
+} from '@/utils/soundPlayer';
 
 interface RestTimerOverlayProps {
   visible: boolean;
@@ -44,25 +53,6 @@ export default function RestTimerOverlay({
   const setupNotificationIdRef = useRef<number>(0);
   const targetEndTimeRef = useRef<number | null>(null);
   const { hapticsEnabled, audioNotification } = useUserStore();
-
-  const playNotificationSound = () => {
-    try {
-      if (audioNotification === 'default_notification' || audioNotification === 'library_bell') {
-        const player = createAudioPlayer(require('@/assets/sounds/timerendsound.wav'));
-        player.play();
-      } else if (
-        audioNotification &&
-        (audioNotification.startsWith('file://') ||
-          audioNotification.startsWith('content://') ||
-          audioNotification.startsWith('/'))
-      ) {
-        const player = createAudioPlayer({ uri: audioNotification });
-        player.play();
-      }
-    } catch (error) {
-      console.warn('Error playing timer sound:', error);
-    }
-  };
 
   // Track max time to correctly render the SVG progress ring
   const [maxTime, setMaxTime] = useState(initialTime > 0 ? initialTime : 60);
@@ -122,22 +112,21 @@ export default function RestTimerOverlay({
     if (!visible || isConfiguring || !isRunning) return;
 
     if (timeLeft <= 0) {
-      if (hapticsEnabled) {
-        Vibration.vibrate([0, 500, 200, 500, 200, 1000]);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      triggerTimerFinishedVibration(hapticsEnabled);
+      playTimerSound(audioNotification);
+      showRestTimerFinishedNotification().catch(() => {});
+
+      if (notificationIdRef.current) {
+        cancelNotification(notificationIdRef.current);
+        notificationIdRef.current = null;
       }
-      playNotificationSound();
-      if (notificationIdRef.current) cancelNotification(notificationIdRef.current);
       setIsRunning(false);
       onClose();
       return;
     }
 
     if (timeLeft <= 3 && timeLeft > 0) {
-      if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-        Vibration.vibrate(60);
-      }
+      triggerCountdownTickVibration(hapticsEnabled);
     }
 
     const timerId = setInterval(() => {
@@ -152,7 +141,10 @@ export default function RestTimerOverlay({
 
   const startCustomTimer = (seconds: number) => {
     if (seconds <= 0) return;
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      Vibration.vibrate(70);
+    }
     targetEndTimeRef.current = Date.now() + seconds * 1000;
     setTimeLeft(seconds);
     setMaxTime(seconds);
@@ -164,7 +156,10 @@ export default function RestTimerOverlay({
   };
 
   const adjustTime = (amount: number) => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      Vibration.vibrate(70);
+    }
     setTimeLeft((prev) => {
       const newTime = Math.max(0, prev + amount);
       targetEndTimeRef.current = Date.now() + newTime * 1000;
@@ -175,7 +170,10 @@ export default function RestTimerOverlay({
   };
 
   const handleApplyPresetInModal = (seconds: number) => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      Vibration.vibrate(50);
+    }
     targetEndTimeRef.current = Date.now() + seconds * 1000;
     setTimeLeft(seconds);
     setMaxTime(seconds);

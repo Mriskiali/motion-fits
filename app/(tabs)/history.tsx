@@ -1,15 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, subDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale/id';
-import { Trash2, Calendar as CalendarIcon, BarChart3, Clock, CheckCircle2, Dumbbell } from 'lucide-react-native';
+import { Trash2, Calendar as CalendarIcon, BarChart3, Clock, CheckCircle2, Dumbbell, Share2 } from 'lucide-react-native';
 import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { useTranslation } from '@/hooks/useTranslation';
 import { ThemeColors } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
+import WorkoutSummaryModal from '@/components/WorkoutSummaryModal';
 
 export default function HistoryScreen() {
   const sessions = useWorkoutStore((state) => state.sessions);
@@ -19,6 +20,43 @@ export default function HistoryScreen() {
   const colors = useThemeColors();
   const styles = getStyles(colors);
   const { t, language } = useTranslation();
+
+  const [selectedShareSession, setSelectedShareSession] = useState<{
+    visible: boolean;
+    workoutName: string;
+    duration: number;
+    exercises: { name: string; setsCount: number; weight?: number }[];
+    totalVolume: number;
+    streak: number;
+  } | null>(null);
+
+  const handleShareSession = (session: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const template = templates.find((tpl) => tpl.id === session.templateId);
+    let volume = 0;
+    const exercisesSummary = (session.completedExercises || []).map((cEx: any) => {
+      const templateEx = template?.exercises.find((e) => e.id === cEx.exerciseId);
+      const setsCount = cEx.completedSets?.length || 0;
+      const weight = templateEx?.weight || 0;
+      (cEx.completedSets || []).forEach((reps: number) => {
+        volume += (reps || 0) * weight;
+      });
+      return {
+        name: templateEx?.name || 'Exercise',
+        setsCount,
+        weight: templateEx?.weight,
+      };
+    });
+
+    setSelectedShareSession({
+      visible: true,
+      workoutName: template?.name || 'Workout',
+      duration: session.duration || 0,
+      exercises: exercisesSummary,
+      totalVolume: volume,
+      streak: 1,
+    });
+  };
 
   const handleDelete = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -297,12 +335,22 @@ export default function HistoryScreen() {
                         })}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => handleDelete(session.id)}
-                      style={styles.deleteButton}
-                    >
-                      <Trash2 color={colors.danger} size={18} />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => handleShareSession(session)}
+                        style={styles.shareButton}
+                        activeOpacity={0.7}
+                      >
+                        <Share2 color={colors.primaryAction} size={18} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDelete(session.id)}
+                        style={styles.deleteButton}
+                        activeOpacity={0.7}
+                      >
+                        <Trash2 color={colors.danger} size={18} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   <View style={styles.historyMetaRow}>
@@ -334,6 +382,18 @@ export default function HistoryScreen() {
 
         <View style={{ height: 110 }} />
       </ScrollView>
+
+      {selectedShareSession && (
+        <WorkoutSummaryModal
+          visible={selectedShareSession.visible}
+          workoutName={selectedShareSession.workoutName}
+          duration={selectedShareSession.duration}
+          exercises={selectedShareSession.exercises}
+          totalVolume={selectedShareSession.totalVolume}
+          streak={selectedShareSession.streak}
+          onClose={() => setSelectedShareSession(null)}
+        />
+      )}
     </View>
   );
 }
@@ -578,6 +638,11 @@ const getStyles = (c: ThemeColors) =>
       fontWeight: '500',
     },
     deleteButton: {
+      padding: 8,
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 10,
+    },
+    shareButton: {
       padding: 8,
       backgroundColor: c.surfaceHighlight,
       borderRadius: 10,

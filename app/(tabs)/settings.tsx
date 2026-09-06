@@ -1,51 +1,55 @@
-import React, { useState } from 'react';
+import { ThemeColors } from "@/constants/theme";
+import { useThemeColors } from "@/hooks/useThemeColors";
+import { useTranslation } from "@/hooks/useTranslation";
+import { useAlertStore } from "@/store/useAlertStore";
+import { useUserStore } from "@/store/useUserStore";
+import { useWorkoutStore } from "@/store/useWorkoutStore";
 import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
-  Platform,
-  TextInput,
-} from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { useUserStore } from '@/store/useUserStore';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import { useWorkoutStore } from '@/store/useWorkoutStore';
-import { useAlertStore } from '@/store/useAlertStore';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-let DocumentPicker: any = null;
-try {
-  DocumentPicker = require('expo-document-picker');
-} catch (e) {
-  console.warn('expo-document-picker is not available');
-}
-import {
-  Minus,
-  Plus,
-  Moon,
-  Sun,
-  Download,
-  Bell,
-  Clock,
-  Globe,
-  Timer,
-  Activity,
-  Volume2,
-  Target,
-} from 'lucide-react-native';
-import {
+  cancelAllReminders,
   requestPermissionsAsync,
   scheduleDailyReminder,
-  cancelAllReminders,
-} from '@/utils/notifications';
-import { useTranslation } from '@/hooks/useTranslation';
-import { ThemeColors } from '@/constants/theme';
-import * as Haptics from 'expo-haptics';
-import { Vibration } from 'react-native';
-import { createAudioPlayer } from 'expo-audio';
+} from "@/utils/notifications";
+import { playTimerSound, triggerButtonVibration } from "@/utils/soundPlayer";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Haptics from "expo-haptics";
+import * as Sharing from "expo-sharing";
+import {
+  Activity,
+  Bell,
+  Clock,
+  Download,
+  Globe,
+  Info,
+  Minus,
+  Moon,
+  Music,
+  Play,
+  Plus,
+  Smartphone,
+  Sun,
+  Target,
+  Timer,
+  Upload,
+  Volume2,
+} from "lucide-react-native";
+import { useState } from "react";
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+let DocumentPicker: any = null;
+try {
+  DocumentPicker = require("expo-document-picker");
+} catch (e) {
+  console.warn("expo-document-picker is not available");
+}
 
 export default function SettingsScreen() {
   const {
@@ -65,8 +69,11 @@ export default function SettingsScreen() {
     setAutoStartTimer,
     hapticsEnabled,
     setHapticsEnabled,
+    keepScreenAwake,
+    setKeepScreenAwake,
     audioNotification,
     setAudioNotification,
+    customAudioName,
   } = useUserStore();
   const { showAlert } = useAlertStore();
   const colors = useThemeColors();
@@ -75,30 +82,12 @@ export default function SettingsScreen() {
 
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const triggerHaptic = () => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      Vibration.vibrate(30);
-    }
+  const triggerHaptic = (duration: number = 70) => {
+    triggerButtonVibration(hapticsEnabled, duration);
   };
 
   const playPreview = (soundOption: string) => {
-    try {
-      if (soundOption === 'default_notification' || soundOption === 'library_bell') {
-        const player = createAudioPlayer(require('@/assets/sounds/timerendsound.wav'));
-        player.play();
-      } else if (
-        soundOption &&
-        (soundOption.startsWith('file://') ||
-          soundOption.startsWith('content://') ||
-          soundOption.startsWith('/'))
-      ) {
-        const player = createAudioPlayer({ uri: soundOption });
-        player.play();
-      }
-    } catch (e) {
-      console.warn('Error playing sound preview:', e);
-    }
+    playTimerSound(soundOption);
   };
 
   const handleIncrementGoal = () => {
@@ -120,9 +109,9 @@ export default function SettingsScreen() {
       } else {
         setRemindersEnabled(false);
         showAlert(
-          t('error'),
-          'Please grant notification permission in system settings to enable reminders.',
-          [{ text: t('ok') }]
+          t("error"),
+          "Please grant notification permission in system settings to enable reminders.",
+          [{ text: t("ok") }],
         );
       }
     } else {
@@ -132,10 +121,10 @@ export default function SettingsScreen() {
   };
 
   const handleTimeChange = async (event: any, selectedDate?: Date) => {
-    setShowTimePicker(Platform.OS === 'ios');
+    setShowTimePicker(Platform.OS === "ios");
     if (selectedDate) {
-      const hours = selectedDate.getHours().toString().padStart(2, '0');
-      const minutes = selectedDate.getMinutes().toString().padStart(2, '0');
+      const hours = selectedDate.getHours().toString().padStart(2, "0");
+      const minutes = selectedDate.getMinutes().toString().padStart(2, "0");
       const timeString = `${hours}:${minutes}`;
       setReminderTime(timeString);
       if (remindersEnabled) {
@@ -146,7 +135,7 @@ export default function SettingsScreen() {
 
   const getReminderDate = () => {
     const d = new Date();
-    const [h, m] = reminderTime.split(':').map(Number);
+    const [h, m] = reminderTime.split(":").map(Number);
     d.setHours(h || 9, m || 0, 0, 0);
     return d;
   };
@@ -159,28 +148,91 @@ export default function SettingsScreen() {
         workout: useWorkoutStore.getState(),
       };
       const jsonStr = JSON.stringify(data, null, 2);
-      const fileUri = `${FileSystem.documentDirectory}FitTrackPro_Export.json`;
+      const fileUri = `${FileSystem.documentDirectory}MotionFit_Export.json`;
       await FileSystem.writeAsStringAsync(fileUri, jsonStr);
 
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri);
       } else {
-        showAlert(t('export_failed'), t('sharing_not_available'), [{ text: t('ok') }]);
+        showAlert(t("export_failed"), t("sharing_not_available"), [
+          { text: t("ok") },
+        ]);
       }
     } catch (error) {
-      showAlert(t('error'), t('export_error'), [{ text: t('ok'), style: 'cancel' }]);
+      showAlert(t("error"), t("export_error"), [
+        { text: t("ok"), style: "cancel" },
+      ]);
+    }
+  };
+
+  const handleImport = async () => {
+    triggerHaptic();
+    if (!DocumentPicker) {
+      showAlert(t("error"), t("doc_picker_not_supported"), [{ text: t("ok") }]);
+      return;
+    }
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/json",
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const fileUri = result.assets[0].uri;
+        const fileContent = await FileSystem.readAsStringAsync(fileUri);
+        const parsed = JSON.parse(fileContent);
+
+        if (!parsed || (!parsed.user && !parsed.workout)) {
+          showAlert(t("error"), t("invalid_backup_file"), [{ text: t("ok") }]);
+          return;
+        }
+
+        showAlert(t("import_confirm_title"), t("import_confirm_desc"), [
+          { text: t("cancel"), style: "cancel" },
+          {
+            text: t("import_data"),
+            style: "destructive",
+            onPress: () => {
+              if (parsed.user) {
+                useUserStore.setState(parsed.user);
+              }
+              if (parsed.workout) {
+                useWorkoutStore.setState(parsed.workout);
+              }
+              triggerHaptic();
+              showAlert(t("completed"), t("import_success"), [
+                { text: t("ok") },
+              ]);
+            },
+          },
+        ]);
+      }
+    } catch (error) {
+      showAlert(t("error"), t("invalid_backup_file"), [{ text: t("ok") }]);
     }
   };
 
   const handlePickAudio = async () => {
     triggerHaptic();
     if (!DocumentPicker) {
-      showAlert(t('error'), t('doc_picker_not_supported'), [{ text: t('ok') }]);
+      showAlert(t("error"), t("doc_picker_not_supported"), [{ text: t("ok") }]);
       return;
     }
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'audio/*',
+        type: [
+          "audio/*",
+          "audio/mpeg",
+          "audio/mp3",
+          "audio/wav",
+          "audio/x-wav",
+          "audio/ogg",
+          "audio/aac",
+          "audio/m4a",
+          "audio/x-m4a",
+          "audio/flac",
+          "*/*",
+        ],
         copyToCacheDirectory: true,
       });
 
@@ -189,22 +241,42 @@ export default function SettingsScreen() {
         let persistentUri = pickedAsset.uri;
 
         // Copy to permanent app documents folder to prevent cache purging
-        if (FileSystem.documentDirectory) {
-          const extension = pickedAsset.name?.split('.').pop() || 'mp3';
-          const destUri = `${FileSystem.documentDirectory}custom_timer_${Date.now()}.${extension}`;
-          await FileSystem.copyAsync({ from: pickedAsset.uri, to: destUri });
-          persistentUri = destUri;
+        try {
+          if (FileSystem.documentDirectory) {
+            const rawExt = pickedAsset.name?.split(".").pop() || "mp3";
+            const cleanExt =
+              rawExt.toLowerCase().replace(/[^a-z0-9]/g, "") || "mp3";
+            const destUri = `${FileSystem.documentDirectory}custom_timer_${Date.now()}.${cleanExt}`;
+            await FileSystem.copyAsync({ from: pickedAsset.uri, to: destUri });
+            persistentUri = destUri;
+          }
+        } catch (copyErr) {
+          console.warn(
+            "Failed to copy audio to documents, using cache URI:",
+            copyErr,
+          );
         }
 
-        setAudioNotification(persistentUri);
+        setAudioNotification(persistentUri, pickedAsset.name || "Custom Sound");
         playPreview(persistentUri);
+        showAlert(
+          t("completed"),
+          `${pickedAsset.name}\n\n${t("sound_mode_reminder")}`,
+          [{ text: t("ok") }],
+        );
       }
     } catch (error) {
-      showAlert(t('error'), t('pick_audio_error'), [{ text: t('ok') }]);
+      console.warn("Pick audio error:", error);
+      showAlert(t("error"), t("pick_audio_error"), [{ text: t("ok") }]);
     }
   };
 
-  const isDarkMode = theme === 'dark';
+  const handlePlayCustomPreview = () => {
+    triggerHaptic(50);
+    playPreview(audioNotification);
+  };
+
+  const isDarkMode = theme === "dark";
 
   return (
     <View style={styles.container}>
@@ -213,21 +285,25 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.headerBar}>
-          <Text style={styles.headerTitle}>{t('settings')}</Text>
-          <Text style={styles.headerSub}>{t('settings_subtitle') || 'Preferences & app configuration'}</Text>
+          <Text style={styles.headerTitle}>{t("settings")}</Text>
+          <Text style={styles.headerSub}>
+            {t("settings_subtitle") || "Preferences & app configuration"}
+          </Text>
         </View>
 
         {/* 1. Weekly Goal Card */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('weekly_goal')}</Text>
+          <Text style={styles.sectionTitle}>{t("weekly_goal")}</Text>
           <View style={styles.goalCard}>
             <View style={styles.goalTopRow}>
               <View style={styles.goalIconBox}>
                 <Target size={20} color={colors.primaryAction} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.goalCardTitle}>{t('weekly_goal')}</Text>
-                <Text style={styles.cardDescription}>{t('weekly_goal_desc')}</Text>
+                <Text style={styles.goalCardTitle}>{t("weekly_goal")}</Text>
+                <Text style={styles.cardDescription}>
+                  {t("weekly_goal_desc")}
+                </Text>
               </View>
             </View>
 
@@ -242,7 +318,7 @@ export default function SettingsScreen() {
 
               <View style={styles.stepperValueContainer}>
                 <Text style={styles.stepperValue}>{weeklyGoal}</Text>
-                <Text style={styles.stepperLabel}>{t('days_per_week')}</Text>
+                <Text style={styles.stepperLabel}>{t("days_per_week")}</Text>
               </View>
 
               <TouchableOpacity
@@ -258,7 +334,9 @@ export default function SettingsScreen() {
 
         {/* 2. Preferences & Options List */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('preferences') || 'Preferences'}</Text>
+          <Text style={styles.sectionTitle}>
+            {t("preferences") || "Preferences"}
+          </Text>
 
           <View style={styles.settingsGroup}>
             {/* Language */}
@@ -267,23 +345,24 @@ export default function SettingsScreen() {
                 <View style={styles.iconBox}>
                   <Globe color={colors.primaryAction} size={18} />
                 </View>
-                <Text style={styles.settingText}>{t('language')}</Text>
+                <Text style={styles.settingText}>{t("language")}</Text>
               </View>
               <View style={styles.segmentedControl}>
                 <TouchableOpacity
                   style={[
                     styles.segmentBtn,
-                    language === 'id' && styles.segmentBtnActive,
+                    language === "id" && styles.segmentBtnActive,
                   ]}
                   onPress={() => {
-                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setLanguage('id');
+                    if (hapticsEnabled)
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setLanguage("id");
                   }}
                 >
                   <Text
                     style={[
                       styles.segmentText,
-                      language === 'id' && styles.segmentTextActive,
+                      language === "id" && styles.segmentTextActive,
                     ]}
                   >
                     ID
@@ -292,17 +371,18 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                   style={[
                     styles.segmentBtn,
-                    language === 'en' && styles.segmentBtnActive,
+                    language === "en" && styles.segmentBtnActive,
                   ]}
                   onPress={() => {
-                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setLanguage('en');
+                    if (hapticsEnabled)
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setLanguage("en");
                   }}
                 >
                   <Text
                     style={[
                       styles.segmentText,
-                      language === 'en' && styles.segmentTextActive,
+                      language === "en" && styles.segmentTextActive,
                     ]}
                   >
                     EN
@@ -323,7 +403,7 @@ export default function SettingsScreen() {
                     <Sun color="#f59e0b" size={18} />
                   )}
                 </View>
-                <Text style={styles.settingText}>{t('theme')}</Text>
+                <Text style={styles.settingText}>{t("theme")}</Text>
               </View>
               <View style={styles.segmentedControl}>
                 <TouchableOpacity
@@ -332,8 +412,9 @@ export default function SettingsScreen() {
                     !isDarkMode && styles.segmentBtnActive,
                   ]}
                   onPress={() => {
-                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setTheme('light');
+                    if (hapticsEnabled)
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTheme("light");
                   }}
                 >
                   <Text
@@ -351,8 +432,9 @@ export default function SettingsScreen() {
                     isDarkMode && styles.segmentBtnActive,
                   ]}
                   onPress={() => {
-                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setTheme('dark');
+                    if (hapticsEnabled)
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTheme("dark");
                   }}
                 >
                   <Text
@@ -375,15 +457,18 @@ export default function SettingsScreen() {
                 <View style={styles.iconBox}>
                   <Activity color={colors.warning} size={18} />
                 </View>
-                <Text style={styles.settingText}>{t('haptics')}</Text>
+                <Text style={styles.settingText}>{t("haptics")}</Text>
               </View>
               <Switch
                 value={hapticsEnabled}
                 onValueChange={(val) => {
-                  if (val) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (val) triggerButtonVibration(true, 150);
                   setHapticsEnabled(val);
                 }}
-                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
+                trackColor={{
+                  false: colors.borderSubtle,
+                  true: colors.primaryAction,
+                }}
                 thumbColor="#fff"
               />
             </View>
@@ -398,16 +483,20 @@ export default function SettingsScreen() {
                     <Timer color={colors.successBadge} size={18} />
                   </View>
                   <Text style={styles.settingText}>
-                    {t('default_prefix')} {t('rest_timer')}
+                    {t("default_prefix")} {t("rest_timer")}
                   </Text>
                 </View>
                 <Switch
                   value={autoStartTimer}
                   onValueChange={(val) => {
-                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    if (hapticsEnabled)
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setAutoStartTimer(val);
                   }}
-                  trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
+                  trackColor={{
+                    false: colors.borderSubtle,
+                    true: colors.primaryAction,
+                  }}
                   thumbColor="#fff"
                 />
               </View>
@@ -424,12 +513,12 @@ export default function SettingsScreen() {
                       const parsed = parseInt(val);
                       if (!isNaN(parsed) && parsed > 0) {
                         setDefaultRestTimer(parsed);
-                      } else if (val === '') {
+                      } else if (val === "") {
                         setDefaultRestTimer(0);
                       }
                     }}
                   />
-                  <Text style={styles.unitText}>{t('seconds')}</Text>
+                  <Text style={styles.unitText}>{t("seconds")}</Text>
                 </View>
               )}
             </View>
@@ -442,74 +531,108 @@ export default function SettingsScreen() {
                 <View style={styles.iconBox}>
                   <Volume2 color={colors.accent} size={18} />
                 </View>
-                <Text style={styles.settingText}>{t('audio_notification')}</Text>
+                <Text style={styles.settingText}>
+                  {t("audio_notification")}
+                </Text>
               </View>
 
               <View style={styles.audioSegmentedControl}>
                 <TouchableOpacity
                   style={[
                     styles.segmentBtn,
-                    audioNotification === 'default_notification' && styles.segmentBtnActive,
-                    { flex: 1, alignItems: 'center' },
-                  ]}
-                  onPress={() => {
-                    triggerHaptic();
-                    setAudioNotification('default_notification');
-                    playPreview('default_notification');
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      audioNotification === 'default_notification' && styles.segmentTextActive,
-                    ]}
-                  >
-                    {t('default')}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.segmentBtn,
-                    audioNotification === 'library_bell' && styles.segmentBtnActive,
-                    { flex: 1, alignItems: 'center' },
-                  ]}
-                  onPress={() => {
-                    triggerHaptic();
-                    setAudioNotification('library_bell');
-                    playPreview('library_bell');
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      audioNotification === 'library_bell' && styles.segmentTextActive,
-                    ]}
-                  >
-                    {t('bell')}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.segmentBtn,
-                    audioNotification !== 'default_notification' &&
-                      audioNotification !== 'library_bell' &&
+                    audioNotification === "default_notification" &&
                       styles.segmentBtnActive,
-                    { flex: 1, alignItems: 'center' },
+                    { flex: 1, alignItems: "center" },
+                  ]}
+                  onPress={() => {
+                    triggerHaptic(70);
+                    setAudioNotification("default_notification");
+                    playPreview("default_notification");
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      audioNotification === "default_notification" &&
+                        styles.segmentTextActive,
+                    ]}
+                  >
+                    {t("default")}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    audioNotification !== "default_notification" &&
+                      styles.segmentBtnActive,
+                    { flex: 1, alignItems: "center" },
                   ]}
                   onPress={handlePickAudio}
                 >
                   <Text
                     style={[
                       styles.segmentText,
-                      audioNotification !== 'default_notification' &&
-                        audioNotification !== 'library_bell' &&
+                      audioNotification !== "default_notification" &&
                         styles.segmentTextActive,
                     ]}
                   >
-                    {t('custom')}
+                    {t("custom")}
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {audioNotification !== "default_notification" && (
+                <View style={styles.customAudioCard}>
+                  {/* File Name Info Row */}
+                  <View style={styles.customAudioFileRow}>
+                    <View style={styles.customAudioIconBox}>
+                      <Music size={13} color={colors.primaryAction} />
+                    </View>
+                    <Text
+                      style={styles.customAudioFileName}
+                      numberOfLines={1}
+                      ellipsizeMode="middle"
+                    >
+                      {customAudioName || "Custom Sound"}
+                    </Text>
+                  </View>
+
+                  {/* Action Buttons Row */}
+                  <View style={styles.customAudioActions}>
+                    <TouchableOpacity
+                      style={styles.customAudioActionBtn}
+                      onPress={handlePlayCustomPreview}
+                    >
+                      <Play size={13} color={colors.primaryAction} />
+                      <Text
+                        style={[
+                          styles.customAudioActionText,
+                          { color: colors.primaryAction },
+                        ]}
+                      >
+                        {t("play_preview")}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.customAudioActionBtn}
+                      onPress={handlePickAudio}
+                    >
+                      <Text style={styles.customAudioActionText}>
+                        {t("change_file")}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.customAudioHintRow}>
+                    <Info size={12} color={colors.textSecondary} />
+                    <Text style={styles.customAudioHintText}>
+                      {t("sound_mode_reminder_short")}
+                    </Text>
+                  </View>
+                </View>
+              )}
             </View>
 
             <View style={styles.settingSeparator} />
@@ -520,12 +643,15 @@ export default function SettingsScreen() {
                 <View style={styles.iconBox}>
                   <Bell color={colors.primaryAction} size={18} />
                 </View>
-                <Text style={styles.settingText}>{t('workout_reminders')}</Text>
+                <Text style={styles.settingText}>{t("workout_reminders")}</Text>
               </View>
               <Switch
                 value={remindersEnabled}
                 onValueChange={toggleReminders}
-                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
+                trackColor={{
+                  false: colors.borderSubtle,
+                  true: colors.primaryAction,
+                }}
                 thumbColor="#fff"
               />
             </View>
@@ -541,7 +667,7 @@ export default function SettingsScreen() {
                     <View style={styles.iconBox}>
                       <Clock color="#3b82f6" size={18} />
                     </View>
-                    <Text style={styles.settingText}>{t('reminder_time')}</Text>
+                    <Text style={styles.settingText}>{t("reminder_time")}</Text>
                   </View>
                   <Text style={styles.timeValueText}>{reminderTime}</Text>
                 </TouchableOpacity>
@@ -560,13 +686,49 @@ export default function SettingsScreen() {
 
             <View style={styles.settingSeparator} />
 
+            {/* Keep Screen Awake */}
+            <View style={styles.settingItem}>
+              <View style={styles.settingItemLeft}>
+                <View style={styles.iconBox}>
+                  <Smartphone color="#8B5CF6" size={18} />
+                </View>
+                <Text style={styles.settingText}>{t("keep_screen_awake")}</Text>
+              </View>
+              <Switch
+                value={keepScreenAwake}
+                onValueChange={(val) => {
+                  triggerHaptic();
+                  setKeepScreenAwake(val);
+                }}
+                trackColor={{
+                  false: colors.borderSubtle,
+                  true: colors.primaryAction,
+                }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <View style={styles.settingSeparator} />
+
             {/* Export Data */}
             <TouchableOpacity style={styles.settingItem} onPress={handleExport}>
               <View style={styles.settingItemLeft}>
                 <View style={styles.iconBox}>
                   <Download color="#f97316" size={18} />
                 </View>
-                <Text style={styles.settingText}>{t('export_data')}</Text>
+                <Text style={styles.settingText}>{t("export_data")}</Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.settingSeparator} />
+
+            {/* Import Data */}
+            <TouchableOpacity style={styles.settingItem} onPress={handleImport}>
+              <View style={styles.settingItemLeft}>
+                <View style={styles.iconBox}>
+                  <Upload color="#10B981" size={18} />
+                </View>
+                <Text style={styles.settingText}>{t("import_data")}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -585,7 +747,7 @@ const getStyles = (c: ThemeColors) =>
       backgroundColor: c.background,
     },
     scrollContent: {
-      paddingTop: Platform.OS === 'ios' ? 60 : 44,
+      paddingTop: Platform.OS === "ios" ? 60 : 44,
       paddingHorizontal: 20,
       paddingBottom: 24,
     },
@@ -594,14 +756,14 @@ const getStyles = (c: ThemeColors) =>
     },
     headerTitle: {
       fontSize: 28,
-      fontWeight: '800',
+      fontWeight: "800",
       color: c.textPrimary,
       letterSpacing: -0.6,
     },
     headerSub: {
       fontSize: 14,
       color: c.textSecondary,
-      fontWeight: '500',
+      fontWeight: "500",
       marginTop: 4,
     },
     section: {
@@ -609,7 +771,7 @@ const getStyles = (c: ThemeColors) =>
     },
     sectionTitle: {
       fontSize: 18,
-      fontWeight: '700',
+      fontWeight: "700",
       color: c.textPrimary,
       letterSpacing: -0.3,
       marginBottom: 12,
@@ -635,8 +797,8 @@ const getStyles = (c: ThemeColors) =>
       }),
     },
     goalTopRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: 12,
       marginBottom: 18,
     },
@@ -645,24 +807,24 @@ const getStyles = (c: ThemeColors) =>
       height: 40,
       borderRadius: 12,
       backgroundColor: c.surfaceHighlight,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
     },
     goalCardTitle: {
       fontSize: 16,
-      fontWeight: '700',
+      fontWeight: "700",
       color: c.textPrimary,
       marginBottom: 2,
     },
     cardDescription: {
       color: c.textSecondary,
       fontSize: 12,
-      fontWeight: '500',
+      fontWeight: "500",
     },
     stepperContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
       gap: 20,
       backgroundColor: c.surfaceHighlight,
       borderRadius: 18,
@@ -674,25 +836,25 @@ const getStyles = (c: ThemeColors) =>
       width: 44,
       height: 44,
       borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       borderWidth: 1,
       borderColor: c.borderSubtle,
     },
     stepperValueContainer: {
-      alignItems: 'center',
+      alignItems: "center",
       minWidth: 110,
     },
     stepperValue: {
       fontSize: 32,
-      fontWeight: '800',
+      fontWeight: "800",
       color: c.textPrimary,
       letterSpacing: -0.5,
     },
     stepperLabel: {
       color: c.textSecondary,
       fontSize: 12,
-      fontWeight: '600',
+      fontWeight: "600",
       marginTop: 2,
     },
 
@@ -702,7 +864,7 @@ const getStyles = (c: ThemeColors) =>
       borderRadius: 22,
       borderWidth: 1,
       borderColor: c.borderSubtle,
-      overflow: 'hidden',
+      overflow: "hidden",
       ...Platform.select({
         ios: {
           shadowColor: c.shadowColor,
@@ -716,9 +878,9 @@ const getStyles = (c: ThemeColors) =>
       }),
     },
     settingItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
       paddingHorizontal: 18,
       paddingVertical: 16,
     },
@@ -727,27 +889,27 @@ const getStyles = (c: ThemeColors) =>
       paddingVertical: 16,
     },
     settingRowBetween: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
     },
     settingItemLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: 12,
     },
     iconBox: {
       width: 36,
       height: 36,
       borderRadius: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       backgroundColor: c.surfaceHighlight,
     },
     settingText: {
       color: c.textPrimary,
       fontSize: 15,
-      fontWeight: '600',
+      fontWeight: "600",
     },
     settingSeparator: {
       height: 1,
@@ -757,18 +919,18 @@ const getStyles = (c: ThemeColors) =>
     timeValueText: {
       color: c.primaryAction,
       fontSize: 15,
-      fontWeight: '700',
+      fontWeight: "700",
     },
 
     // Segmented Controls
     segmentedControl: {
-      flexDirection: 'row',
+      flexDirection: "row",
       backgroundColor: c.surfaceHighlight,
       borderRadius: 12,
       padding: 3,
     },
     audioSegmentedControl: {
-      flexDirection: 'row',
+      flexDirection: "row",
       backgroundColor: c.surfaceHighlight,
       borderRadius: 12,
       padding: 3,
@@ -783,7 +945,7 @@ const getStyles = (c: ThemeColors) =>
       backgroundColor: c.cardSurface,
       ...Platform.select({
         ios: {
-          shadowColor: '#000',
+          shadowColor: "#000",
           shadowOffset: { width: 0, height: 1 },
           shadowOpacity: 0.1,
           shadowRadius: 2,
@@ -796,18 +958,18 @@ const getStyles = (c: ThemeColors) =>
     segmentText: {
       color: c.textSecondary,
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: "700",
     },
     segmentTextActive: {
       color: c.textPrimary,
-      fontWeight: '800',
+      fontWeight: "800",
     },
 
     // Manual input for rest timer
     manualInputContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
       gap: 10,
       marginTop: 14,
       backgroundColor: c.surfaceHighlight,
@@ -821,8 +983,8 @@ const getStyles = (c: ThemeColors) =>
       backgroundColor: c.cardSurface,
       color: c.textPrimary,
       fontSize: 18,
-      fontWeight: '800',
-      textAlign: 'center',
+      fontWeight: "800",
+      textAlign: "center",
       borderRadius: 10,
       borderWidth: 1,
       borderColor: c.borderSubtle,
@@ -830,7 +992,73 @@ const getStyles = (c: ThemeColors) =>
     unitText: {
       fontSize: 13,
       color: c.textSecondary,
-      fontWeight: '600',
+      fontWeight: "600",
+    },
+
+    // Custom Audio Card
+    customAudioCard: {
+      marginTop: 12,
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 14,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    customAudioFileRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingBottom: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderSubtle,
+      marginBottom: 8,
+    },
+    customAudioIconBox: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      backgroundColor: c.cardSurface,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    customAudioFileName: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "700",
+      color: c.textPrimary,
+    },
+    customAudioActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    customAudioActionBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingVertical: 4,
+      paddingHorizontal: 6,
+    },
+    customAudioActionText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: c.textSecondary,
+    },
+    customAudioHintRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: c.borderSubtle,
+    },
+    customAudioHintText: {
+      flex: 1,
+      fontSize: 11,
+      fontWeight: "600",
+      color: c.textSecondary,
+      opacity: 0.85,
     },
   });
-
