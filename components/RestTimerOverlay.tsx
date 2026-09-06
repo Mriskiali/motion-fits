@@ -18,6 +18,7 @@ import { useThemeColors } from '@/hooks/useThemeColors';
 import { scheduleRestTimerNotification, cancelNotification } from '@/utils/notifications';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useUserStore } from '@/store/useUserStore';
+import { createAudioPlayer } from 'expo-audio';
 
 interface RestTimerOverlayProps {
   visible: boolean;
@@ -42,7 +43,26 @@ export default function RestTimerOverlay({
   const notificationIdRef = useRef<string | null>(null);
   const setupNotificationIdRef = useRef<number>(0);
   const targetEndTimeRef = useRef<number | null>(null);
-  const { hapticsEnabled } = useUserStore();
+  const { hapticsEnabled, audioNotification } = useUserStore();
+
+  const playNotificationSound = () => {
+    try {
+      if (audioNotification === 'default_notification' || audioNotification === 'library_bell') {
+        const player = createAudioPlayer(require('@/assets/sounds/timerendsound.wav'));
+        player.play();
+      } else if (
+        audioNotification &&
+        (audioNotification.startsWith('file://') ||
+          audioNotification.startsWith('content://') ||
+          audioNotification.startsWith('/'))
+      ) {
+        const player = createAudioPlayer({ uri: audioNotification });
+        player.play();
+      }
+    } catch (error) {
+      console.warn('Error playing timer sound:', error);
+    }
+  };
 
   // Track max time to correctly render the SVG progress ring
   const [maxTime, setMaxTime] = useState(initialTime > 0 ? initialTime : 60);
@@ -104,7 +124,9 @@ export default function RestTimerOverlay({
     if (timeLeft <= 0) {
       if (hapticsEnabled) {
         Vibration.vibrate([0, 500, 200, 500, 200, 1000]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
+      playNotificationSound();
       if (notificationIdRef.current) cancelNotification(notificationIdRef.current);
       setIsRunning(false);
       onClose();
@@ -112,7 +134,10 @@ export default function RestTimerOverlay({
     }
 
     if (timeLeft <= 3 && timeLeft > 0) {
-      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+        Vibration.vibrate(60);
+      }
     }
 
     const timerId = setInterval(() => {

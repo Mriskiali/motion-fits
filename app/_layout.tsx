@@ -12,6 +12,7 @@ import { useColorScheme as useNativeColorScheme } from 'react-native';
 
 
 import { useWorkoutBackgroundTracker } from '@/hooks/useWorkoutBackgroundTracker';
+import { setupNotificationChannels } from '@/utils/notifications';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -31,6 +32,10 @@ export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
+
+  useEffect(() => {
+    setupNotificationChannels().catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (error) {

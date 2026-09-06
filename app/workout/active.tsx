@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard, Vibration } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -81,12 +81,20 @@ export default function ActiveWorkoutScreen() {
     
     if (exerciseSets.includes(setIndex)) {
       // Undo log
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        Vibration.vibrate(30);
+      }
       newCompletedSets = {
         ...completedSets,
         [exerciseId]: exerciseSets.filter(i => i !== setIndex),
       };
     } else {
       // Log set and trigger Rest Timer
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        Vibration.vibrate(40);
+      }
       newCompletedSets = {
         ...completedSets,
         [exerciseId]: [...exerciseSets, setIndex],

@@ -44,6 +44,8 @@ import {
 import { useTranslation } from '@/hooks/useTranslation';
 import { ThemeColors } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
+import { Vibration } from 'react-native';
+import { createAudioPlayer } from 'expo-audio';
 
 export default function SettingsScreen() {
   const {
@@ -73,17 +75,43 @@ export default function SettingsScreen() {
 
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  const triggerHaptic = () => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      Vibration.vibrate(30);
+    }
+  };
+
+  const playPreview = (soundOption: string) => {
+    try {
+      if (soundOption === 'default_notification' || soundOption === 'library_bell') {
+        const player = createAudioPlayer(require('@/assets/sounds/timerendsound.wav'));
+        player.play();
+      } else if (
+        soundOption &&
+        (soundOption.startsWith('file://') ||
+          soundOption.startsWith('content://') ||
+          soundOption.startsWith('/'))
+      ) {
+        const player = createAudioPlayer({ uri: soundOption });
+        player.play();
+      }
+    } catch (e) {
+      console.warn('Error playing sound preview:', e);
+    }
+  };
+
   const handleIncrementGoal = () => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerHaptic();
     setWeeklyGoal(Math.min(7, weeklyGoal + 1));
   };
   const handleDecrementGoal = () => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerHaptic();
     setWeeklyGoal(Math.max(1, weeklyGoal - 1));
   };
 
   const toggleReminders = async (value: boolean) => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerHaptic();
     if (value) {
       const granted = await requestPermissionsAsync();
       if (granted) {
@@ -91,6 +119,11 @@ export default function SettingsScreen() {
         await scheduleDailyReminder(reminderTime);
       } else {
         setRemindersEnabled(false);
+        showAlert(
+          t('error'),
+          'Please grant notification permission in system settings to enable reminders.',
+          [{ text: t('ok') }]
+        );
       }
     } else {
       setRemindersEnabled(false);
@@ -119,7 +152,7 @@ export default function SettingsScreen() {
   };
 
   const handleExport = async () => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerHaptic();
     try {
       const data = {
         user: useUserStore.getState(),
@@ -140,6 +173,7 @@ export default function SettingsScreen() {
   };
 
   const handlePickAudio = async () => {
+    triggerHaptic();
     if (!DocumentPicker) {
       showAlert(t('error'), t('doc_picker_not_supported'), [{ text: t('ok') }]);
       return;
@@ -151,7 +185,19 @@ export default function SettingsScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAudioNotification(result.assets[0].uri);
+        const pickedAsset = result.assets[0];
+        let persistentUri = pickedAsset.uri;
+
+        // Copy to permanent app documents folder to prevent cache purging
+        if (FileSystem.documentDirectory) {
+          const extension = pickedAsset.name?.split('.').pop() || 'mp3';
+          const destUri = `${FileSystem.documentDirectory}custom_timer_${Date.now()}.${extension}`;
+          await FileSystem.copyAsync({ from: pickedAsset.uri, to: destUri });
+          persistentUri = destUri;
+        }
+
+        setAudioNotification(persistentUri);
+        playPreview(persistentUri);
       }
     } catch (error) {
       showAlert(t('error'), t('pick_audio_error'), [{ text: t('ok') }]);
@@ -407,8 +453,9 @@ export default function SettingsScreen() {
                     { flex: 1, alignItems: 'center' },
                   ]}
                   onPress={() => {
-                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    triggerHaptic();
                     setAudioNotification('default_notification');
+                    playPreview('default_notification');
                   }}
                 >
                   <Text
@@ -427,8 +474,9 @@ export default function SettingsScreen() {
                     { flex: 1, alignItems: 'center' },
                   ]}
                   onPress={() => {
-                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    triggerHaptic();
                     setAudioNotification('library_bell');
+                    playPreview('library_bell');
                   }}
                 >
                   <Text
