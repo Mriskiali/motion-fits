@@ -19,14 +19,6 @@ import { scheduleRestTimerNotification, cancelNotification } from '@/utils/notif
 import { useTranslation } from '@/hooks/useTranslation';
 import { useUserStore } from '@/store/useUserStore';
 
-// dynamically require expo-av
-let Audio: any = null;
-try {
-  Audio = require('expo-av').Audio;
-} catch (e) {
-  console.warn('expo-av is not available in this environment');
-}
-
 interface RestTimerOverlayProps {
   visible: boolean;
   initialTime: number; // in seconds
@@ -50,16 +42,7 @@ export default function RestTimerOverlay({
   const notificationIdRef = useRef<string | null>(null);
   const setupNotificationIdRef = useRef<number>(0);
   const targetEndTimeRef = useRef<number | null>(null);
-  const { audioNotification, hapticsEnabled } = useUserStore();
-  const soundRef = useRef<any | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
-    };
-  }, []);
+  const { hapticsEnabled } = useUserStore();
 
   // Track max time to correctly render the SVG progress ring
   const [maxTime, setMaxTime] = useState(initialTime > 0 ? initialTime : 60);
@@ -115,34 +98,6 @@ export default function RestTimerOverlay({
     }
   }, [visible, initialTime]);
 
-  const playNotificationSound = async () => {
-    if (!Audio) return;
-    try {
-      if (audioNotification === 'default_notification') {
-        return;
-      }
-
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-
-      if (audioNotification === 'library_bell') {
-        const { sound } = await Audio.Sound.createAsync(
-          require('@/assets/sounds/timerendsound.wav')
-        );
-        soundRef.current = sound;
-        await sound.playAsync();
-      } else {
-        const { sound } = await Audio.Sound.createAsync({ uri: audioNotification });
-        soundRef.current = sound;
-        await sound.playAsync();
-      }
-    } catch (error) {
-      console.log('Error playing sound:', error);
-    }
-  };
-
   useEffect(() => {
     if (!visible || isConfiguring || !isRunning) return;
 
@@ -150,7 +105,6 @@ export default function RestTimerOverlay({
       if (hapticsEnabled) {
         Vibration.vibrate([0, 500, 200, 500, 200, 1000]);
       }
-      playNotificationSound();
       if (notificationIdRef.current) cancelNotification(notificationIdRef.current);
       setIsRunning(false);
       onClose();
