@@ -1,4 +1,4 @@
-﻿import { ThemeColors } from "@/constants/theme";
+import { ThemeColors } from "@/constants/theme";
 import { useThemeColors } from "@/hooks/useThemeColors";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAlertStore } from "@/store/useAlertStore";
