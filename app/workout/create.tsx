@@ -235,7 +235,7 @@ export default function CreateWorkoutScreen() {
                   <Text style={styles.detailLabel}>{isTimeBased ? t('intervals_sets') : t('sets')}</Text>
                   <TextInput
                     style={styles.detailInput}
-                    keyboardType="numeric"
+                    keyboardType="number-pad"
                     placeholder={t('sets_placeholder')}
                     placeholderTextColor="#475569"
                     value={exercise.sets !== undefined && exercise.sets !== null && exercise.sets !== ('' as any) ? exercise.sets.toString() : ''}
@@ -248,7 +248,7 @@ export default function CreateWorkoutScreen() {
                     <Text style={styles.detailLabel}>{t('duration_sec')}</Text>
                     <TextInput
                       style={styles.detailInput}
-                      keyboardType="numeric"
+                      keyboardType="number-pad"
                       placeholder={t('duration_placeholder')}
                       placeholderTextColor="#475569"
                       value={exercise.duration !== undefined && exercise.duration !== null && exercise.duration !== ('' as any) ? exercise.duration.toString() : ''}
@@ -260,10 +260,11 @@ export default function CreateWorkoutScreen() {
                     <Text style={styles.detailLabel}>{t('reps')}</Text>
                     <TextInput
                       style={styles.detailInput}
+                      keyboardType="number-pad"
                       placeholder={t('reps_placeholder')}
                       placeholderTextColor="#475569"
                       value={exercise.reps ? exercise.reps.toString() : ''}
-                      onChangeText={(val) => handleUpdateExercise(index, 'reps', val)}
+                      onChangeText={(val) => handleUpdateExercise(index, 'reps', val.replace(/[^0-9]/g, ''))}
                     />
                   </View>
                 )}

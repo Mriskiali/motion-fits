@@ -4,6 +4,29 @@ import { Vibration, Platform } from 'react-native';
 
 let activePlayer: any = null;
 let stopTimerTimeout: any = null;
+let fadeInterval: any = null;
+
+type PlaybackStateListener = (isPlaying: boolean) => void;
+const playbackListeners = new Set<PlaybackStateListener>();
+
+export function subscribeAudioPlayback(listener: PlaybackStateListener) {
+  playbackListeners.add(listener);
+  return () => {
+    playbackListeners.delete(listener);
+  };
+}
+
+function notifyPlaybackState(isPlaying: boolean) {
+  playbackListeners.forEach((fn) => {
+    try {
+      fn(isPlaying);
+    } catch (e) {}
+  });
+}
+
+export function isAudioPlaying(): boolean {
+  return activePlayer !== null;
+}
 
 // Initialize global audio mode
 export async function initAudioMode() {
@@ -24,6 +47,10 @@ export function stopTimerSound() {
     clearTimeout(stopTimerTimeout);
     stopTimerTimeout = null;
   }
+  if (fadeInterval) {
+    clearInterval(fadeInterval);
+    fadeInterval = null;
+  }
   if (activePlayer) {
     try {
       activePlayer.pause();
@@ -31,6 +58,7 @@ export function stopTimerSound() {
     } catch (e) {}
     activePlayer = null;
   }
+  notifyPlaybackState(false);
 }
 
 // Play sound safely using a persistent singleton player instance (auto-stops after maxDurationMs, default 10000ms / 10s)
@@ -54,12 +82,30 @@ export async function playTimerSound(audioNotification?: string, maxDurationMs: 
     if (activePlayer) {
       activePlayer.volume = 1.0;
       activePlayer.play();
+      notifyPlaybackState(true);
 
-      // Automatically stop playback after 5 seconds to prevent full song playback
+      // Automatically stop playback after maxDurationMs (default 10s) with a 2-second smooth fade-out
       if (maxDurationMs > 0) {
+        const fadeDurationMs = 2000;
+        const fadeStartMs = Math.max(0, maxDurationMs - fadeDurationMs);
+
         stopTimerTimeout = setTimeout(() => {
-          stopTimerSound();
-        }, maxDurationMs);
+          const steps = 10;
+          const stepTime = fadeDurationMs / steps;
+          let currentStep = 0;
+
+          fadeInterval = setInterval(() => {
+            currentStep++;
+            if (activePlayer) {
+              try {
+                activePlayer.volume = Math.max(0, 1.0 - currentStep / steps);
+              } catch (e) {}
+            }
+            if (currentStep >= steps) {
+              stopTimerSound();
+            }
+          }, stepTime);
+        }, fadeStartMs);
       }
     }
   } catch (error) {
@@ -69,6 +115,7 @@ export async function playTimerSound(audioNotification?: string, maxDurationMs: 
       if (activePlayer) {
         activePlayer.volume = 1.0;
         activePlayer.play();
+        notifyPlaybackState(true);
         if (maxDurationMs > 0) {
           stopTimerTimeout = setTimeout(() => {
             stopTimerSound();

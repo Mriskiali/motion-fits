@@ -5,14 +5,20 @@ try {
   Notifications = require('expo-notifications');
   if (Notifications && Notifications.setNotificationHandler) {
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-        priority: Notifications?.AndroidNotificationPriority?.MAX,
-      }),
+      handleNotification: async (notification) => {
+        // Rest timer notifications should NOT trigger OS ringtone because playTimerSound handles it cleanly
+        const isTimer =
+          notification?.request?.content?.data?.type === 'workout-timer' ||
+          (notification?.request?.trigger as any)?.channelId === 'workout-rest-timer-v2';
+        return {
+          shouldShowAlert: true,
+          shouldPlaySound: !isTimer,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+          priority: Notifications?.AndroidNotificationPriority?.MAX,
+        };
+      },
     });
   }
 } catch (e) {
@@ -25,14 +31,18 @@ export async function setupNotificationChannels() {
   if (!Notifications) return;
   if (Platform.OS === 'android') {
     try {
-      await Notifications.setNotificationChannelAsync('workout-timer', {
+      // Clean up legacy channel if present on device
+      await Notifications.deleteNotificationChannelAsync('workout-timer').catch(() => {});
+
+      // Silent timer channel: allows HUD banner + vibration, but suppresses OS ringtone so custom audio can play cleanly
+      await Notifications.setNotificationChannelAsync('workout-rest-timer-v2', {
         name: 'Workout Rest Timer',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 500, 250, 500],
         lightColor: '#3B82F6',
         enableLights: true,
         enableVibrate: true,
-        sound: 'default',
+        sound: null, // Silent so phone notification sound does not clash with custom workout sound
         showBadge: true,
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
         bypassDnd: true,
@@ -124,11 +134,12 @@ export async function showRestTimerFinishedNotification() {
       content: {
         title: 'Rest Time Finished!',
         body: 'Time for your next set. Stay strong!',
-        sound: true,
+        sound: false,
         priority: Notifications.AndroidNotificationPriority.MAX,
         vibrate: [0, 500, 250, 500],
+        data: { type: 'workout-timer' },
       },
-      trigger: Platform.OS === 'android' ? { channelId: 'workout-timer' } : null,
+      trigger: Platform.OS === 'android' ? { channelId: 'workout-rest-timer-v2' } : null,
     });
   } catch (error) {
     console.warn('Failed to display rest timer popup notification:', error);
@@ -144,14 +155,15 @@ export async function scheduleRestTimerNotification(seconds: number): Promise<st
       content: {
         title: 'Rest Time Finished!',
         body: 'Time for your next set. Stay strong!',
-        sound: true,
+        sound: false,
         priority: Notifications.AndroidNotificationPriority.MAX,
+        data: { type: 'workout-timer' },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
         seconds: Math.max(1, Math.round(seconds)),
         repeats: false,
-        channelId: 'workout-timer',
+        channelId: 'workout-rest-timer-v2',
       },
     });
     return id;

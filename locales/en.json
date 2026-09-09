@@ -169,5 +169,6 @@
   "days_count": "Days",
   "days_remaining": "days left",
   "day_remaining": "day left",
-  "goal_reached": "completed"
+  "goal_reached": "completed",
+  "stop_preview": "Stop Preview"
 }

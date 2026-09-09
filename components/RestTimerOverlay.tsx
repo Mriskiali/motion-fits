@@ -317,8 +317,9 @@ export default function RestTimerOverlay({
                     placeholderTextColor={colors.textMuted}
                     value={manualInput}
                     onChangeText={(val) => {
-                      setManualInput(val);
-                      const parsed = parseInt(val, 10);
+                      const cleanVal = val.replace(/[^0-9]/g, '');
+                      setManualInput(cleanVal);
+                      const parsed = parseInt(cleanVal, 10);
                       if (!isNaN(parsed) && parsed > 0) {
                         setSelectedDuration(parsed);
                       }

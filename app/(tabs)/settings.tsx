@@ -9,7 +9,12 @@ import {
   requestPermissionsAsync,
   scheduleDailyReminder,
 } from "@/utils/notifications";
-import { playTimerSound, triggerButtonVibration } from "@/utils/soundPlayer";
+import {
+  playTimerSound,
+  stopTimerSound,
+  subscribeAudioPlayback,
+  triggerButtonVibration,
+} from "@/utils/soundPlayer";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
@@ -27,13 +32,14 @@ import {
   Play,
   Plus,
   Smartphone,
+  Square,
   Sun,
   Target,
   Timer,
   Upload,
   Volume2,
 } from "lucide-react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Platform,
   ScrollView,
@@ -81,13 +87,20 @@ export default function SettingsScreen() {
   const { t } = useTranslation();
 
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
+  useEffect(() => {
+    return subscribeAudioPlayback((playing) => {
+      setIsPlayingAudio(playing);
+    });
+  }, []);
 
   const triggerHaptic = (duration: number = 70) => {
     triggerButtonVibration(hapticsEnabled, duration);
   };
 
   const playPreview = (soundOption: string) => {
-    playTimerSound(soundOption);
+    playTimerSound(soundOption, 10000);
   };
 
   const handleIncrementGoal = () => {
@@ -273,7 +286,11 @@ export default function SettingsScreen() {
 
   const handlePlayCustomPreview = () => {
     triggerHaptic(50);
-    playPreview(audioNotification);
+    if (isPlayingAudio) {
+      stopTimerSound();
+    } else {
+      playPreview(audioNotification);
+    }
   };
 
   const isDarkMode = theme === "dark";
@@ -601,18 +618,40 @@ export default function SettingsScreen() {
                   {/* Action Buttons Row */}
                   <View style={styles.customAudioActions}>
                     <TouchableOpacity
-                      style={styles.customAudioActionBtn}
+                      style={[
+                        styles.customAudioActionBtn,
+                        isPlayingAudio && {
+                          borderColor: colors.danger,
+                          backgroundColor: "rgba(239, 68, 68, 0.08)",
+                        },
+                      ]}
                       onPress={handlePlayCustomPreview}
                     >
-                      <Play size={13} color={colors.primaryAction} />
-                      <Text
-                        style={[
-                          styles.customAudioActionText,
-                          { color: colors.primaryAction },
-                        ]}
-                      >
-                        {t("play_preview")}
-                      </Text>
+                      {isPlayingAudio ? (
+                        <>
+                          <Square size={13} color={colors.danger} fill={colors.danger} />
+                          <Text
+                            style={[
+                              styles.customAudioActionText,
+                              { color: colors.danger, fontWeight: "700" },
+                            ]}
+                          >
+                            {t("stop_preview")}
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={13} color={colors.primaryAction} />
+                          <Text
+                            style={[
+                              styles.customAudioActionText,
+                              { color: colors.primaryAction },
+                            ]}
+                          >
+                            {t("play_preview")} (10s)
+                          </Text>
+                        </>
+                      )}
                     </TouchableOpacity>
 
                     <TouchableOpacity

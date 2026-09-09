@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "MotionFit",
-    "slug": "workout-apps",
+    "name": "MotionFit v2",
+    "slug": "workout-apps-v2",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -14,7 +14,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.workoutapps",
+      "bundleIdentifier": "com.anonymous.workoutapps.v2",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -31,7 +31,7 @@
         "VIBRATE"
       ],
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.workoutapps"
+      "package": "com.anonymous.workoutapps.v2"
     },
     "web": {
       "bundler": "metro",

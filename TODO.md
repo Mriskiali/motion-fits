@@ -18,15 +18,14 @@ Gunakan checklist ini untuk melacak status pengerjaan fitur dan perbaikan bug se
   - [ ] Implementasikan deteksi hardware Step Counter Android murni tanpa fallback accelerometer yang terlalu sensitif.
   - [ ] Pasang algoritma filter frekuensi langkah manusia (1.5 - 2.5 Hz).
   - [ ] Pastikan listener sensor 100% mati saat toggle step tracking dimatikan di Settings.
-- [ ] 🔴 **Perbaiki Durasi Suara Custom Notifikasi & Test Audio di Settings**
-  - [ ] Pasang batas waktu pemutaran (*auto-cutoff*) maksimal **10 detik** untuk file audio kustom agar tidak memutar seluruh durasi lagu.
-  - [ ] Tambahkan efek *fade out* lembut di detik ke-8 hingga ke-10 sebelum audio otomatis berhenti.
-  - [ ] Sediakan tombol toggle Play/Stop manual saat melakukan tes audio di menu Settings.
-  - [ ] Pastikan pemutaran audio kustom saat timer istirahat selesai di latar belakang juga otomatis berhenti setelah 10 detik.
-- [ ] 🔴 **Validasi Form Input Number Only**
-  - [ ] Terapkan `keyboardType="number-pad"` pada input Sets, Reps, Weight, dan Rest Time di layar Buat/Edit Workout.
-  - [ ] Tambahkan sanitasi regex (hanya menerima angka positif).
-  - [ ] Pasang tombol stepper (+ / -) untuk memudahkan pengaturan angka.
+- [x] 🟢 **Perbaiki Durasi Suara Custom Notifikasi & Test Audio di Settings**
+  - [x] Pasang batas waktu pemutaran (*auto-cutoff*) maksimal **10 detik** untuk file audio kustom agar tidak memutar seluruh durasi lagu.
+  - [x] Tambahkan efek *fade out* lembut di detik ke-8 hingga ke-10 sebelum audio otomatis berhenti.
+  - [x] Sediakan tombol toggle Play/Stop manual saat melakukan tes audio di menu Settings.
+  - [x] Pastikan pemutaran audio kustom saat timer istirahat selesai di latar belakang juga otomatis berhenti setelah 10 detik.
+- [x] 🟢 **Validasi Form Input Number Only**
+  - [x] Terapkan `keyboardType="number-pad"` pada input Sets, Reps, Weight, dan Rest Time di layar Buat/Edit Workout, Active Workout, dan Rest Timer Overlay.
+  - [x] Tambahkan sanitasi regex (hanya menerima angka bulat positif `/[^0-9]/g`).
 
 ---
 

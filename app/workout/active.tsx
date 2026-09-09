@@ -346,16 +346,17 @@ export default function ActiveWorkoutScreen() {
                             : isTimeBased ? String(exercise.duration || 0) : String(exercise.reps || 0)
                         }
                         onChangeText={(val) => {
+                          const cleanVal = val.replace(/[^0-9]/g, '');
                           const newActualValues = {
                             ...actualValues,
                             [exercise.id]: {
                               ...(actualValues[exercise.id] || {}),
-                              [setIndex]: val
+                              [setIndex]: cleanVal
                             }
                           };
                           updateActiveSession(completedSets, newActualValues);
                         }}
-                        keyboardType="numeric"
+                        keyboardType="number-pad"
                         editable={!isCompleted}
                         selectTextOnFocus
                       />
