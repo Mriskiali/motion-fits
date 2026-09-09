@@ -1,4 +1,4 @@
-{
+﻿{
   "start_workout": "Mulai Latihan",
   "quick_workout": "Latihan Kilat",
   "rest_timer": "Waktu Istirahat",
@@ -165,19 +165,5 @@
   "sound_preview_title": "Memutar Suara Audio",
   "sound_mode_reminder": "Jika suara tidak terdengar, pastikan HP Anda tidak dalam mode hening/getar dan volume media dalam keadaan aktif.",
   "sound_mode_reminder_short": "Pastikan HP tidak dalam mode hening agar suara terdengar.",
-  "target_achieved": "Target tercapai!",
-  "daily_steps": "Langkah Harian",
-  "step_goal": "Target Langkah Harian",
-  "step_goal_desc": "Target jumlah langkah yang ingin dicapai setiap hari",
-  "steps": "Langkah",
-  "step_tracking": "Pelacak Langkah",
-  "step_tracking_desc": "Hitung langkah harian menggunakan sensor perangkat",
-  "distance": "Jarak",
-  "calories": "Kalori",
-  "steps_today": "Langkah Hari Ini",
-  "kcal": "kkal",
-  "km": "km",
-  "steps_left": "Sisa Langkah",
-  "sensor_not_available": "Sensor Pedometer memerlukan versi APK Build (Aktivitas Fisik)",
-  "step_tracking_disabled": "Pelacak langkah dinonaktifkan"
+  "target_achieved": "Target tercapai!"
 }

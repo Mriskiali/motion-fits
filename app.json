@@ -1,7 +1,6 @@
 {
   "expo": {
     "name": "MotionFit",
-    // "name": "MotionFit V2",
     "slug": "workout-apps",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,10 +10,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.workoutapps",
-      // "bundleIdentifier": "com.anonymous.workoutapps.v2",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSMotionUsageDescription": "MotionFit uses step data to display your daily activity progress and calories burned."
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -28,12 +25,10 @@
         "RECEIVE_BOOT_COMPLETED",
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
-        "VIBRATE",
-        "ACTIVITY_RECOGNITION"
+        "VIBRATE"
       ],
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.workoutapps"
-      // "package": "com.anonymous.workoutapps.v2"
     },
     "web": {
       "bundler": "metro",

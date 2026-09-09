@@ -1,4 +1,4 @@
-{
+﻿{
   "start_workout": "Start Workout",
   "quick_workout": "Quick Workout",
   "rest_timer": "Rest Timer",
@@ -165,19 +165,5 @@
   "sound_preview_title": "Playing Audio Preview",
   "sound_mode_reminder": "If you cannot hear the audio, please ensure your device is not in silent or vibrate mode and media volume is turned on.",
   "sound_mode_reminder_short": "Ensure phone is not in silent mode for audio to play.",
-  "target_achieved": "Target achieved!",
-  "daily_steps": "Daily Steps",
-  "step_goal": "Daily Step Goal",
-  "step_goal_desc": "Target number of steps to achieve daily",
-  "steps": "Steps",
-  "step_tracking": "Step Tracking",
-  "step_tracking_desc": "Track daily walking steps with device sensor",
-  "distance": "Distance",
-  "calories": "Calories",
-  "steps_today": "Steps Today",
-  "kcal": "kcal",
-  "km": "km",
-  "steps_left": "Remaining",
-  "sensor_not_available": "Pedometer sensor requires a standalone APK build",
-  "step_tracking_disabled": "Step tracking paused"
+  "target_achieved": "Target achieved!"
 }
