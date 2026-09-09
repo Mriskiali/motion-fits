@@ -63,10 +63,10 @@ Dokumen ini merangkum rencana pengembangan, perbaikan bug, dan perombakan antarm
 - **Masalah:** Saat memilih file audio kustom (lagu/musik) untuk notifikasi istirahat, saat di-test atau saat berbunyi, aplikasi memutar **seluruh durasi lagu secara penuh (*full length*, misal 3–4 menit)**, bukan potongan ringkas nada pengingat.
 - **Penyebab:** Pemutar audio (`expo-audio`) memutar file suara dari awal hingga selesai tanpa adanya batasan waktu pemutaran (*playback timeout / cutoff duration*).
 - **Rencana Solusi:**
-  - Pasang batas durasi otomatis (*auto-cutoff*) untuk audio kustom (misal: maksimal 3–5 detik, lalu otomatis berhenti).
-  - Tambahkan efek *fade out* lembut di akhir detik batas agar audio tidak terpotong kasar.
+  - Pasang batas durasi otomatis (*auto-cutoff*) untuk audio kustom (maksimal **10 detik**, lalu otomatis berhenti).
+  - Tambahkan efek *fade out* lembut di detik ke-8 hingga ke-10 agar audio tidak terpotong kasar.
   - Sediakan tombol kontrol **Play / Stop** manual saat melakukan uji coba audio di menu Settings.
-  - Pastikan saat rest timer selesai dan membunyikan audio di latar belakang, suara lagu kustom juga otomatis berhenti setelah batas durasi singkat tersebut.
+  - Pastikan saat rest timer selesai dan membunyikan audio di latar belakang, suara lagu kustom juga otomatis berhenti setelah 10 detik.
 
 ### 7. 🎬 Fitur GIF / YouTube Video Tutorial Gerakan
 - **Masalah:** Pengguna pemula sering kali tidak mengetahui teknik gerakan yang benar.

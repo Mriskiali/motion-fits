@@ -19,10 +19,10 @@ Gunakan checklist ini untuk melacak status pengerjaan fitur dan perbaikan bug se
   - [ ] Pasang algoritma filter frekuensi langkah manusia (1.5 - 2.5 Hz).
   - [ ] Pastikan listener sensor 100% mati saat toggle step tracking dimatikan di Settings.
 - [ ] 🔴 **Perbaiki Durasi Suara Custom Notifikasi & Test Audio di Settings**
-  - [ ] Pasang batas waktu pemutaran (*auto-cutoff*) maksimal 3–5 detik untuk file audio kustom agar tidak memutar seluruh durasi lagu.
-  - [ ] Tambahkan efek *fade out* lembut sebelum audio otomatis berhenti.
+  - [ ] Pasang batas waktu pemutaran (*auto-cutoff*) maksimal **10 detik** untuk file audio kustom agar tidak memutar seluruh durasi lagu.
+  - [ ] Tambahkan efek *fade out* lembut di detik ke-8 hingga ke-10 sebelum audio otomatis berhenti.
   - [ ] Sediakan tombol toggle Play/Stop manual saat melakukan tes audio di menu Settings.
-  - [ ] Pastikan pemutaran audio kustom saat timer istirahat selesai di latar belakang juga otomatis berhenti setelah 3–5 detik.
+  - [ ] Pastikan pemutaran audio kustom saat timer istirahat selesai di latar belakang juga otomatis berhenti setelah 10 detik.
 - [ ] 🔴 **Validasi Form Input Number Only**
   - [ ] Terapkan `keyboardType="number-pad"` pada input Sets, Reps, Weight, dan Rest Time di layar Buat/Edit Workout.
   - [ ] Tambahkan sanitasi regex (hanya menerima angka positif).
