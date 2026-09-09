@@ -252,8 +252,8 @@ export default function DashboardScreen() {
                   {lastSessionTemplate?.name || t('custom_workout')}
                 </Text>
                 <Text style={styles.activitySub}>
-                  {format(new Date(lastSession.date), 'dd MMM yyyy')} ΓÇó{' '}
-                  {Math.round((lastSession.duration || 0) / 60)} {t('min_short')} ΓÇó{' '}
+                  {format(new Date(lastSession.date), 'dd MMM yyyy')} •{' '}
+                  {Math.round((lastSession.duration || 0) / 60)} {t('min_short')} •{' '}
                   {lastSession.completedExercises?.reduce((a, b) => a + (b.completedSets?.length || 0), 0) || 0} {t('set')}
                 </Text>
               </View>
