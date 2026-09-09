@@ -59,12 +59,14 @@ Dokumen ini merangkum rencana pengembangan, perbaikan bug, dan perombakan antarm
   - Tombol duplikasi set atau copy set sebelumnya dalam satu sentuhan.
   - Terhubung langsung dengan Exercise Library (Pilihan Gerakan Otomatis).
 
-### 6. 🔔 Perbaikan Durasi Notifikasi & Test Audio di Settings
-- **Masalah:** Notifikasi durasi istirahat kadang tidak sinkron dengan timer, dan tombol tes audio di halaman Settings perlu dipastikan selalu stabil.
+### 6. 🔔 Perbaikan Durasi Suara Custom Notifikasi & Test Audio di Settings
+- **Masalah:** Saat memilih file audio kustom (lagu/musik) untuk notifikasi istirahat, saat di-test atau saat berbunyi, aplikasi memutar **seluruh durasi lagu secara penuh (*full length*, misal 3–4 menit)**, bukan potongan ringkas nada pengingat.
+- **Penyebab:** Pemutar audio (`expo-audio`) memutar file suara dari awal hingga selesai tanpa adanya batasan waktu pemutaran (*playback timeout / cutoff duration*).
 - **Rencana Solusi:**
-  - Sinkronkan penjadwalan notifikasi latar belakang dengan sisa detik aktual.
-  - Perbaiki fungsi tes audio di Settings agar memutar suara yang dipilih secara instan dan menghentikan audio lama jika tombol ditekan berulang.
-  - Tampilkan indikator visual saat audio sedang dimainkan.
+  - Pasang batas durasi otomatis (*auto-cutoff*) untuk audio kustom (misal: maksimal 3–5 detik, lalu otomatis berhenti).
+  - Tambahkan efek *fade out* lembut di akhir detik batas agar audio tidak terpotong kasar.
+  - Sediakan tombol kontrol **Play / Stop** manual saat melakukan uji coba audio di menu Settings.
+  - Pastikan saat rest timer selesai dan membunyikan audio di latar belakang, suara lagu kustom juga otomatis berhenti setelah batas durasi singkat tersebut.
 
 ### 7. 🎬 Fitur GIF / YouTube Video Tutorial Gerakan
 - **Masalah:** Pengguna pemula sering kali tidak mengetahui teknik gerakan yang benar.

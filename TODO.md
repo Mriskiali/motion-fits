@@ -18,10 +18,11 @@ Gunakan checklist ini untuk melacak status pengerjaan fitur dan perbaikan bug se
   - [ ] Implementasikan deteksi hardware Step Counter Android murni tanpa fallback accelerometer yang terlalu sensitif.
   - [ ] Pasang algoritma filter frekuensi langkah manusia (1.5 - 2.5 Hz).
   - [ ] Pastikan listener sensor 100% mati saat toggle step tracking dimatikan di Settings.
-- [ ] 🔴 **Perbaiki Durasi Notifikasi & Tes Audio di Settings**
-  - [ ] Sinkronkan trigger durasi notifikasi latar belakang dengan sisa waktu istirahat aktual.
-  - [ ] Perbaiki pemutar audio di menu Settings agar preview suara bekerja konsisten tanpa crash.
-  - [ ] Tambahkan status visual "Memutar Audio..." pada tombol tes suara.
+- [ ] 🔴 **Perbaiki Durasi Suara Custom Notifikasi & Test Audio di Settings**
+  - [ ] Pasang batas waktu pemutaran (*auto-cutoff*) maksimal 3–5 detik untuk file audio kustom agar tidak memutar seluruh durasi lagu.
+  - [ ] Tambahkan efek *fade out* lembut sebelum audio otomatis berhenti.
+  - [ ] Sediakan tombol toggle Play/Stop manual saat melakukan tes audio di menu Settings.
+  - [ ] Pastikan pemutaran audio kustom saat timer istirahat selesai di latar belakang juga otomatis berhenti setelah 3–5 detik.
 - [ ] 🔴 **Validasi Form Input Number Only**
   - [ ] Terapkan `keyboardType="number-pad"` pada input Sets, Reps, Weight, dan Rest Time di layar Buat/Edit Workout.
   - [ ] Tambahkan sanitasi regex (hanya menerima angka positif).
