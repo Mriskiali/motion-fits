@@ -165,5 +165,9 @@
   "sound_preview_title": "Memutar Suara Audio",
   "sound_mode_reminder": "Jika suara tidak terdengar, pastikan HP Anda tidak dalam mode hening/getar dan volume media dalam keadaan aktif.",
   "sound_mode_reminder_short": "Pastikan HP tidak dalam mode hening agar suara terdengar.",
-  "target_achieved": "Target tercapai!"
+  "target_achieved": "Target tercapai!",
+  "days_count": "Hari",
+  "days_remaining": "hari tersisa",
+  "day_remaining": "hari tersisa",
+  "goal_reached": "tercapai"
 }

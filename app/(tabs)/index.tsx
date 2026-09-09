@@ -145,7 +145,8 @@ export default function DashboardScreen() {
           <View style={styles.heroTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroGoalHeading}>
-                {thisWeekSessionsCount} / {weeklyGoal} {t('days_per_week')}
+                {thisWeekSessionsCount} / {weeklyGoal}{' '}
+                <Text style={styles.heroGoalUnit}>{t('days_count')}</Text>
               </Text>
               <Text style={styles.heroGoalSub}>{t('weekly_goal')}</Text>
             </View>
@@ -171,10 +172,14 @@ export default function DashboardScreen() {
           </View>
 
           <View style={styles.heroBottomMeta}>  
-            <Text style={styles.heroProgressLabel}>{goalPercent}% {t('exercises_completed')}</Text>
+            <Text style={styles.heroProgressLabel}>{goalPercent}% {t('goal_reached')}</Text>
             <Text style={styles.heroTargetLabel}>
               {weeklyGoal - thisWeekSessionsCount > 0
-                ? `${weeklyGoal - thisWeekSessionsCount} ${t('days_per_week')} left`
+                ? `${weeklyGoal - thisWeekSessionsCount} ${
+                    weeklyGoal - thisWeekSessionsCount === 1 && language === 'en'
+                      ? t('day_remaining')
+                      : t('days_remaining')
+                  }`
                 : t('target_achieved')}
             </Text>
           </View>
@@ -392,10 +397,15 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 16,
     },
     heroGoalHeading: {
-      fontSize: 20,
+      fontSize: 22,
       fontWeight: '800',
       color: '#FFFFFF',
       letterSpacing: -0.3,
+    },
+    heroGoalUnit: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: c.heroTextSecondary,
     },
     heroGoalSub: {
       fontSize: 13,

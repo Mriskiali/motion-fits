@@ -165,5 +165,9 @@
   "sound_preview_title": "Playing Audio Preview",
   "sound_mode_reminder": "If you cannot hear the audio, please ensure your device is not in silent or vibrate mode and media volume is turned on.",
   "sound_mode_reminder_short": "Ensure phone is not in silent mode for audio to play.",
-  "target_achieved": "Target achieved!"
+  "target_achieved": "Target achieved!",
+  "days_count": "Days",
+  "days_remaining": "days left",
+  "day_remaining": "day left",
+  "goal_reached": "completed"
 }
