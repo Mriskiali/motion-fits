@@ -3,6 +3,8 @@ import { useColorScheme as useNativeColorScheme, StyleSheet } from 'react-native
 import { useUserStore } from '@/store/useUserStore';
 import { theme, ThemeColors, ThemeMode } from '@/constants/theme';
 
+export type { ThemeColors, ThemeMode };
+
 /**
  * Hook to retrieve active ThemeColors tokens.
  */

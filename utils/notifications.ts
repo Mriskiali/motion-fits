@@ -1,4 +1,27 @@
 import { Platform } from 'react-native';
+import { useUserStore } from '@/store/useUserStore';
+
+function getNotificationStrings(langOverride?: 'en' | 'id') {
+  const lang = langOverride || useUserStore.getState().language || 'en';
+  if (lang === 'id') {
+    return {
+      restFinishedTitle: 'Waktu Istirahat Selesai!',
+      restFinishedBody: 'Yuk lanjut set berikutnya, gas terus!',
+      activeWorkoutTitle: (name: string) => `Latihan Berjalan: ${name || 'Latihan'}`,
+      activeWorkoutBody: 'Sesi latihan masih aktif. Ketuk untuk lanjut.',
+      dailyReminderTitle: 'Waktunya Latihan!',
+      dailyReminderBody: 'Yuk sempatkan latihan hari ini biar streak kamu tetap terjaga!',
+    };
+  }
+  return {
+    restFinishedTitle: 'Rest Time Finished!',
+    restFinishedBody: "Time for your next set. Let's crush it!",
+    activeWorkoutTitle: (name: string) => `Active Workout: ${name || 'Workout'}`,
+    activeWorkoutBody: 'Workout session in progress. Tap to resume.',
+    dailyReminderTitle: 'Workout Time!',
+    dailyReminderBody: 'Keep your streak going! Time to hit your workout goal today.',
+  };
+}
 
 let Notifications: typeof import('expo-notifications') | null = null;
 try {
@@ -31,12 +54,13 @@ export async function setupNotificationChannels() {
   if (!Notifications) return;
   if (Platform.OS === 'android') {
     try {
+      const isId = useUserStore.getState().language === 'id';
       // Clean up legacy channel if present on device
       await Notifications.deleteNotificationChannelAsync('workout-timer').catch(() => {});
 
       // Silent timer channel: allows HUD banner + vibration, but suppresses OS ringtone so custom audio can play cleanly
       await Notifications.setNotificationChannelAsync('workout-rest-timer-v2', {
-        name: 'Workout Rest Timer',
+        name: isId ? 'Timer Istirahat Latihan' : 'Workout Rest Timer',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 500, 250, 500],
         lightColor: '#3B82F6',
@@ -49,7 +73,7 @@ export async function setupNotificationChannels() {
       });
 
       await Notifications.setNotificationChannelAsync('workout-reminders', {
-        name: 'Daily Workout Reminders',
+        name: isId ? 'Pengingat Latihan Harian' : 'Daily Workout Reminders',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#3B82F6',
@@ -61,7 +85,7 @@ export async function setupNotificationChannels() {
       });
 
       await Notifications.setNotificationChannelAsync('active-workout-ongoing', {
-        name: 'Active Workout in Progress',
+        name: isId ? 'Sesi Latihan Berjalan' : 'Active Workout in Progress',
         importance: Notifications.AndroidImportance.LOW,
         enableLights: false,
         enableVibrate: false,
@@ -82,11 +106,12 @@ export async function showActiveWorkoutNotification(workoutName: string) {
   if (!Notifications) return;
   try {
     await setupNotificationChannels();
+    const strings = getNotificationStrings();
     await Notifications.scheduleNotificationAsync({
       identifier: ONGOING_WORKOUT_NOTIFICATION_ID,
       content: {
-        title: `Active Workout: ${workoutName || 'Workout'}`,
-        body: 'Workout session in progress. Tap to resume.',
+        title: strings.activeWorkoutTitle(workoutName),
+        body: strings.activeWorkoutBody,
         sticky: true, // Non-dismissible: cannot be swiped away until workout finishes
         autoDismiss: false,
         priority: Notifications.AndroidNotificationPriority.LOW,
@@ -130,10 +155,11 @@ export async function showRestTimerFinishedNotification() {
   if (!Notifications) return;
   try {
     await setupNotificationChannels();
+    const strings = getNotificationStrings();
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Rest Time Finished!',
-        body: 'Time for your next set. Stay strong!',
+        title: strings.restFinishedTitle,
+        body: strings.restFinishedBody,
         sound: false,
         priority: Notifications.AndroidNotificationPriority.MAX,
         vibrate: [0, 500, 250, 500],
@@ -151,10 +177,11 @@ export async function scheduleRestTimerNotification(seconds: number): Promise<st
   if (!Notifications || seconds <= 0) return null;
   try {
     await setupNotificationChannels();
+    const strings = getNotificationStrings();
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Rest Time Finished!',
-        body: 'Time for your next set. Stay strong!',
+        title: strings.restFinishedTitle,
+        body: strings.restFinishedBody,
         sound: false,
         priority: Notifications.AndroidNotificationPriority.MAX,
         data: { type: 'workout-timer' },
@@ -184,7 +211,7 @@ export async function cancelNotification(notificationId: string) {
 }
 
 // Schedule daily workout reminder at given time "HH:mm"
-export async function scheduleDailyReminder(timeString: string) {
+export async function scheduleDailyReminder(timeString: string, langOverride?: 'en' | 'id') {
   if (!Notifications) return;
   try {
     await setupNotificationChannels();
@@ -193,11 +220,12 @@ export async function scheduleDailyReminder(timeString: string) {
     const [hoursStr, minutesStr] = timeString.split(':');
     const hour = parseInt(hoursStr, 10) || 9;
     const minute = parseInt(minutesStr, 10) || 0;
+    const strings = getNotificationStrings(langOverride);
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Workout Time!',
-        body: 'Keep your streak going! Time to hit your workout goal today.',
+        title: strings.dailyReminderTitle,
+        body: strings.dailyReminderBody,
         sound: true,
         priority: Notifications.AndroidNotificationPriority.HIGH,
       },

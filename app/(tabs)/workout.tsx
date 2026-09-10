@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -15,13 +15,19 @@ import { id as idLocale } from 'date-fns/locale/id';
 import { MoreVertical, Plus, Calendar, X, Edit3, Trash2, Dumbbell, Play } from 'lucide-react-native';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
-import { ThemeColors } from '@/constants/theme';
+import { AppFonts } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
+import SpotlightGuideOverlay from '@/components/SpotlightGuideOverlay';
 
 export default function WorkoutScreen() {
   const router = useRouter();
+  const isTourActive = useOnboardingStore((state) => state.isTourActive);
+  const currentStep = useOnboardingStore((state) => state.currentStep);
+  const nextStep = useOnboardingStore((state) => state.nextStep);
+  const skipTour = useOnboardingStore((state) => state.skipTour);
   const templates = useWorkoutStore((state) => state.templates);
   const scheduledWorkouts = useWorkoutStore((state) => state.scheduledWorkouts);
   const scheduleWorkout = useWorkoutStore((state) => state.scheduleWorkout);
@@ -40,6 +46,12 @@ export default function WorkoutScreen() {
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
   const scheduledTemplateId = scheduledWorkouts[selectedDateStr];
   const scheduledTemplate = templates.find((t) => t.id === scheduledTemplateId);
+
+  useEffect(() => {
+    if (isTourActive && currentStep === 'workout_planner' && !scheduledTemplateId && templates.length > 0) {
+      scheduleWorkout(selectedDateStr, templates[0].id);
+    }
+  }, [isTourActive, currentStep, scheduledTemplateId, templates, selectedDateStr, scheduleWorkout]);
 
   const activeSession = useWorkoutStore((state) => state.activeSession);
 
@@ -216,11 +228,17 @@ export default function WorkoutScreen() {
             <TouchableOpacity
               style={[
                 styles.mainStartButton,
+                isTourActive && currentStep === 'workout_planner' && styles.mainStartButtonHighlight,
                 activeSession?.templateId === scheduledTemplate.id && {
                   backgroundColor: colors.successBadge,
                 },
               ]}
-              onPress={() => handleStartWorkout(scheduledTemplate.id)}
+              onPress={() => {
+                if (isTourActive && currentStep === 'workout_planner') {
+                  nextStep();
+                }
+                handleStartWorkout(scheduledTemplate.id);
+              }}
             >
               <Play size={18} color="#FFFFFF" fill="#FFFFFF" />
               <Text style={styles.mainStartButtonText}>
@@ -228,6 +246,11 @@ export default function WorkoutScreen() {
                   ? t('resume_workout')
                   : t('start_workout')}
               </Text>
+              {isTourActive && currentStep === 'workout_planner' && (
+                <View style={styles.tourButtonBadge}>
+                  <Text style={styles.tourButtonBadgeText}>👈 {t('onboarding_step2_tap_here')}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         ) : (
@@ -385,6 +408,26 @@ export default function WorkoutScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Interactive Onboarding Spotlight: Step 2 Workout Planner */}
+      {isTourActive && currentStep === 'workout_planner' && (
+        <SpotlightGuideOverlay
+          stepNumber={2}
+          totalSteps={5}
+          title={t('onboarding_step2_title')}
+          message={t('onboarding_step2_desc')}
+          nextLabel={t('onboarding_step2_btn')}
+          onNext={() => {
+            const targetId = scheduledTemplate?.id || templates[0]?.id;
+            if (targetId) {
+              nextStep();
+              handleStartWorkout(targetId);
+            }
+          }}
+          onSkip={skipTour}
+          position="top"
+        />
+      )}
     </View>
   );
 }
@@ -404,12 +447,14 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 20,
     },
     headerTitle: {
+      fontFamily: AppFonts.extraBold,
       fontSize: 28,
       fontWeight: '800',
       color: c.textPrimary,
       letterSpacing: -0.6,
     },
     headerSub: {
+      fontFamily: AppFonts.medium,
       fontSize: 14,
       color: c.textSecondary,
       fontWeight: '500',
@@ -446,6 +491,7 @@ const getStyles = (c: ThemeColors) =>
       gap: 6,
     },
     dayAbbr: {
+      fontFamily: AppFonts.semiBold,
       fontSize: 11,
       fontWeight: '600',
       color: c.textSecondary,
@@ -467,11 +513,13 @@ const getStyles = (c: ThemeColors) =>
       backgroundColor: c.dateBadgeSelected,
     },
     dayNumberText: {
+      fontFamily: AppFonts.bold,
       fontSize: 15,
       fontWeight: '700',
       color: c.textPrimary,
     },
     dayNumberTextSelected: {
+      fontFamily: AppFonts.extraBold,
       fontWeight: '800',
       color: c.dateTextSelected,
     },
@@ -486,6 +534,7 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 28,
     },
     sectionTitle: {
+      fontFamily: AppFonts.bold,
       fontSize: 18,
       fontWeight: '700',
       color: c.textPrimary,
@@ -539,6 +588,7 @@ const getStyles = (c: ThemeColors) =>
       justifyContent: 'center',
     },
     assignedTitle: {
+      fontFamily: AppFonts.extraBold,
       fontSize: 18,
       fontWeight: '800',
       color: c.textPrimary,
@@ -550,11 +600,13 @@ const getStyles = (c: ThemeColors) =>
       borderRadius: 10,
     },
     assignedSubtitle: {
+      fontFamily: AppFonts.medium,
       fontSize: 13,
       color: c.textSecondary,
       fontWeight: '500',
     },
     unassignedText: {
+      fontFamily: AppFonts.medium,
       color: c.textSecondary,
       marginBottom: 16,
       fontSize: 14,
@@ -570,6 +622,7 @@ const getStyles = (c: ThemeColors) =>
       gap: 6,
     },
     assignButtonText: {
+      fontFamily: AppFonts.extraBold,
       color: '#FFFFFF',
       fontSize: 14,
       fontWeight: '800',
@@ -582,6 +635,7 @@ const getStyles = (c: ThemeColors) =>
       paddingTop: 16,
     },
     inlinePickerTitle: {
+      fontFamily: AppFonts.bold,
       color: c.textSecondary,
       fontSize: 12,
       fontWeight: '700',
@@ -599,11 +653,13 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 8,
     },
     inlineTemplateName: {
+      fontFamily: AppFonts.bold,
       color: c.textPrimary,
       fontWeight: '700',
       fontSize: 15,
     },
     inlineTemplateSub: {
+      fontFamily: AppFonts.medium,
       color: c.textSecondary,
       fontSize: 12,
       marginTop: 2,
@@ -637,10 +693,38 @@ const getStyles = (c: ThemeColors) =>
       }),
     },
     mainStartButtonText: {
+      fontFamily: AppFonts.extraBold,
       color: '#FFFFFF',
       fontSize: 15,
       fontWeight: '800',
       letterSpacing: 0.3,
+    },
+    mainStartButtonHighlight: {
+      borderWidth: 2,
+      borderColor: '#F59E0B',
+      ...Platform.select({
+        ios: {
+          shadowColor: '#F59E0B',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.6,
+          shadowRadius: 10,
+        },
+        android: {
+          elevation: 6,
+        },
+      }),
+    },
+    tourButtonBadge: {
+      backgroundColor: '#FEF3C7',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    tourButtonBadgeText: {
+      fontFamily: AppFonts.bold,
+      color: '#B45309',
+      fontSize: 11,
+      fontWeight: '800',
     },
 
     // Templates Section
@@ -663,6 +747,7 @@ const getStyles = (c: ThemeColors) =>
       gap: 4,
     },
     addButtonText: {
+      fontFamily: AppFonts.bold,
       color: c.primaryAction,
       fontSize: 13,
       fontWeight: '700',
@@ -701,12 +786,14 @@ const getStyles = (c: ThemeColors) =>
       flex: 1,
     },
     templateName: {
+      fontFamily: AppFonts.bold,
       fontSize: 16,
       fontWeight: '700',
       color: c.textPrimary,
       marginBottom: 2,
     },
     templateSubtitle: {
+      fontFamily: AppFonts.medium,
       fontSize: 12,
       color: c.textSecondary,
       marginBottom: 4,
@@ -720,6 +807,7 @@ const getStyles = (c: ThemeColors) =>
       marginTop: 2,
     },
     exerciseBadgeText: {
+      fontFamily: AppFonts.semiBold,
       fontSize: 11,
       color: c.textSecondary,
       fontWeight: '600',

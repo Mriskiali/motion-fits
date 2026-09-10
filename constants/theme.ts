@@ -96,54 +96,62 @@ export const darkTheme: ThemeColors = {
 };
 
 export const warmLightTheme: ThemeColors = {
-  // Core Surfaces (Warm Wellness & Sage Tinted)
-  background: '#F4F6F2',
+  // Core Surfaces (Clean Bionic Athletic Light)
+  background: '#F8FAFC',
   cardSurface: '#FFFFFF',
-  surfaceHighlight: '#EAE5D9',
-  inputSurface: '#F1EFEA',
-  borderSubtle: '#E6E1D7',
+  surfaceHighlight: '#F1F5F9',
+  inputSurface: '#FFFFFF',
+  borderSubtle: '#E2E8F0',
 
-  // Actions & Brand
-  primaryAction: '#1B4D3E', // Forest Emerald Primary
-  accentLime: '#9EE837', // High Energy Lime
-  accentSecondary: '#1B4D3E',
-  successBadge: '#15803D',
-  danger: '#DC2626',
-  warning: '#D97706',
-  accent: '#4F46E5',
+  // Actions & Brand (Consistent Electric Blue & Athletic Accents)
+  primaryAction: '#3B82F6',
+  accentLime: '#16A34A',
+  accentSecondary: '#3B82F6',
+  successBadge: '#16A34A',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  accent: '#6366F1',
 
-  // Typography
-  textPrimary: '#111827',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
-  textPrimaryOnVolt: '#111827',
+  // Typography (Sharp Slate Hierarchy)
+  textPrimary: '#0F172A',
+  textSecondary: '#64748B',
+  textMuted: '#94A3B8',
+  textPrimaryOnVolt: '#0F172A',
 
   // Shadows & Elevation
-  shadowColor: '#1A2E20',
+  shadowColor: '#0F172A',
   shadowOpacity: 0.06,
-  shadowRadius: 12,
+  shadowRadius: 10,
   elevation: 2,
 
   // Components & Interactions
-  actionIconBg: 'rgba(27, 77, 62, 0.06)',
-  tabBar: 'rgba(255, 255, 255, 0.95)',
-  overlay: 'rgba(19, 42, 30, 0.4)',
-  dateBadgeSelected: '#1B4D3E',
+  actionIconBg: 'rgba(59, 130, 246, 0.08)',
+  tabBar: 'rgba(255, 255, 255, 0.98)',
+  overlay: 'rgba(15, 23, 42, 0.5)',
+  dateBadgeSelected: '#3B82F6',
   dateTextSelected: '#FFFFFF',
-  heroBackground: '#132A1E',
-  heroTextSecondary: '#A7F3D0',
+  heroBackground: '#1E293B',
+  heroTextSecondary: '#94A3B8',
 
   // Aliases for seamless backward compatibility
   card: '#FFFFFF',
-  border: '#E6E1D7',
-  primary: '#1B4D3E',
-  success: '#15803D',
-  text: '#111827',
+  border: '#E2E8F0',
+  primary: '#3B82F6',
+  success: '#16A34A',
+  text: '#0F172A',
 };
 
 export const theme = {
   dark: darkTheme,
   light: warmLightTheme,
+};
+
+export const AppFonts = {
+  regular: 'PlusJakartaSans-Regular',
+  medium: 'PlusJakartaSans-Medium',
+  semiBold: 'PlusJakartaSans-SemiBold',
+  bold: 'PlusJakartaSans-Bold',
+  extraBold: 'PlusJakartaSans-ExtraBold',
 };
 
 export type ThemeMode = 'dark' | 'light';

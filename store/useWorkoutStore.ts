@@ -114,7 +114,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       startSession: (templateId) =>
         set(() => ({
           activeSession: {
-            id: Date.now().toString(),
+            id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             templateId,
             date: new Date().toISOString(),
             duration: 0,

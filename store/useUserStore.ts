@@ -19,6 +19,7 @@ interface UserState {
   audioNotification: string;
   customAudioName: string;
   keepScreenAwake: boolean;
+  hasCompletedOnboarding: boolean;
   setName: (name: string) => void;
   setWeeklyGoal: (goal: number) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -27,6 +28,8 @@ interface UserState {
   setAutoStartTimer: (enabled: boolean) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setKeepScreenAwake: (enabled: boolean) => void;
+  setHasCompletedOnboarding: (completed: boolean) => void;
+  resetOnboarding: () => void;
   setRemindersEnabled: (enabled: boolean) => void;
   setReminderTime: (time: string) => void;
   setAudioNotification: (val: string, customName?: string) => void;
@@ -45,6 +48,7 @@ export const useUserStore = create<UserState>()(
       autoStartTimer: true,
       hapticsEnabled: true,
       keepScreenAwake: true,
+      hasCompletedOnboarding: false,
       streak: 0,
       lastWorkoutDate: null,
       remindersEnabled: false,
@@ -59,6 +63,8 @@ export const useUserStore = create<UserState>()(
       setAutoStartTimer: (enabled) => set({ autoStartTimer: enabled }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
       setKeepScreenAwake: (enabled) => set({ keepScreenAwake: enabled }),
+      setHasCompletedOnboarding: (completed) => set({ hasCompletedOnboarding: completed }),
+      resetOnboarding: () => set({ hasCompletedOnboarding: false }),
       setRemindersEnabled: (enabled) => set({ remindersEnabled: enabled }),
       setReminderTime: (time) => set({ reminderTime: time }),
       setAudioNotification: (val, customName) => set((state) => ({ audioNotification: val, customAudioName: customName || state.customAudioName })),

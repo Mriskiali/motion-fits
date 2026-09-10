@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MotionFit v2",
-    "slug": "workout-apps-v2",
+    "slug": "workout-apps",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

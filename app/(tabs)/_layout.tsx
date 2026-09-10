@@ -42,11 +42,13 @@ export default function TabLayout() {
           ],
           tabBarBackground: () => (
             <View style={[styles.blurContainer, { backgroundColor: pillBg }]}>
-              <BlurView
-                tint={isDark ? 'dark' : 'light'}
-                intensity={50}
-                style={StyleSheet.absoluteFill}
-              />
+              {Platform.OS === 'ios' && (
+                <BlurView
+                  tint={isDark ? 'dark' : 'light'}
+                  intensity={50}
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
             </View>
           ),
         }}

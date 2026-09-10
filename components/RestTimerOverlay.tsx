@@ -12,8 +12,22 @@ import {
   Vibration,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { Ionicons } from '@expo/vector-icons';
+import {
+  Timer,
+  X,
+  Play,
+  ChevronDown,
+  Edit3,
+  Plus,
+  Minus,
+  Sliders,
+  Sparkles,
+  Undo2,
+  FastForward,
+  Check,
+} from 'lucide-react-native';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useUserStore } from '@/store/useUserStore';
 import {
@@ -22,6 +36,7 @@ import {
   showRestTimerFinishedNotification,
 } from '@/utils/notifications';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 import {
   playTimerSound,
   triggerTimerFinishedVibration,
@@ -42,11 +57,17 @@ export default function RestTimerOverlay({
   onClose,
   onCancelSet,
 }: RestTimerOverlayProps) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const router = useRouter();
+  const isTourActive = useOnboardingStore((state) => state.isTourActive);
+  const currentStep = useOnboardingStore((state) => state.currentStep);
+  const nextStep = useOnboardingStore((state) => state.nextStep);
+  const completeTour = useOnboardingStore((state) => state.completeTour);
   const [timeLeft, setTimeLeft] = useState(initialTime);
   const [isConfiguring, setIsConfiguring] = useState(initialTime <= 0);
   const [selectedDuration, setSelectedDuration] = useState(60);
   const [isEditing, setIsEditing] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
   const [manualInput, setManualInput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const notificationIdRef = useRef<string | null>(null);
@@ -79,6 +100,7 @@ export default function RestTimerOverlay({
 
   useEffect(() => {
     if (visible) {
+      setIsMinimized(false);
       if (initialTime > 0) {
         targetEndTimeRef.current = Date.now() + initialTime * 1000;
         setTimeLeft(initialTime);
@@ -104,6 +126,7 @@ export default function RestTimerOverlay({
       setIsConfiguring(false);
       setIsRunning(false);
       setIsEditing(false);
+      setIsMinimized(false);
       if (notificationIdRef.current) cancelNotification(notificationIdRef.current);
     }
   }, [visible, initialTime]);
@@ -121,6 +144,7 @@ export default function RestTimerOverlay({
         notificationIdRef.current = null;
       }
       setIsRunning(false);
+      setIsMinimized(false);
       onClose();
       return;
     }
@@ -202,6 +226,7 @@ export default function RestTimerOverlay({
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (notificationIdRef.current) await cancelNotification(notificationIdRef.current);
     setIsRunning(false);
+    setIsMinimized(false);
     onClose();
   };
 
@@ -209,6 +234,7 @@ export default function RestTimerOverlay({
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (notificationIdRef.current) await cancelNotification(notificationIdRef.current);
     setIsRunning(false);
+    setIsMinimized(false);
     if (onCancelSet) onCancelSet();
   };
 
@@ -225,8 +251,9 @@ export default function RestTimerOverlay({
   const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
   const isDark = colors.background === '#0B0C0E';
-  const gradStart = isDark ? '#38BDF8' : '#1B4D3E';
-  const gradEnd = isDark ? '#818CF8' : '#22C55E';
+  const isWarning = timeLeft <= 3 && timeLeft > 0;
+  const gradStart = isWarning ? '#EF4444' : isDark ? '#38BDF8' : '#1B4D3E';
+  const gradEnd = isWarning ? '#F97316' : isDark ? '#818CF8' : '#22C55E';
   const ringTrackColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
 
   const parsedManual = parseInt(manualInput, 10);
@@ -236,8 +263,9 @@ export default function RestTimerOverlay({
   const previewFormatted = `${previewMinutes}:${previewSeconds.toString().padStart(2, '0')}`;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={styles.overlay}>
+    <>
+      <Modal visible={visible && !isMinimized} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.overlay}>
         <KeyboardAvoidingView
           style={styles.keyboardContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -249,7 +277,7 @@ export default function RestTimerOverlay({
                 {/* Popup Top Row */}
                 <View style={styles.popupHeaderRow}>
                   <View style={styles.popupBadge}>
-                    <Ionicons name="timer" size={15} color={colors.primaryAction} />
+                    <Timer size={15} color={colors.primaryAction} strokeWidth={2.2} />
                     <Text style={styles.popupBadgeText}>{t('rest_period').toUpperCase()}</Text>
                   </View>
                   <TouchableOpacity
@@ -257,7 +285,7 @@ export default function RestTimerOverlay({
                     onPress={handleCancelSet}
                     style={styles.popupCloseBtn}
                   >
-                    <Ionicons name="close" size={18} color={colors.textSecondary} />
+                    <X size={18} color={colors.textSecondary} strokeWidth={2.2} />
                   </TouchableOpacity>
                 </View>
 
@@ -345,7 +373,7 @@ export default function RestTimerOverlay({
                       startCustomTimer(activeChosenSeconds);
                     }}
                   >
-                    <Ionicons name="play" size={18} color="#FFFFFF" />
+                    <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
                     <Text style={styles.setupStartBtnText}>{t('start_rest')}</Text>
                   </TouchableOpacity>
                 </View>
@@ -353,14 +381,28 @@ export default function RestTimerOverlay({
             </View>
           ) : (
             <>
-              {/* Top Header Pill & Subtitle (during active timer) */}
-              <View style={styles.header}>
+              {/* Top Header Row with Minimize Button & Pill */}
+              <View style={styles.topControlRow}>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={styles.minimizeButton}
+                  onPress={() => {
+                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setIsMinimized(true);
+                  }}
+                >
+                  <ChevronDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
+                  <Text style={styles.minimizeButtonText}>{t('minimize')}</Text>
+                </TouchableOpacity>
+
                 <View style={styles.badgePill}>
-                  <View style={styles.pulseDot} />
+                  <View style={[styles.pulseDot, isWarning && { backgroundColor: '#EF4444' }]} />
                   <Text style={styles.badgeText}>{t('rest_period').toUpperCase()}</Text>
                 </View>
-                <Text style={styles.subtitle}>{t('catch_breath')}</Text>
+
+                <View style={{ width: 75 }} />
               </View>
+              <Text style={styles.subtitle}>{t('catch_breath')}</Text>
 
               {/* Hero Circular Progress Ring */}
               <View style={styles.heroSection}>
@@ -406,9 +448,11 @@ export default function RestTimerOverlay({
                       }}
                       style={styles.timerTouchTarget}
                     >
-                      <Text style={styles.timerDigits}>{formattedTime}</Text>
+                      <Text style={[styles.timerDigits, isWarning && styles.timerDigitsWarning]}>
+                        {formattedTime}
+                      </Text>
                       <View style={styles.editBadge}>
-                        <Ionicons name="pencil-sharp" size={12} color={colors.textSecondary} />
+                        <Edit3 size={12} color={colors.textSecondary} strokeWidth={2} />
                         <Text style={styles.editBadgeText}>{t('edit')}</Text>
                       </View>
                     </TouchableOpacity>
@@ -423,7 +467,7 @@ export default function RestTimerOverlay({
                   style={styles.chipButton}
                   onPress={() => adjustTime(-15)}
                 >
-                  <Ionicons name="remove" size={16} color={colors.textPrimary} />
+                  <Minus size={16} color={colors.textPrimary} strokeWidth={2.2} />
                   <Text style={styles.chipText}>15{t('seconds_short')}</Text>
                 </TouchableOpacity>
 
@@ -432,7 +476,7 @@ export default function RestTimerOverlay({
                   style={styles.chipButton}
                   onPress={() => adjustTime(15)}
                 >
-                  <Ionicons name="add" size={16} color={colors.textPrimary} />
+                  <Plus size={16} color={colors.textPrimary} strokeWidth={2.2} />
                   <Text style={styles.chipText}>15{t('seconds_short')}</Text>
                 </TouchableOpacity>
 
@@ -441,7 +485,7 @@ export default function RestTimerOverlay({
                   style={styles.chipButton}
                   onPress={() => adjustTime(30)}
                 >
-                  <Ionicons name="add" size={16} color={colors.textPrimary} />
+                  <Plus size={16} color={colors.textPrimary} strokeWidth={2.2} />
                   <Text style={styles.chipText}>30{t('seconds_short')}</Text>
                 </TouchableOpacity>
 
@@ -453,10 +497,40 @@ export default function RestTimerOverlay({
                     setIsEditing(true);
                   }}
                 >
-                  <Ionicons name="options-outline" size={16} color={colors.textPrimary} />
+                  <Sliders size={16} color={colors.textPrimary} strokeWidth={2.2} />
                   <Text style={styles.chipText}>{t('custom')}</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Tour Step 4: Observing Rest Timer & Next to History */}
+              {isTourActive && currentStep === 'rest_timer' && (
+                <View style={styles.tourGuideCard}>
+                  <View style={styles.tourGuideHeader}>
+                    <View style={styles.tourGuideBadge}>
+                      <Sparkles size={13} color="#F59E0B" />
+                      <Text style={styles.tourGuideBadgeText}>
+                        {language === 'id' ? 'Langkah 4 dari 5' : 'Step 4 of 5'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.tourGuideTitle}>{t('onboarding_step4_title')}</Text>
+                  <Text style={styles.tourGuideDesc}>{t('onboarding_step4_desc')}</Text>
+                  <TouchableOpacity
+                    style={styles.tourFinishBtn}
+                    onPress={() => {
+                      if (hapticsEnabled) {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }
+                      onClose();
+                      nextStep();
+                      router.push('/(tabs)/history');
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.tourFinishBtnText}>{t('onboarding_step4_btn')}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Bottom Action Dock */}
               <View style={styles.actionDock}>
@@ -466,7 +540,7 @@ export default function RestTimerOverlay({
                     style={styles.undoButton}
                     onPress={handleCancelSet}
                   >
-                    <Ionicons name="arrow-undo-outline" size={18} color={colors.danger} />
+                    <Undo2 size={18} color={colors.danger} strokeWidth={2.2} />
                     <Text style={styles.undoButtonText}>{t('undo_last_set')}</Text>
                   </TouchableOpacity>
                 )}
@@ -477,7 +551,7 @@ export default function RestTimerOverlay({
                   onPress={handleSkip}
                 >
                   <Text style={styles.skipButtonText}>{t('skip')}</Text>
-                  <Ionicons name="play-forward" size={18} color="#FFFFFF" />
+                  <FastForward size={18} color="#FFFFFF" strokeWidth={2.2} />
                 </TouchableOpacity>
               </View>
             </>
@@ -501,7 +575,7 @@ export default function RestTimerOverlay({
                       onPress={() => setIsEditing(false)}
                       style={styles.sheetCloseBtn}
                     >
-                      <Ionicons name="close" size={20} color={colors.textSecondary} />
+                      <X size={20} color={colors.textSecondary} strokeWidth={2.2} />
                     </TouchableOpacity>
                   </View>
 
@@ -547,10 +621,10 @@ export default function RestTimerOverlay({
                       style={styles.sheetApplyButton}
                       onPress={handleManualApplyInModal}
                     >
-                      <Ionicons
-                        name="checkmark"
-                        size={20}
+                      <Check
+                        size={18}
                         color="#FFFFFF"
+                        strokeWidth={2.5}
                       />
                       <Text style={styles.sheetApplyText}>{t('save')}</Text>
                     </TouchableOpacity>
@@ -562,6 +636,87 @@ export default function RestTimerOverlay({
         </KeyboardAvoidingView>
       </View>
     </Modal>
+
+    {visible && isMinimized && (
+      <View style={styles.floatingMiniBarWrapper} pointerEvents="box-none">
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={styles.floatingMiniBar}
+          onPress={() => {
+            if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setIsMinimized(false);
+          }}
+        >
+          {/* Left: Mini Ring & Digits */}
+          <View style={styles.miniBarLeft}>
+            <View style={styles.miniRingWrapper}>
+              <Svg width={38} height={38} viewBox="0 0 38 38">
+                <Circle
+                  cx={19}
+                  cy={19}
+                  r={15}
+                  stroke={ringTrackColor}
+                  strokeWidth={3.5}
+                  fill="none"
+                />
+                <Circle
+                  cx={19}
+                  cy={19}
+                  r={15}
+                  stroke={isWarning ? '#EF4444' : colors.primaryAction}
+                  strokeWidth={3.5}
+                  strokeDasharray={`${2 * Math.PI * 15}`}
+                  strokeDashoffset={`${2 * Math.PI * 15 * (1 - Math.min(1, Math.max(0, progress)))}`}
+                  strokeLinecap="round"
+                  fill="none"
+                  transform="rotate(-90 19 19)"
+                />
+              </Svg>
+              <Timer
+                size={15}
+                color={isWarning ? '#EF4444' : colors.primaryAction}
+                style={styles.miniRingIcon}
+                strokeWidth={2}
+              />
+            </View>
+            <View style={styles.miniBarTextCol}>
+              <Text style={styles.miniBarLabel}>{t('rest_period')}</Text>
+              <Text style={[styles.miniBarDigits, isWarning && styles.timerDigitsWarning]}>
+                {formattedTime}
+              </Text>
+            </View>
+          </View>
+
+          {/* Right: +30s and Skip buttons */}
+          <View style={styles.miniBarActions}>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={styles.miniBarPlusBtn}
+              onPress={(e) => {
+                e.stopPropagation();
+                adjustTime(30);
+              }}
+            >
+              <Plus size={14} color={colors.textPrimary} strokeWidth={2.2} />
+              <Text style={styles.miniBarPlusText}>30{t('seconds_short')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.miniBarSkipBtn}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleSkip();
+              }}
+            >
+              <Text style={styles.miniBarSkipText}>{t('skip')}</Text>
+              <FastForward size={13} color="#FFFFFF" strokeWidth={2.2} />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </View>
+    )}
+  </>
   );
 }
 
@@ -1020,6 +1175,194 @@ const getStyles = (c: any) =>
       fontWeight: '800',
       color: '#FFFFFF',
       letterSpacing: 0.5,
+    },
+    topControlRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      width: '100%',
+      marginTop: 4,
+      marginBottom: 6,
+    },
+    minimizeButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: c.cardSurface,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    minimizeButtonText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    timerDigitsWarning: {
+      color: '#EF4444',
+    },
+    floatingMiniBarWrapper: {
+      position: 'absolute',
+      bottom: 110,
+      left: 16,
+      right: 16,
+      zIndex: 9999,
+      elevation: 10,
+    },
+    floatingMiniBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: c.background === '#0B0C0E' ? '#161B22' : '#FFFFFF',
+      borderRadius: 18,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderWidth: 1.5,
+      borderColor: c.background === '#0B0C0E' ? 'rgba(56, 189, 248, 0.35)' : 'rgba(37, 99, 235, 0.25)',
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.35,
+          shadowRadius: 12,
+        },
+        android: {
+          elevation: 12,
+        },
+      }),
+    },
+    miniBarLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    miniRingWrapper: {
+      width: 38,
+      height: 38,
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+    },
+    miniRingIcon: {
+      position: 'absolute',
+    },
+    miniBarTextCol: {
+      justifyContent: 'center',
+    },
+    miniBarLabel: {
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      color: c.textSecondary,
+    },
+    miniBarDigits: {
+      fontSize: 20,
+      fontWeight: '900',
+      fontVariant: ['tabular-nums'],
+      color: c.textPrimary,
+      letterSpacing: -0.5,
+    },
+    miniBarActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    miniBarPlusBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      backgroundColor: c.cardSurface,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    miniBarPlusText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    miniBarSkipBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: c.primaryAction,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+    },
+    miniBarSkipText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#FFFFFF',
+    },
+    tourGuideCard: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 18,
+      borderWidth: 1.5,
+      borderColor: '#F59E0B',
+      padding: 14,
+      marginTop: 14,
+      marginBottom: 6,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#F59E0B',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+        },
+        android: {
+          elevation: 4,
+        },
+      }),
+    },
+    tourGuideHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 6,
+    },
+    tourGuideBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+    },
+    tourGuideBadgeText: {
+      color: '#F59E0B',
+      fontSize: 11,
+      fontWeight: '800',
+    },
+    tourGuideTitle: {
+      color: c.textPrimary,
+      fontSize: 15,
+      fontWeight: '800',
+      marginBottom: 4,
+    },
+    tourGuideDesc: {
+      color: c.textSecondary,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: '500',
+      marginBottom: 10,
+    },
+    tourFinishBtn: {
+      backgroundColor: '#F59E0B',
+      borderRadius: 12,
+      paddingVertical: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tourFinishBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '800',
     },
   });
 

@@ -1,9 +1,11 @@
-import { ThemeColors } from "@/constants/theme";
-import { useThemeColors } from "@/hooks/useThemeColors";
+import { useRouter } from "expo-router";
+import { AppFonts } from "@/constants/theme";
+import { useThemeColors, ThemeColors } from "@/hooks/useThemeColors";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAlertStore } from "@/store/useAlertStore";
 import { useUserStore } from "@/store/useUserStore";
 import { useWorkoutStore } from "@/store/useWorkoutStore";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
 import {
   cancelAllReminders,
   requestPermissionsAsync,
@@ -23,6 +25,7 @@ import {
   Activity,
   Bell,
   Clock,
+  Compass,
   Download,
   Globe,
   Info,
@@ -80,11 +83,32 @@ export default function SettingsScreen() {
     audioNotification,
     setAudioNotification,
     customAudioName,
+    resetOnboarding,
   } = useUserStore();
+  const router = useRouter();
+  const startTour = useOnboardingStore((state) => state.startTour);
   const { showAlert } = useAlertStore();
   const colors = useThemeColors();
   const styles = getStyles(colors);
   const { t } = useTranslation();
+
+  const handleReplayTutorial = () => {
+    showAlert(
+      t("repeat_tutorial_title"),
+      t("repeat_tutorial_desc"),
+      [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("start_tutorial"),
+          onPress: () => {
+            resetOnboarding();
+            useOnboardingStore.getState().setStep('welcome');
+            router.push("/(tabs)");
+          },
+        },
+      ]
+    );
+  };
 
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -123,7 +147,7 @@ export default function SettingsScreen() {
         setRemindersEnabled(false);
         showAlert(
           t("error"),
-          "Please grant notification permission in system settings to enable reminders.",
+          t("grant_notification_permission"),
           [{ text: t("ok") }],
         );
       }
@@ -374,6 +398,9 @@ export default function SettingsScreen() {
                     if (hapticsEnabled)
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setLanguage("id");
+                    if (remindersEnabled) {
+                      scheduleDailyReminder(reminderTime, "id");
+                    }
                   }}
                 >
                   <Text
@@ -394,6 +421,9 @@ export default function SettingsScreen() {
                     if (hapticsEnabled)
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setLanguage("en");
+                    if (remindersEnabled) {
+                      scheduleDailyReminder(reminderTime, "en");
+                    }
                   }}
                 >
                   <Text
@@ -523,7 +553,7 @@ export default function SettingsScreen() {
                   <TextInput
                     style={styles.manualInput}
                     keyboardType="numeric"
-                    placeholder="e.g. 90"
+                    placeholder={t("rest_timer_placeholder") || "90"}
                     placeholderTextColor={colors.textMuted}
                     value={String(defaultRestTimer)}
                     onChangeText={(val) => {
@@ -770,6 +800,21 @@ export default function SettingsScreen() {
                 <Text style={styles.settingText}>{t("import_data")}</Text>
               </View>
             </TouchableOpacity>
+
+            <View style={styles.settingSeparator} />
+
+            {/* Replay App Guide & Interactive Tutorial */}
+            <TouchableOpacity style={styles.settingItem} onPress={handleReplayTutorial}>
+              <View style={styles.settingItemLeft}>
+                <View style={[styles.iconBox, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                  <Compass color={colors.primaryAction} size={18} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingText}>{t("app_guide")}</Text>
+                  <Text style={styles.settingSubtext}>{t("app_guide_desc")}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -794,12 +839,14 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 20,
     },
     headerTitle: {
+      fontFamily: AppFonts.extraBold,
       fontSize: 28,
       fontWeight: "800",
       color: c.textPrimary,
       letterSpacing: -0.6,
     },
     headerSub: {
+      fontFamily: AppFonts.medium,
       fontSize: 14,
       color: c.textSecondary,
       fontWeight: "500",
@@ -809,6 +856,7 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 24,
     },
     sectionTitle: {
+      fontFamily: AppFonts.bold,
       fontSize: 18,
       fontWeight: "700",
       color: c.textPrimary,
@@ -842,20 +890,22 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 18,
     },
     goalIconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
+      width: 44,
+      height: 44,
+      borderRadius: 14,
       backgroundColor: c.surfaceHighlight,
       alignItems: "center",
       justifyContent: "center",
     },
     goalCardTitle: {
+      fontFamily: AppFonts.bold,
       fontSize: 16,
       fontWeight: "700",
       color: c.textPrimary,
       marginBottom: 2,
     },
     cardDescription: {
+      fontFamily: AppFonts.medium,
       color: c.textSecondary,
       fontSize: 12,
       fontWeight: "500",
@@ -885,12 +935,14 @@ const getStyles = (c: ThemeColors) =>
       minWidth: 110,
     },
     stepperValue: {
+      fontFamily: AppFonts.extraBold,
       fontSize: 32,
       fontWeight: "800",
       color: c.textPrimary,
       letterSpacing: -0.5,
     },
     stepperLabel: {
+      fontFamily: AppFonts.semiBold,
       color: c.textSecondary,
       fontSize: 12,
       fontWeight: "600",
@@ -946,9 +998,17 @@ const getStyles = (c: ThemeColors) =>
       backgroundColor: c.surfaceHighlight,
     },
     settingText: {
+      fontFamily: AppFonts.semiBold,
       color: c.textPrimary,
       fontSize: 15,
       fontWeight: "600",
+    },
+    settingSubtext: {
+      fontFamily: AppFonts.medium,
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: "500",
+      marginTop: 2,
     },
     settingSeparator: {
       height: 1,
@@ -956,6 +1016,7 @@ const getStyles = (c: ThemeColors) =>
       marginLeft: 66,
     },
     timeValueText: {
+      fontFamily: AppFonts.bold,
       color: c.primaryAction,
       fontSize: 15,
       fontWeight: "700",
@@ -995,11 +1056,13 @@ const getStyles = (c: ThemeColors) =>
       }),
     },
     segmentText: {
+      fontFamily: AppFonts.semiBold,
       color: c.textSecondary,
       fontSize: 12,
-      fontWeight: "700",
+      fontWeight: "600",
     },
     segmentTextActive: {
+      fontFamily: AppFonts.bold,
       color: c.textPrimary,
       fontWeight: "800",
     },

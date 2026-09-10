@@ -8,23 +8,39 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import {
+  Flame,
+  Dumbbell,
+  Clock,
+  CheckCheck,
+  Timer,
+  CheckCircle2,
+  Plus,
+  ChevronRight,
+} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { format, startOfWeek, addDays, isSameDay, subDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale/id';
 import { useUserStore } from '@/store/useUserStore';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
-import { ThemeColors } from '@/constants/theme';
+import { AppFonts } from '@/constants/theme';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
+import SpotlightGuideOverlay from '@/components/SpotlightGuideOverlay';
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const isTourActive = useOnboardingStore((state) => state.isTourActive);
+  const currentStep = useOnboardingStore((state) => state.currentStep);
+  const nextStep = useOnboardingStore((state) => state.nextStep);
+  const skipTour = useOnboardingStore((state) => state.skipTour);
   const streak = useUserStore((state) => state.streak);
   const weeklyGoal = useUserStore((state) => state.weeklyGoal);
   const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
   const sessions = useWorkoutStore((state) => state.sessions);
   const templates = useWorkoutStore((state) => state.templates);
+  const scheduledWorkouts = useWorkoutStore((state) => state.scheduledWorkouts);
   const colors = useThemeColors();
   const styles = getStyles(colors);
   const { t, language } = useTranslation();
@@ -91,7 +107,7 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Header (Clean Greeting & Full Date, No Month Button, No Avatar) */}
+        {/* 1. Header (Clean Greeting & Full Date) */}
         <View style={styles.headerBar}>
           <Text style={styles.greetingTitle}>{getGreeting()}</Text>
           <Text style={styles.dateSubtitle}>
@@ -106,6 +122,10 @@ export default function DashboardScreen() {
           {weekDays.map((date, idx) => {
             const isSelected = isSameDay(date, selectedDate);
             const isCurrentToday = isSameDay(date, new Date());
+            const dateStr = format(date, 'yyyy-MM-dd');
+            const hasWorkout = !!scheduledWorkouts[dateStr] || sessions.some(
+              (s) => format(new Date(s.date), 'yyyy-MM-dd') === dateStr
+            );
             return (
               <Pressable
                 key={idx}
@@ -135,6 +155,13 @@ export default function DashboardScreen() {
                     {format(date, 'd')}
                   </Text>
                 </View>
+                <View
+                  style={[
+                    styles.dot,
+                    hasWorkout && { backgroundColor: isSelected ? colors.dateBadgeSelected : colors.primaryAction },
+                    !hasWorkout && { backgroundColor: 'transparent' },
+                  ]}
+                />
               </Pressable>
             );
           })}
@@ -153,7 +180,7 @@ export default function DashboardScreen() {
 
             {streak > 0 && (
               <View style={styles.streakBadge}>
-                <Ionicons name="flame" size={16} color={colors.warning} />
+                <Flame size={15} color={colors.warning} />
                 <Text style={styles.streakText}>
                   {streak} {t('day_streak')}
                 </Text>
@@ -191,24 +218,12 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.bentoGrid}>
-          {/* Tile 1: Workouts This Week */}
-          <View style={styles.bentoTile}>
-            <View style={styles.bentoHeader}>
-              <Text style={styles.bentoCategory}>{t('this_week')}</Text>
-              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
-                <Ionicons name="barbell-outline" size={16} color="#3B82F6" />
-              </View>
-            </View>
-            <Text style={styles.bentoValue}>{thisWeekSessionsCount}</Text>
-            <Text style={styles.bentoSubtext}>/ {weeklyGoal} {t('days_per_week')}</Text>
-          </View>
-
-          {/* Tile 2: Active Training Time This Week */}
-          <View style={styles.bentoTile}>
+          {/* Tile 1: Active Training Time This Week (Wide Card) */}
+          <View style={[styles.bentoTile, styles.bentoTileWide]}>
             <View style={styles.bentoHeader}>
               <Text style={styles.bentoCategory}>{t('active_time')}</Text>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                <Ionicons name="time-outline" size={16} color="#F59E0B" />
+                <Clock size={18} color="#F59E0B" strokeWidth={2.2} />
               </View>
             </View>
             <Text style={styles.bentoValue}>
@@ -217,24 +232,24 @@ export default function DashboardScreen() {
             <Text style={styles.bentoSubtext}>{t('this_week')}</Text>
           </View>
 
-          {/* Tile 3: Total Sets This Week */}
+          {/* Tile 2: Total Sets This Week */}
           <View style={styles.bentoTile}>
             <View style={styles.bentoHeader}>
               <Text style={styles.bentoCategory}>{t('sets')}</Text>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(34, 197, 94, 0.12)' }]}>
-                <Ionicons name="checkmark-done-outline" size={16} color="#22C55E" />
+                <CheckCheck size={16} color="#22C55E" strokeWidth={2.2} />
               </View>
             </View>
             <Text style={styles.bentoValue}>{thisWeekSetsCount}</Text>
             <Text style={styles.bentoSubtext}>{t('total_sets_completed')}</Text>
           </View>
 
-          {/* Tile 4: Avg Duration Per Session This Week */}
+          {/* Tile 3: Avg Duration Per Session This Week */}
           <View style={styles.bentoTile}>
             <View style={styles.bentoHeader}>
               <Text style={styles.bentoCategory}>{t('avg_per_session')}</Text>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
-                <Ionicons name="timer-outline" size={16} color="#6366F1" />
+                <Timer size={16} color="#6366F1" strokeWidth={2.2} />
               </View>
             </View>
             <Text style={styles.bentoValue}>
@@ -250,7 +265,7 @@ export default function DashboardScreen() {
           {lastSession ? (
             <View style={styles.activityCard}>
               <View style={[styles.activityIconBox, { backgroundColor: 'rgba(34, 197, 94, 0.12)' }]}>
-                <Ionicons name="checkmark-circle" size={22} color={colors.successBadge} />
+                <CheckCircle2 size={22} color={colors.successBadge} strokeWidth={2} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.activityTitle}>
@@ -262,10 +277,11 @@ export default function DashboardScreen() {
                   {lastSession.completedExercises?.reduce((a, b) => a + (b.completedSets?.length || 0), 0) || 0} {t('set')}
                 </Text>
               </View>
+              <ChevronRight size={18} color={colors.textMuted} />
             </View>
           ) : (
             <View style={styles.emptyCard}>
-              <Ionicons name="barbell-outline" size={28} color={colors.textMuted} />
+              <Dumbbell size={28} color={colors.textMuted} strokeWidth={1.75} />
               <Text style={styles.emptyTitle}>{t('no_workouts_yet')}</Text>
               <Text style={styles.emptySub}>{t('tap_add_routine')}</Text>
             </View>
@@ -281,13 +297,30 @@ export default function DashboardScreen() {
           ]}
         >
           <View style={styles.plusIconWrapper}>
-            <Ionicons name="add" size={22} color="#FFFFFF" />
+            <Plus size={18} color="#FFFFFF" strokeWidth={2.5} />
           </View>
           <Text style={styles.startWorkoutButtonText}>{t('start_workout')}</Text>
         </Pressable>
 
         <View style={{ height: 110 }} />
       </ScrollView>
+
+      {/* Interactive Onboarding: Step 1 Dashboard */}
+      {isTourActive && currentStep === 'dashboard_overview' && (
+        <SpotlightGuideOverlay
+          stepNumber={1}
+          totalSteps={5}
+          title={t('onboarding_step1_title')}
+          message={t('onboarding_step1_desc')}
+          nextLabel={t('onboarding_step1_btn')}
+          onNext={() => {
+            nextStep();
+            router.push('/(tabs)/workout');
+          }}
+          onSkip={skipTour}
+          position="top"
+        />
+      )}
     </View>
   );
 }
@@ -309,12 +342,14 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 20,
     },
     greetingTitle: {
+      fontFamily: AppFonts.extraBold,
       fontSize: 28,
       fontWeight: '800',
       color: c.textPrimary,
       letterSpacing: -0.6,
     },
     dateSubtitle: {
+      fontFamily: AppFonts.medium,
       fontSize: 14,
       color: c.textSecondary,
       fontWeight: '500',
@@ -330,7 +365,7 @@ const getStyles = (c: ThemeColors) =>
       borderRadius: 24,
       paddingVertical: 14,
       paddingHorizontal: 8,
-      marginBottom: 20,
+      marginBottom: 24,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       ...Platform.select({
@@ -351,6 +386,7 @@ const getStyles = (c: ThemeColors) =>
       gap: 6,
     },
     dayAbbr: {
+      fontFamily: AppFonts.semiBold,
       fontSize: 11,
       fontWeight: '600',
       color: c.textSecondary,
@@ -372,13 +408,20 @@ const getStyles = (c: ThemeColors) =>
       backgroundColor: c.dateBadgeSelected,
     },
     dayNumberText: {
+      fontFamily: AppFonts.bold,
       fontSize: 15,
       fontWeight: '700',
       color: c.textPrimary,
     },
     dayNumberTextSelected: {
+      fontFamily: AppFonts.extraBold,
       fontWeight: '800',
       color: c.dateTextSelected,
+    },
+    dot: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
     },
 
     // Hero Goal Card
@@ -397,17 +440,20 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 16,
     },
     heroGoalHeading: {
+      fontFamily: AppFonts.extraBold,
       fontSize: 22,
       fontWeight: '800',
       color: '#FFFFFF',
       letterSpacing: -0.3,
     },
     heroGoalUnit: {
+      fontFamily: AppFonts.semiBold,
       fontSize: 16,
       fontWeight: '600',
       color: c.heroTextSecondary,
     },
     heroGoalSub: {
+      fontFamily: AppFonts.medium,
       fontSize: 13,
       color: c.heroTextSecondary,
       fontWeight: '500',
@@ -416,13 +462,14 @@ const getStyles = (c: ThemeColors) =>
     streakBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: 5,
       backgroundColor: 'rgba(255, 255, 255, 0.1)',
       paddingHorizontal: 10,
       paddingVertical: 5,
       borderRadius: 20,
     },
     streakText: {
+      fontFamily: AppFonts.bold,
       fontSize: 12,
       fontWeight: '700',
       color: '#FFFFFF',
@@ -444,11 +491,13 @@ const getStyles = (c: ThemeColors) =>
       alignItems: 'center',
     },
     heroProgressLabel: {
+      fontFamily: AppFonts.semiBold,
       fontSize: 12,
       fontWeight: '600',
       color: c.accentLime,
     },
     heroTargetLabel: {
+      fontFamily: AppFonts.medium,
       fontSize: 12,
       fontWeight: '500',
       color: c.heroTextSecondary,
@@ -462,6 +511,7 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 20,
     },
     sectionTitle: {
+      fontFamily: AppFonts.bold,
       fontSize: 18,
       fontWeight: '700',
       color: c.textPrimary,
@@ -496,6 +546,9 @@ const getStyles = (c: ThemeColors) =>
         },
       }),
     },
+    bentoTileWide: {
+      width: '100%',
+    },
     bentoHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -503,6 +556,7 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 8,
     },
     bentoCategory: {
+      fontFamily: AppFonts.bold,
       fontSize: 11,
       fontWeight: '700',
       color: c.textSecondary,
@@ -511,13 +565,14 @@ const getStyles = (c: ThemeColors) =>
       marginRight: 4,
     },
     bentoIconBadge: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
+      width: 30,
+      height: 30,
+      borderRadius: 10,
       alignItems: 'center',
       justifyContent: 'center',
     },
     bentoValue: {
+      fontFamily: AppFonts.extraBold,
       fontSize: 24,
       fontWeight: '800',
       color: c.textPrimary,
@@ -525,11 +580,13 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 4,
     },
     bentoUnit: {
+      fontFamily: AppFonts.semiBold,
       fontSize: 14,
       fontWeight: '600',
       color: c.textSecondary,
     },
     bentoSubtext: {
+      fontFamily: AppFonts.medium,
       fontSize: 12,
       fontWeight: '500',
       color: c.textMuted,
@@ -540,7 +597,7 @@ const getStyles = (c: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: c.cardSurface,
-      borderRadius: 18,
+      borderRadius: 20,
       padding: 16,
       borderWidth: 1,
       borderColor: c.borderSubtle,
@@ -560,18 +617,20 @@ const getStyles = (c: ThemeColors) =>
     activityIconBox: {
       width: 44,
       height: 44,
-      borderRadius: 12,
+      borderRadius: 14,
       backgroundColor: c.surfaceHighlight,
       alignItems: 'center',
       justifyContent: 'center',
     },
     activityTitle: {
+      fontFamily: AppFonts.bold,
       fontSize: 16,
       fontWeight: '700',
       color: c.textPrimary,
       marginBottom: 2,
     },
     activitySub: {
+      fontFamily: AppFonts.medium,
       fontSize: 12,
       color: c.textSecondary,
       fontWeight: '500',
@@ -580,19 +639,21 @@ const getStyles = (c: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: c.cardSurface,
-      borderRadius: 18,
+      borderRadius: 20,
       padding: 24,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       borderStyle: 'dashed',
     },
     emptyTitle: {
+      fontFamily: AppFonts.semiBold,
       fontSize: 15,
       fontWeight: '600',
       color: c.textPrimary,
       marginTop: 8,
     },
     emptySub: {
+      fontFamily: AppFonts.medium,
       fontSize: 12,
       color: c.textSecondary,
       marginTop: 2,
@@ -606,7 +667,7 @@ const getStyles = (c: ThemeColors) =>
       height: 56,
       backgroundColor: c.primaryAction,
       borderRadius: 20,
-      gap: 8,
+      gap: 10,
       ...Platform.select({
         ios: {
           shadowColor: c.primaryAction,
@@ -628,6 +689,7 @@ const getStyles = (c: ThemeColors) =>
       justifyContent: 'center',
     },
     startWorkoutButtonText: {
+      fontFamily: AppFonts.extraBold,
       fontSize: 16,
       fontWeight: '800',
       color: '#FFFFFF',

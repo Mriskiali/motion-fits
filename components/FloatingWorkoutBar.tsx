@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, Pressable, Platform } from 'react-native';
+import Animated, {
+  SlideInDown,
+  SlideOutDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useRouter, usePathname } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Dumbbell, Clock, ChevronRight } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
+import { AppFonts } from '@/constants/theme';
 
 export default function FloatingWorkoutBar() {
   const router = useRouter();
@@ -23,6 +33,34 @@ export default function FloatingWorkoutBar() {
   const styles = getStyles(colors);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Pulse animation shared value
+  const pulseOpacity = useSharedValue(1);
+  const pulseScale = useSharedValue(1);
+
+  useEffect(() => {
+    pulseOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.4, { duration: 800 }),
+        withTiming(1, { duration: 800 })
+      ),
+      -1,
+      true
+    );
+    pulseScale.value = withRepeat(
+      withSequence(
+        withTiming(1.2, { duration: 800 }),
+        withTiming(1, { duration: 800 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedPulseStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+    transform: [{ scale: pulseScale.value }],
+  }));
 
   // Live Timer based on activeSession.startTime timestamp
   useEffect(() => {
@@ -78,7 +116,12 @@ export default function FloatingWorkoutBar() {
   };
 
   return (
-    <View style={styles.wrapper} pointerEvents="box-none">
+    <Animated.View
+      entering={SlideInDown.springify().damping(18).stiffness(140)}
+      exiting={SlideOutDown.duration(200)}
+      style={styles.wrapper}
+      pointerEvents="box-none"
+    >
       <Pressable
         onPress={handleResume}
         style={({ pressed }) => [
@@ -88,8 +131,8 @@ export default function FloatingWorkoutBar() {
       >
         {/* Left: Animated pulse badge & workout icon */}
         <View style={styles.iconBox}>
-          <View style={styles.pulseDot} />
-          <Ionicons name="barbell" size={20} color={colors.primaryAction} />
+          <Animated.View style={[styles.pulseDot, animatedPulseStyle]} />
+          <Dumbbell size={20} color={colors.primaryAction} strokeWidth={2.2} />
         </View>
 
         {/* Middle: Workout info & live stats */}
@@ -99,7 +142,7 @@ export default function FloatingWorkoutBar() {
           </Text>
           <View style={styles.metaRow}>
             <View style={styles.timerBadge}>
-              <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
+              <Clock size={12} color={colors.textSecondary} strokeWidth={2} />
               <Text style={styles.metaText}>{formatTime(elapsedSeconds)}</Text>
             </View>
             <Text style={styles.dotSeparator}>•</Text>
@@ -112,10 +155,10 @@ export default function FloatingWorkoutBar() {
         {/* Right: Resume button badge */}
         <View style={styles.resumeButton}>
           <Text style={styles.resumeButtonText}>{t('resume')}</Text>
-          <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
+          <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.5} />
         </View>
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 
