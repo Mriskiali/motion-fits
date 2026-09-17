@@ -18,6 +18,8 @@ interface UserState {
   reminderTime: string; // ISO time or 'HH:mm'
   audioNotification: string;
   customAudioName: string;
+  customAudioDuration: number; // Duration in seconds (e.g. 5)
+  customAudioStartOffset: number; // Start offset in seconds (e.g. 0)
   keepScreenAwake: boolean;
   hasCompletedOnboarding: boolean;
   setName: (name: string) => void;
@@ -34,13 +36,17 @@ interface UserState {
   setReminderTime: (time: string) => void;
   setAudioNotification: (val: string, customName?: string) => void;
   setCustomAudioName: (name: string) => void;
+  setCustomAudioDuration: (seconds: number) => void;
+  setCustomAudioStartOffset: (seconds: number) => void;
   updateStreak: (date: string) => void;
+  checkStreakExpiry: () => void;
+  recalculateStreak: (sessionDates: string[]) => void;
 }
 
 export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
-      name: 'Athlete',
+      name: '',
       weeklyGoal: 3,
       theme: 'system',
       language: 'en',
@@ -55,6 +61,8 @@ export const useUserStore = create<UserState>()(
       reminderTime: '09:00', // Default 9 AM
       audioNotification: 'default_notification',
       customAudioName: 'Custom Sound',
+      customAudioDuration: 5, // Default 5 seconds
+      customAudioStartOffset: 0, // Default start at 0s
       setName: (name) => set({ name }),
       setWeeklyGoal: (goal) => set({ weeklyGoal: goal }),
       setTheme: (theme) => set({ theme }),
@@ -69,6 +77,8 @@ export const useUserStore = create<UserState>()(
       setReminderTime: (time) => set({ reminderTime: time }),
       setAudioNotification: (val, customName) => set((state) => ({ audioNotification: val, customAudioName: customName || state.customAudioName })),
       setCustomAudioName: (name) => set({ customAudioName: name }),
+      setCustomAudioDuration: (seconds) => set({ customAudioDuration: Math.max(1, seconds) }),
+      setCustomAudioStartOffset: (seconds) => set({ customAudioStartOffset: Math.max(0, seconds) }),
       updateStreak: (date) => {
         const { lastWorkoutDate, streak } = get();
         if (!lastWorkoutDate) {
@@ -76,24 +86,99 @@ export const useUserStore = create<UserState>()(
           return;
         }
 
+        // Same date workout: streak already counted for today
+        if (lastWorkoutDate === date) {
+          return;
+        }
+
         const lastDate = new Date(lastWorkoutDate);
         const newDate = new Date(date);
         
-        // Reset time to compare just the dates
+        // Reset time to compare just the calendar dates
         lastDate.setHours(0, 0, 0, 0);
         newDate.setHours(0, 0, 0, 0);
         
-        const diffTime = Math.abs(newDate.getTime() - lastDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffTime = newDate.getTime() - lastDate.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays === 1) {
-          // Consecutive day
+          // Consecutive day: increment streak
           set({ streak: streak + 1, lastWorkoutDate: date });
         } else if (diffDays > 1) {
-          // Streak broken
+          // Streak broken: reset to 1 for today's new workout
           set({ streak: 1, lastWorkoutDate: date });
         }
-        // If diffDays === 0, same day, do nothing to streak
+      },
+      checkStreakExpiry: () => {
+        const { lastWorkoutDate, streak } = get();
+        if (!lastWorkoutDate || streak <= 0) return;
+
+        const lastDate = new Date(lastWorkoutDate);
+        const today = new Date();
+        lastDate.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+
+        const diffTime = today.getTime() - lastDate.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+        // If last workout was before yesterday (2 or more days ago), streak has broken
+        if (diffDays > 1) {
+          set({ streak: 0 });
+        }
+      },
+      recalculateStreak: (sessionDateStrings) => {
+        if (!sessionDateStrings || sessionDateStrings.length === 0) {
+          set({ streak: 0, lastWorkoutDate: null });
+          return;
+        }
+
+        const uniqueDayStrings = Array.from(
+          new Set(
+            sessionDateStrings.map((d) => {
+              const dt = new Date(d);
+              const yr = dt.getFullYear();
+              const mo = String(dt.getMonth() + 1).padStart(2, '0');
+              const da = String(dt.getDate()).padStart(2, '0');
+              return `${yr}-${mo}-${da}`;
+            })
+          )
+        ).sort((a, b) => b.localeCompare(a));
+
+        if (uniqueDayStrings.length === 0) {
+          set({ streak: 0, lastWorkoutDate: null });
+          return;
+        }
+
+        const mostRecentDateStr = uniqueDayStrings[0];
+        const [mY, mM, mD] = mostRecentDateStr.split('-').map(Number);
+        const mostRecentDate = new Date(mY, mM - 1, mD);
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        const diffFromToday = Math.round((today.getTime() - mostRecentDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffFromToday > 1) {
+          set({ streak: 0, lastWorkoutDate: mostRecentDateStr });
+          return;
+        }
+
+        let currentStreak = 1;
+        let prevDate = mostRecentDate;
+
+        for (let i = 1; i < uniqueDayStrings.length; i++) {
+          const [cY, cM, cD] = uniqueDayStrings[i].split('-').map(Number);
+          const checkDate = new Date(cY, cM - 1, cD);
+
+          const dayDiff = Math.round((prevDate.getTime() - checkDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (dayDiff === 1) {
+            currentStreak++;
+            prevDate = checkDate;
+          } else {
+            break;
+          }
+        }
+
+        set({ streak: currentStreak, lastWorkoutDate: mostRecentDateStr });
       },
     }),
     {

@@ -1,22 +1,22 @@
 import { useState, useEffect } from 'react';
 import {
   useFonts,
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-  PlusJakartaSans_800ExtraBold,
-} from '@expo-google-fonts/plus-jakarta-sans';
+  Barlow_400Regular,
+  Barlow_500Medium,
+  Barlow_600SemiBold,
+  Barlow_700Bold,
+  Barlow_800ExtraBold,
+  Barlow_900Black,
+} from '@expo-google-fonts/barlow';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import CustomAlert from '@/components/CustomAlert';
+import StepMilestoneModal from '@/components/StepMilestoneModal';
 import SplashScreenOverlay from '@/components/SplashScreenOverlay';
-import OnboardingModal from '@/components/OnboardingModal';
 import { useUserStore } from '@/store/useUserStore';
-import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useColorScheme as useNativeColorScheme } from 'react-native';
 
 import { useWorkoutBackgroundTracker } from '@/hooks/useWorkoutBackgroundTracker';
@@ -40,11 +40,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    'PlusJakartaSans-Regular': PlusJakartaSans_400Regular,
-    'PlusJakartaSans-Medium': PlusJakartaSans_500Medium,
-    'PlusJakartaSans-SemiBold': PlusJakartaSans_600SemiBold,
-    'PlusJakartaSans-Bold': PlusJakartaSans_700Bold,
-    'PlusJakartaSans-ExtraBold': PlusJakartaSans_800ExtraBold,
+    'Barlow-Regular': Barlow_400Regular,
+    'Barlow-Medium': Barlow_500Medium,
+    'Barlow-SemiBold': Barlow_600SemiBold,
+    'Barlow-Bold': Barlow_700Bold,
+    'Barlow-ExtraBold': Barlow_800ExtraBold,
+    'Barlow-Black': Barlow_900Black,
   });
 
   useEffect(() => {
@@ -81,11 +82,6 @@ function RootLayoutNav() {
   useWorkoutBackgroundTracker();
   const router = useRouter();
   const themePreference = useUserStore((state) => state.theme);
-  const hasCompletedOnboarding = useUserStore((state) => state.hasCompletedOnboarding);
-  const isTourActive = useOnboardingStore((state) => state.isTourActive);
-  const currentStep = useOnboardingStore((state) => state.currentStep);
-  const startTour = useOnboardingStore((state) => state.startTour);
-  const skipTour = useOnboardingStore((state) => state.skipTour);
 
   const [isSplashComplete, setIsSplashComplete] = useState(false);
   const systemTheme = useNativeColorScheme();
@@ -98,26 +94,13 @@ function RootLayoutNav() {
       ? 'light'
       : 'dark';
 
-  const handleStartTour = () => {
-    startTour();
-    router.push('/(tabs)/workout');
-  };
-
   return (
     <ThemeProvider value={activeTheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
       <CustomAlert />
-
-      {/* First-Run Interactive Hands-on Onboarding Modal */}
-      {isSplashComplete && !hasCompletedOnboarding && (currentStep === 'idle' || currentStep === 'welcome') && (
-        <OnboardingModal
-          visible={!hasCompletedOnboarding && !isTourActive}
-          onStartTour={handleStartTour}
-          onSkipTour={skipTour}
-        />
-      )}
+      <StepMilestoneModal />
 
       {/* Animated Splash Screen Overlay */}
       {!isSplashComplete && (

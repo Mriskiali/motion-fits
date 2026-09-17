@@ -8,39 +8,53 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  Vibration,
 } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
-import { Vibration } from 'react-native';
 import {
   Share2,
   X,
   Flame,
   Clock,
-  Dumbbell,
   CheckCircle2,
   Trophy,
-  Sparkles,
+  Dumbbell,
+  TrendingUp,
 } from 'lucide-react-native';
+import { format } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale/id';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useUserStore } from '@/store/useUserStore';
+import { AppFonts } from '@/constants/theme';
 
-interface ExerciseSummaryItem {
+export interface ExerciseSummarySetItem {
+  setNumber: number;
+  reps: number;
+  weight?: number;
+  isTimeBased?: boolean;
+}
+
+export interface ExerciseSummaryItem {
   name: string;
   setsCount: number;
   totalReps?: number;
   weight?: number;
+  sets?: ExerciseSummarySetItem[];
 }
 
-interface WorkoutSummaryModalProps {
+export interface WorkoutSummaryModalProps {
   visible: boolean;
   workoutName: string;
   duration: number; // in seconds
   exercises: ExerciseSummaryItem[];
-  totalVolume: number;
   streak: number;
+  totalReps?: number;
+  totalVolume?: number;
+  maxWeight?: number;
+  date?: string;
   onClose: () => void;
 }
 
@@ -49,11 +63,14 @@ export default function WorkoutSummaryModal({
   workoutName,
   duration,
   exercises,
-  totalVolume,
   streak,
+  totalReps,
+  totalVolume,
+  maxWeight,
+  date,
   onClose,
 }: WorkoutSummaryModalProps) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const colors = useThemeColors();
   const { hapticsEnabled } = useUserStore();
   const cardRef = useRef<View>(null);
@@ -72,6 +89,19 @@ export default function WorkoutSummaryModal({
 
   const totalSets = exercises.reduce((acc, curr) => acc + curr.setsCount, 0);
 
+  // Calculate highest weight lifted across exercises if not provided
+  const peakWeight =
+    maxWeight ||
+    exercises.reduce((max, ex) => {
+      const w = ex.weight || 0;
+      return w > max ? w : max;
+    }, 0);
+
+  const cardDate = date ? new Date(date) : new Date();
+  const formattedDate = format(cardDate, 'EEEE, dd MMM yyyy', {
+    locale: language === 'id' ? idLocale : undefined,
+  });
+
   const handleShare = async () => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -89,7 +119,7 @@ export default function WorkoutSummaryModal({
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'image/png',
-          dialogTitle: 'Share Workout Summary',
+          dialogTitle: 'Bagikan Ringkasan Latihan',
         });
       }
     } catch (error) {
@@ -110,7 +140,7 @@ export default function WorkoutSummaryModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       transparent={true}
       onRequestClose={handleClose}
     >
@@ -119,15 +149,15 @@ export default function WorkoutSummaryModal({
           {/* Header */}
           <View style={styles.topHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Trophy size={22} color="#EAB308" />
-              <Text style={styles.modalHeaderTitle}>{t('workout_summary')}</Text>
+              <Trophy size={20} color="#F59E0B" />
+              <Text style={styles.modalHeaderTitle}>{t('workout_summary') || 'Ringkasan Latihan'}</Text>
             </View>
             <TouchableOpacity
               style={styles.closeBtn}
               onPress={handleClose}
               activeOpacity={0.7}
             >
-              <X size={20} color={colors.textSecondary} />
+              <X size={18} color="#94A3B8" />
             </TouchableOpacity>
           </View>
 
@@ -144,85 +174,129 @@ export default function WorkoutSummaryModal({
               {/* Top Branding Row */}
               <View style={styles.brandRow}>
                 <View style={styles.brandBadge}>
-                  <Sparkles size={14} color="#3B82F6" />
-                  <Text style={styles.brandText}>MotionFit</Text>
+                  <Flame size={14} color="#F59E0B" />
+                  <Text style={styles.brandText}>MOTIONFIT</Text>
                 </View>
-                <Text style={styles.dateText}>
-                  {new Date().toLocaleDateString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
+                <View style={styles.streakBadge}>
+                  {streak > 0 ? (
+                    <>
+                      <Trophy size={11} color="#F59E0B" />
+                      <Text style={styles.streakBadgeText}>{streak} HARI STREAK</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.dateBadgeText}>{formattedDate}</Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Hero Title Section */}
+              <View style={styles.titleSection}>
+                <View style={styles.completedTagRow}>
+                  <View style={styles.greenDot} />
+                  <Text style={styles.celebrationSubtitle}>
+                    {language === 'id' ? 'WORKOUT BERES' : 'SESSION COMPLETED'} • {formattedDate}
+                  </Text>
+                </View>
+                <Text style={styles.cardWorkoutName} numberOfLines={2}>
+                  {workoutName}
                 </Text>
               </View>
 
-              {/* Title Section */}
-              <View style={styles.titleSection}>
-                <Text style={styles.celebrationText}>{t('workout_crushed')}</Text>
-                <Text style={styles.cardWorkoutName}>{workoutName}</Text>
-              </View>
-
-              {/* Key Stats Grid */}
+              {/* Bento Stats Grid (2x2) */}
               <View style={styles.statsGrid}>
                 {/* Duration */}
                 <View style={styles.statBox}>
-                  <Clock size={18} color="#3B82F6" />
+                  <View style={[styles.statIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                    <Clock size={16} color="#F59E0B" />
+                  </View>
                   <Text style={styles.statValue}>{formatDuration(duration)}</Text>
-                  <Text style={styles.statLabel}>{t('duration')}</Text>
+                  <Text style={styles.statLabel}>{t('duration') || 'Durasi'}</Text>
                 </View>
 
                 {/* Total Sets */}
                 <View style={styles.statBox}>
-                  <CheckCircle2 size={18} color="#10B981" />
-                  <Text style={styles.statValue}>{totalSets}</Text>
-                  <Text style={styles.statLabel}>{t('total_sets')}</Text>
+                  <View style={[styles.statIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                    <CheckCircle2 size={16} color="#10B981" />
+                  </View>
+                  <Text style={styles.statValue}>{totalSets} Set</Text>
+                  <Text style={styles.statLabel}>{t('total_sets') || 'Total Set'}</Text>
                 </View>
 
-                {/* Total Volume */}
+                {/* Total Reps */}
                 <View style={styles.statBox}>
-                  <Dumbbell size={18} color="#F59E0B" />
+                  <View style={[styles.statIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                    <Flame size={16} color="#F59E0B" />
+                  </View>
                   <Text style={styles.statValue}>
-                    {totalVolume > 0 ? `${totalVolume.toLocaleString()} kg` : 'Bodyweight'}
+                    {typeof totalReps === 'number' && totalReps > 0
+                      ? `${totalReps} Reps`
+                      : `${exercises.reduce((acc, curr) => acc + curr.setsCount, 0)} Reps`}
                   </Text>
-                  <Text style={styles.statLabel}>{t('total_volume')}</Text>
+                  <Text style={styles.statLabel}>{t('total_reps') || 'Total Reps'}</Text>
                 </View>
 
-                {/* Streak */}
+                {/* Peak Weight */}
                 <View style={styles.statBox}>
-                  <Flame size={18} color="#EF4444" />
-                  <Text style={styles.statValue}>{streak} Days</Text>
-                  <Text style={styles.statLabel}>{t('day_streak')}</Text>
+                  <View style={[styles.statIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                    <Trophy size={16} color="#F59E0B" />
+                  </View>
+                  <Text style={styles.statValue}>
+                    {peakWeight > 0 ? `${peakWeight} kg` : 'Bodyweight'}
+                  </Text>
+                  <Text style={styles.statLabel}>
+                    {peakWeight > 0 ? (language === 'id' ? 'Beban Puncak' : 'Max Weight') : 'Mode Beban'}
+                  </Text>
                 </View>
               </View>
 
-              {/* Exercises Summary List */}
+              {/* Clean Exercises Summary */}
               <View style={styles.exerciseSection}>
-                <Text style={styles.exerciseHeaderLabel}>{t('exercises')}</Text>
-                {exercises.slice(0, 5).map((ex, idx) => (
-                  <View key={idx} style={styles.exerciseRow}>
-                    <Text style={styles.exerciseItemName} numberOfLines={1}>
-                      {ex.name}
+                <View style={styles.exerciseHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TrendingUp size={14} color="#10B981" />
+                    <Text style={styles.exerciseHeaderLabel}>
+                      {language === 'id' ? 'RINGKASAN GERAKAN' : 'EXERCISES COMPLETED'}
                     </Text>
-                    <View style={styles.exerciseSetPill}>
-                      <Text style={styles.exerciseSetPillText}>
-                        {ex.setsCount} {t('sets_reps') ? 'sets' : 'sets'}
-                        {ex.weight ? ` • ${ex.weight}kg` : ''}
+                  </View>
+                  <Text style={styles.exerciseCountSub}>
+                    {exercises.length} {language === 'id' ? 'Gerakan' : 'Exercises'}
+                  </Text>
+                </View>
+
+                {exercises.slice(0, 5).map((ex, idx) => (
+                  <View key={idx} style={styles.exerciseCardItem}>
+                    <View style={styles.exerciseItemLeft}>
+                      <View style={styles.exOrderBadge}>
+                        <Text style={styles.exOrderText}>{String(idx + 1).padStart(2, '0')}</Text>
+                      </View>
+                      <Text style={styles.exerciseItemName} numberOfLines={1}>
+                        {ex.name}
+                      </Text>
+                    </View>
+
+                    <View style={styles.exercisePillWrap}>
+                      <Text style={styles.exercisePillText}>
+                        {ex.setsCount} Set{ex.weight && ex.weight > 0 ? ` • ${ex.weight} kg` : ex.totalReps ? ` • ${ex.totalReps}r` : ''}
                       </Text>
                     </View>
                   </View>
                 ))}
+
                 {exercises.length > 5 && (
                   <Text style={styles.moreExercisesText}>
-                    +{exercises.length - 5} more exercises completed
+                    +{exercises.length - 5} {language === 'id' ? 'gerakan lainnya selesai' : 'more exercises completed'}
                   </Text>
                 )}
               </View>
 
               {/* Card Footer Watermark */}
               <View style={styles.cardFooter}>
-                <Text style={styles.footerTagline}>
-                  Tracked with <Text style={{ color: '#3B82F6', fontWeight: '800' }}>MotionFit</Text>
-                </Text>
+                <View style={styles.watermarkRow}>
+                  <Dumbbell size={13} color="#F59E0B" />
+                  <Text style={styles.footerTagline}>
+                    Tracked with <Text style={{ color: '#F59E0B', fontWeight: '800' }}>MotionFit</Text> • Progressive Overload
+                  </Text>
+                </View>
               </View>
             </View>
           </ScrollView>
@@ -236,11 +310,11 @@ export default function WorkoutSummaryModal({
               activeOpacity={0.8}
             >
               {isSharing ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color="#000000" size="small" />
               ) : (
                 <>
-                  <Share2 size={18} color="#fff" />
-                  <Text style={styles.shareBtnText}>{t('share_story')}</Text>
+                  <Share2 size={18} color="#000000" />
+                  <Text style={styles.shareBtnText}>{t('share_story') || 'Bagikan ke Story'}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -250,7 +324,7 @@ export default function WorkoutSummaryModal({
               onPress={handleClose}
               activeOpacity={0.8}
             >
-              <Text style={styles.doneBtnText}>{t('done')}</Text>
+              <Text style={styles.doneBtnText}>{t('done') || 'Tutup'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -262,59 +336,65 @@ export default function WorkoutSummaryModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#0F172A', // Obsidian Dark
+    backgroundColor: '#12131A',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingTop: 20,
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 22,
     maxHeight: '92%',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
   },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   modalHeaderTitle: {
-    fontSize: 20,
+    fontFamily: AppFonts.extraBold,
+    fontSize: 18,
     fontWeight: '800',
     color: '#F8FAFC',
     letterSpacing: -0.3,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1E293B',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1A1B24',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   scrollArea: {
     paddingBottom: 16,
     alignItems: 'center',
   },
-  // 9:16 Story Card Container
+
+  // 9:16 Story Card Container (Deep Obsidian with Sleek Glass Border)
   storyCard: {
     width: '100%',
-    backgroundColor: '#1E293B',
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#334155',
+    backgroundColor: '#0D0E15',
+    borderRadius: 28,
+    padding: 22,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 18,
       },
       android: {
-        elevation: 6,
+        elevation: 10,
       },
     }),
   },
@@ -328,130 +408,226 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
     paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderColor: 'rgba(245, 158, 11, 0.25)',
   },
   brandText: {
-    color: '#60A5FA',
+    fontFamily: AppFonts.extraBold,
+    color: '#F59E0B',
     fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
-  dateText: {
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#161722',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  streakBadgeText: {
+    fontFamily: AppFonts.bold,
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  dateBadgeText: {
+    fontFamily: AppFonts.medium,
     color: '#94A3B8',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   titleSection: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
-  celebrationText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#F8FAFC',
-    letterSpacing: -0.5,
-    marginBottom: 4,
+  completedTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  greenDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  celebrationSubtitle: {
+    fontFamily: AppFonts.bold,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   cardWorkoutName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#38BDF8',
+    fontFamily: AppFonts.extraBold,
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.6,
   },
+
+  // Bento Stats Grid (2x2)
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 16,
   },
   statBox: {
     flex: 1,
-    minWidth: '45%',
-    backgroundColor: '#0F172A',
+    minWidth: '47%',
+    backgroundColor: '#161722',
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  statIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   statValue: {
+    fontFamily: AppFonts.extraBold,
     fontSize: 18,
-    fontWeight: '800',
-    color: '#F8FAFC',
-    marginTop: 8,
+    fontWeight: '900',
+    color: '#FFFFFF',
     marginBottom: 2,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   statLabel: {
+    fontFamily: AppFonts.bold,
     fontSize: 11,
     color: '#94A3B8',
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
+
+  // Exercise Breakdown Section
   exerciseSection: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#161722',
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     marginBottom: 16,
   },
-  exerciseHeaderLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    marginBottom: 10,
-    letterSpacing: 0.5,
-  },
-  exerciseRow: {
+  exerciseHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 10,
+  },
+  exerciseHeaderLabel: {
+    fontFamily: AppFonts.bold,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+  },
+  exerciseCountSub: {
+    fontFamily: AppFonts.medium,
+    fontSize: 12,
+    color: '#64748B',
+  },
+  exerciseCardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  exerciseItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 10,
+  },
+  exOrderBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exOrderText: {
+    fontFamily: AppFonts.bold,
+    fontSize: 11,
+    color: '#F59E0B',
+    fontWeight: '800',
   },
   exerciseItemName: {
+    fontFamily: AppFonts.bold,
     fontSize: 14,
     fontWeight: '700',
     color: '#F1F5F9',
     flex: 1,
-    marginRight: 8,
   },
-  exerciseSetPill: {
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 8,
+  exercisePillWrap: {
+    backgroundColor: '#1A1B24',
+    paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  exerciseSetPillText: {
-    color: '#38BDF8',
-    fontSize: 12,
+  exercisePillText: {
+    fontFamily: AppFonts.bold,
+    color: '#F59E0B',
+    fontSize: 11,
     fontWeight: '700',
   },
   moreExercisesText: {
-    fontSize: 12,
+    fontFamily: AppFonts.medium,
+    fontSize: 11,
     color: '#64748B',
     fontStyle: 'italic',
-    marginTop: 8,
+    marginTop: 10,
     textAlign: 'center',
   },
+
+  // Footer Watermark
   cardFooter: {
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 4,
+  },
+  watermarkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   footerTagline: {
+    fontFamily: AppFonts.medium,
     color: '#64748B',
     fontSize: 11,
-    fontWeight: '600',
   },
+
+  // Action Buttons
   actionRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
+    gap: 10,
+    marginTop: 14,
   },
   shareBtn: {
     flex: 2,
@@ -459,28 +635,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#2563EB',
-    paddingVertical: 16,
-    borderRadius: 16,
+    backgroundColor: '#F59E0B',
+    paddingVertical: 14,
+    borderRadius: 14,
   },
   shareBtnText: {
-    color: '#fff',
-    fontSize: 15,
+    fontFamily: AppFonts.bold,
+    color: '#000000',
+    fontSize: 14,
     fontWeight: '800',
   },
   doneBtn: {
     flex: 1,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1A1B24',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   doneBtnText: {
+    fontFamily: AppFonts.bold,
     color: '#F8FAFC',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,7 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Timer, Plus, Minus, Check, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -20,7 +20,7 @@ import {
   formatDurationDetailed,
   formatDurationBadge,
 } from '@/utils/time';
-import { ThemeColors } from '@/constants/theme';
+import { ThemeColors, AppFonts } from '@/constants/theme';
 
 interface ExerciseDurationModalProps {
   visible: boolean;
@@ -38,7 +38,7 @@ export default function ExerciseDurationModal({
   onClose,
 }: ExerciseDurationModalProps) {
   const colors = useThemeColors();
-  const styles = getStyles(colors);
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { t, language } = useTranslation();
 
   const [hours, setHours] = useState(0);
@@ -130,14 +130,11 @@ export default function ExerciseDurationModal({
         />
 
         <View style={styles.sheetCard}>
-          {/* Top Grab Bar */}
-          <View style={styles.grabBar} />
-
           {/* Header Row */}
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={styles.iconWrap}>
-                <Ionicons name="timer" size={20} color={colors.primaryAction} />
+                <Timer size={18} color={colors.primaryAction} strokeWidth={2.4} />
               </View>
               <View>
                 <Text style={styles.title}>{t('set_duration_title')}</Text>
@@ -156,7 +153,7 @@ export default function ExerciseDurationModal({
               style={styles.closeButton}
               activeOpacity={0.7}
             >
-              <Ionicons name="close" size={20} color={colors.textSecondary} />
+              <X size={16} color={colors.textSecondary} strokeWidth={2.4} />
             </TouchableOpacity>
           </View>
 
@@ -197,7 +194,7 @@ export default function ExerciseDurationModal({
                     onPress={() => handleStepHours(1)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="add" size={18} color={colors.textPrimary} />
+                    <Plus size={16} color={colors.textPrimary} />
                   </TouchableOpacity>
 
                   <TextInput
@@ -216,7 +213,7 @@ export default function ExerciseDurationModal({
                     onPress={() => handleStepHours(-1)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="remove" size={18} color={colors.textPrimary} />
+                    <Minus size={16} color={colors.textPrimary} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -230,7 +227,7 @@ export default function ExerciseDurationModal({
                     onPress={() => handleStepMinutes(1)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="add" size={18} color={colors.textPrimary} />
+                    <Plus size={16} color={colors.textPrimary} />
                   </TouchableOpacity>
 
                   <TextInput
@@ -249,7 +246,7 @@ export default function ExerciseDurationModal({
                     onPress={() => handleStepMinutes(-1)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="remove" size={18} color={colors.textPrimary} />
+                    <Minus size={16} color={colors.textPrimary} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -263,7 +260,7 @@ export default function ExerciseDurationModal({
                     onPress={() => handleStepSeconds(5)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="add" size={18} color={colors.textPrimary} />
+                    <Plus size={16} color={colors.textPrimary} />
                   </TouchableOpacity>
 
                   <TextInput
@@ -282,7 +279,7 @@ export default function ExerciseDurationModal({
                     onPress={() => handleStepSeconds(-5)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="remove" size={18} color={colors.textPrimary} />
+                    <Minus size={16} color={colors.textPrimary} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -334,7 +331,7 @@ export default function ExerciseDurationModal({
               onPress={handleSave}
               activeOpacity={0.85}
             >
-              <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+              <Check size={16} color="#000000" strokeWidth={2.5} />
               <Text style={styles.applyBtnText}>{t('apply_duration')}</Text>
             </TouchableOpacity>
           </View>
@@ -345,46 +342,41 @@ export default function ExerciseDurationModal({
 }
 
 const getStyles = (c: ThemeColors) => {
-  const isDark = c.background === '#0B0C0E';
-
   return StyleSheet.create({
     backdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.65)',
-      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0, 0, 0, 0.78)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
     },
     backdropTouch: {
-      flex: 1,
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
     },
     sheetCard: {
       backgroundColor: c.cardSurface,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      borderTopWidth: 1,
+      borderRadius: 24,
+      borderWidth: 1,
       borderColor: c.borderSubtle,
-      paddingHorizontal: 20,
-      paddingTop: 12,
-      paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+      padding: 22,
+      maxWidth: 360,
+      width: '100%',
       maxHeight: '88%',
       ...Platform.select({
         ios: {
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.35,
+          shadowRadius: 18,
         },
         android: {
-          elevation: 16,
+          elevation: 12,
         },
       }),
-    },
-    grabBar: {
-      width: 44,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)',
-      alignSelf: 'center',
-      marginBottom: 16,
     },
     headerRow: {
       flexDirection: 'row',
@@ -397,46 +389,48 @@ const getStyles = (c: ThemeColors) => {
       alignItems: 'center',
       gap: 12,
       flex: 1,
+      marginRight: 8,
     },
     iconWrap: {
-      width: 42,
-      height: 42,
-      borderRadius: 14,
-      backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.1)',
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: 'rgba(245, 158, 11, 0.15)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     title: {
+      fontFamily: AppFonts.bold,
       fontSize: 17,
       fontWeight: '800',
       color: c.textPrimary,
-      letterSpacing: -0.3,
+      letterSpacing: -0.2,
     },
     subtitle: {
+      fontFamily: AppFonts.medium,
       fontSize: 12,
       color: c.textSecondary,
-      fontWeight: '500',
-      marginTop: 2,
+      marginTop: 1,
     },
     closeButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       backgroundColor: c.surfaceHighlight,
       alignItems: 'center',
       justifyContent: 'center',
     },
     scrollBody: {
-      paddingBottom: 16,
+      paddingBottom: 8,
     },
     previewBox: {
-      backgroundColor: c.surfaceHighlight,
-      borderRadius: 20,
-      paddingVertical: 18,
+      backgroundColor: c.elevatedSurface,
+      borderRadius: 18,
+      paddingVertical: 14,
       paddingHorizontal: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 20,
+      marginBottom: 16,
       borderWidth: 1,
       borderColor: c.borderSubtle,
     },
@@ -446,56 +440,60 @@ const getStyles = (c: ThemeColors) => {
       gap: 6,
     },
     previewDigits: {
-      fontSize: 34,
+      fontSize: 32,
+      fontFamily: AppFonts.extraBold,
       fontWeight: '900',
       color: c.primaryAction,
       fontVariant: ['tabular-nums'],
       letterSpacing: 1,
     },
     previewSeparator: {
-      fontSize: 26,
+      fontSize: 24,
+      fontFamily: AppFonts.bold,
       fontWeight: '800',
       color: c.textSecondary,
       opacity: 0.6,
       marginBottom: 2,
     },
     previewFormatted: {
-      fontSize: 13,
+      fontSize: 12,
+      fontFamily: AppFonts.bold,
       fontWeight: '700',
       color: c.textSecondary,
-      marginTop: 6,
+      marginTop: 4,
     },
     columnsContainer: {
       flexDirection: 'row',
-      gap: 10,
-      marginBottom: 20,
+      gap: 8,
+      marginBottom: 16,
     },
     timeColumn: {
       flex: 1,
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F8FAFC',
-      borderRadius: 18,
-      paddingVertical: 12,
-      paddingHorizontal: 8,
+      backgroundColor: c.elevatedSurface,
+      borderRadius: 16,
+      paddingVertical: 10,
+      paddingHorizontal: 6,
       alignItems: 'center',
       borderWidth: 1,
       borderColor: c.borderSubtle,
     },
     columnLabel: {
       fontSize: 10,
+      fontFamily: AppFonts.bold,
       fontWeight: '800',
       color: c.textSecondary,
       letterSpacing: 0.8,
-      marginBottom: 8,
+      marginBottom: 6,
     },
     stepperContainer: {
       alignItems: 'center',
-      gap: 6,
+      gap: 4,
       width: '100%',
     },
     stepperBtn: {
       width: '100%',
-      height: 34,
-      borderRadius: 10,
+      height: 32,
+      borderRadius: 8,
       backgroundColor: c.cardSurface,
       alignItems: 'center',
       justifyContent: 'center',
@@ -504,97 +502,95 @@ const getStyles = (c: ThemeColors) => {
     },
     columnInput: {
       width: '100%',
-      fontSize: 22,
+      fontSize: 18,
+      fontFamily: AppFonts.extraBold,
       fontWeight: '900',
       color: c.textPrimary,
       textAlign: 'center',
-      paddingVertical: 4,
+      paddingVertical: 2,
       includeFontPadding: false,
       fontVariant: ['tabular-nums'],
     },
     presetsSection: {
-      marginBottom: 10,
+      marginBottom: 8,
     },
     presetsTitle: {
-      fontSize: 12,
+      fontSize: 11,
+      fontFamily: AppFonts.bold,
       fontWeight: '800',
       color: c.textSecondary,
       textTransform: 'uppercase',
       letterSpacing: 0.6,
-      marginBottom: 10,
+      marginBottom: 8,
     },
     presetChipsWrap: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 8,
+      gap: 6,
     },
     presetChip: {
-      backgroundColor: c.surfaceHighlight,
-      paddingVertical: 7,
-      paddingHorizontal: 12,
-      borderRadius: 12,
+      backgroundColor: c.elevatedSurface,
+      paddingVertical: 6,
+      paddingHorizontal: 11,
+      borderRadius: 10,
       borderWidth: 1,
       borderColor: c.borderSubtle,
     },
     presetChipActive: {
-      backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.12)',
+      backgroundColor: c.primaryAction,
       borderColor: c.primaryAction,
     },
     presetChipText: {
       fontSize: 12,
+      fontFamily: AppFonts.bold,
       fontWeight: '700',
       color: c.textPrimary,
+      fontVariant: ['tabular-nums'],
     },
     presetChipTextActive: {
-      color: c.primaryAction,
+      color: '#000000',
       fontWeight: '800',
     },
     actionsDock: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
+      gap: 10,
+      marginTop: 14,
       paddingTop: 12,
       borderTopWidth: 1,
       borderTopColor: c.borderSubtle,
     },
     cancelBtn: {
       flex: 1,
-      paddingVertical: 14,
-      borderRadius: 16,
+      paddingVertical: 13,
+      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: c.surfaceHighlight,
+      backgroundColor: c.elevatedSurface,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
     cancelBtnText: {
       fontSize: 14,
+      fontFamily: AppFonts.bold,
       fontWeight: '700',
       color: c.textSecondary,
     },
     applyBtn: {
-      flex: 2,
+      flex: 1.6,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 8,
-      paddingVertical: 14,
-      borderRadius: 16,
+      gap: 6,
+      paddingVertical: 13,
+      borderRadius: 14,
       backgroundColor: c.primaryAction,
-      ...Platform.select({
-        ios: {
-          shadowColor: c.primaryAction,
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-        },
-        android: {
-          elevation: 3,
-        },
-      }),
     },
     applyBtnText: {
       fontSize: 14,
+      fontFamily: AppFonts.bold,
       fontWeight: '800',
-      color: '#FFFFFF',
+      color: '#000000',
     },
   });
 };

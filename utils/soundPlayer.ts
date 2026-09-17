@@ -1,6 +1,7 @@
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { Vibration, Platform } from 'react-native';
+import { useUserStore } from '@/store/useUserStore';
 
 let activePlayer: any = null;
 let stopTimerTimeout: any = null;
@@ -61,10 +62,24 @@ export function stopTimerSound() {
   notifyPlaybackState(false);
 }
 
-// Play sound safely using a persistent singleton player instance (auto-stops after maxDurationMs, default 10000ms / 10s)
-export async function playTimerSound(audioNotification?: string, maxDurationMs: number = 10000) {
+// Play sound safely using a persistent singleton player instance (auto-stops after durationMs)
+export async function playTimerSound(
+  audioNotification?: string,
+  maxDurationMs?: number,
+  startOffsetSecs?: number
+) {
   try {
     stopTimerSound();
+
+    if (audioNotification === 'none' || audioNotification === 'silent') {
+      return;
+    }
+
+    const configuredDuration = useUserStore.getState().customAudioDuration || 5;
+    const configuredStartOffset = useUserStore.getState().customAudioStartOffset || 0;
+
+    const durationMs = maxDurationMs !== undefined ? maxDurationMs : Math.max(1000, configuredDuration * 1000);
+    const startSecs = startOffsetSecs !== undefined ? startOffsetSecs : Math.max(0, configuredStartOffset);
 
     if (
       !audioNotification ||
@@ -81,17 +96,28 @@ export async function playTimerSound(audioNotification?: string, maxDurationMs: 
 
     if (activePlayer) {
       activePlayer.volume = 1.0;
+      if (startSecs > 0) {
+        try {
+          if (typeof activePlayer.seekTo === 'function') {
+            await activePlayer.seekTo(startSecs);
+          } else if ('currentTime' in activePlayer) {
+            activePlayer.currentTime = startSecs;
+          }
+        } catch (seekErr) {
+          console.warn('Could not seek player to offset:', seekErr);
+        }
+      }
       activePlayer.play();
       notifyPlaybackState(true);
 
-      // Automatically stop playback after maxDurationMs (default 10s) with a 2-second smooth fade-out
-      if (maxDurationMs > 0) {
-        const fadeDurationMs = 2000;
-        const fadeStartMs = Math.max(0, maxDurationMs - fadeDurationMs);
+      // Automatically stop playback after durationMs with a smooth fade-out
+      if (durationMs > 0) {
+        const fadeDurationMs = Math.min(1500, Math.floor(durationMs * 0.3));
+        const fadeStartMs = Math.max(0, durationMs - fadeDurationMs);
 
         stopTimerTimeout = setTimeout(() => {
           const steps = 10;
-          const stepTime = fadeDurationMs / steps;
+          const stepTime = Math.max(20, fadeDurationMs / steps);
           let currentStep = 0;
 
           fadeInterval = setInterval(() => {
@@ -116,14 +142,25 @@ export async function playTimerSound(audioNotification?: string, maxDurationMs: 
         activePlayer.volume = 1.0;
         activePlayer.play();
         notifyPlaybackState(true);
-        if (maxDurationMs > 0) {
-          stopTimerTimeout = setTimeout(() => {
-            stopTimerSound();
-          }, maxDurationMs);
-        }
+        const fallbackDuration = maxDurationMs || 5000;
+        stopTimerTimeout = setTimeout(() => {
+          stopTimerSound();
+        }, fallbackDuration);
       }
     } catch (e) {}
   }
+}
+
+// Play preview sound with explicit duration and start offset in seconds
+export async function playPreviewSound(
+  audioNotification?: string,
+  durationSeconds?: number,
+  startOffsetSeconds?: number
+) {
+  const userDuration = durationSeconds ?? useUserStore.getState().customAudioDuration ?? 5;
+  const userStart = startOffsetSeconds ?? useUserStore.getState().customAudioStartOffset ?? 0;
+  const durationMs = Math.max(1000, userDuration * 1000);
+  await playTimerSound(audioNotification, durationMs, userStart);
 }
 
 // Timer completion vibration: robust multi-pulse vibration for all Android & iOS devices

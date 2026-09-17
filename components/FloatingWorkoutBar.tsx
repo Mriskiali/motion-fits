@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Pressable, Platform } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { StyleSheet, Text, View, Pressable, Platform, TouchableOpacity, AppState, AppStateStatus } from 'react-native';
 import Animated, {
   SlideInDown,
   SlideOutDown,
@@ -10,29 +10,59 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useRouter, usePathname } from 'expo-router';
-import { Dumbbell, Clock, ChevronRight } from 'lucide-react-native';
+import { Dumbbell, Clock, ChevronRight, Timer, Plus, FastForward } from 'lucide-react-native';
+import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
+import {
+  playTimerSound,
+  triggerTimerFinishedVibration,
+  triggerCountdownTickVibration,
+} from '@/utils/soundPlayer';
+import { showRestTimerFinishedNotification } from '@/utils/notifications';
 
 export default function FloatingWorkoutBar() {
-  const router = useRouter();
+  const activeSession = useWorkoutStore((s) => s.activeSession);
   let pathname = '';
   try {
     pathname = usePathname() || '';
   } catch (e) {
     pathname = '';
   }
-  const { activeSession, templates = [] } = useWorkoutStore();
-  const { hapticsEnabled } = useUserStore();
+  const isOnActiveScreen = pathname === '/workout/active' || pathname.includes('active');
+
+  if (!activeSession || isOnActiveScreen) {
+    return null;
+  }
+
+  return <FloatingWorkoutBarContent activeSession={activeSession} isOnActiveScreen={isOnActiveScreen} />;
+}
+
+function FloatingWorkoutBarContent({
+  activeSession,
+  isOnActiveScreen,
+}: {
+  activeSession: NonNullable<ReturnType<typeof useWorkoutStore.getState>['activeSession']>;
+  isOnActiveScreen: boolean;
+}) {
+  const router = useRouter();
+  const template = useWorkoutStore(
+    useCallback((s) => s.templates?.find((t) => t.id === activeSession.templateId), [activeSession.templateId])
+  );
+  const adjustRestTimer = useWorkoutStore((s) => s.adjustRestTimer);
+  const completeRestTimer = useWorkoutStore((s) => s.completeRestTimer);
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
+  const audioNotification = useUserStore((s) => s.audioNotification);
   const { t } = useTranslation();
   const colors = useThemeColors();
-  const styles = getStyles(colors);
+  const styles = useMemo(() => getStyles(colors), [colors]);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [restSecondsRemaining, setRestSecondsRemaining] = useState<number | null>(null);
 
   // Pulse animation shared value
   const pulseOpacity = useSharedValue(1);
@@ -76,12 +106,70 @@ export default function FloatingWorkoutBar() {
     return () => clearInterval(interval);
   }, [activeSession?.startTime]);
 
-  // Hide if no active session or already on the active workout screen
-  if (!activeSession || pathname === '/workout/active' || pathname.includes('active')) {
-    return null;
-  }
+  // Live Rest Timer monitoring with AppState sync
+  const activeRest = activeSession?.activeRestTimer;
 
-  const template = (templates || []).find((t) => t.id === activeSession.templateId);
+  // Sync immediately on AppState active (waking up or foregrounded)
+  useEffect(() => {
+    if (isOnActiveScreen) return;
+
+    const handleAppState = (state: AppStateStatus) => {
+      if (state === 'active') {
+        const currentRest = useWorkoutStore.getState().activeSession?.activeRestTimer;
+        if (currentRest?.targetEndTime) {
+          const rem = Math.ceil((currentRest.targetEndTime - Date.now()) / 1000);
+          if (rem <= 0) {
+            // Already finished while phone was asleep/backgrounded.
+            // Settle timer cleanly without duplicate notification.
+            completeRestTimer();
+            setRestSecondsRemaining(null);
+          } else {
+            setRestSecondsRemaining(rem);
+          }
+        }
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => sub.remove();
+  }, [isOnActiveScreen, completeRestTimer]);
+
+  useEffect(() => {
+    if (isOnActiveScreen || !activeRest) {
+      setRestSecondsRemaining(null);
+      return;
+    }
+
+    if (activeRest.targetEndTime <= Date.now()) {
+      completeRestTimer();
+      setRestSecondsRemaining(null);
+      return;
+    }
+
+    const checkRest = () => {
+      const rem = Math.ceil((activeRest.targetEndTime - Date.now()) / 1000);
+
+      if (rem <= 0) {
+        triggerTimerFinishedVibration(hapticsEnabled);
+        playTimerSound(audioNotification);
+        showRestTimerFinishedNotification().catch(() => {});
+        completeRestTimer();
+        setRestSecondsRemaining(null);
+        return;
+      }
+
+      setRestSecondsRemaining(rem);
+
+      if (rem <= 3 && rem > 0) {
+        triggerCountdownTickVibration(hapticsEnabled);
+      }
+    };
+
+    checkRest();
+    const interval = setInterval(checkRest, 1000);
+    return () => clearInterval(interval);
+  }, [isOnActiveScreen, activeRest?.targetEndTime, completeRestTimer, hapticsEnabled, audioNotification]);
+
   const workoutName = template?.name || t('custom_workout');
 
   // Compute total sets & completed sets count
@@ -94,7 +182,10 @@ export default function FloatingWorkoutBar() {
   });
 
   const totalSetsCount = template?.exercises
-    ? template.exercises.reduce((acc, ex) => acc + (typeof ex.sets === 'number' ? ex.sets : parseInt(ex.sets as any, 10) || 0), 0)
+    ? template.exercises.reduce(
+        (acc, ex) => acc + (typeof ex.sets === 'number' ? ex.sets : parseInt(ex.sets as any, 10) || 0),
+        0
+      )
     : 0;
 
   const formatTime = (totalSecs: number) => {
@@ -115,9 +206,18 @@ export default function FloatingWorkoutBar() {
     router.push('/workout/active');
   };
 
+  const hasActiveRest = restSecondsRemaining !== null && restSecondsRemaining > 0;
+  const restMinutes = hasActiveRest ? Math.floor(restSecondsRemaining / 60) : 0;
+  const restSecs = hasActiveRest ? restSecondsRemaining % 60 : 0;
+  const formattedRest = `${restMinutes}:${restSecs.toString().padStart(2, '0')}`;
+
+  const restTotal = activeRest?.totalDuration || (restSecondsRemaining || 60);
+  const restProgress = hasActiveRest && restTotal > 0 ? restSecondsRemaining / restTotal : 0;
+  const isRestWarning = hasActiveRest && restSecondsRemaining <= 3;
+
   return (
     <Animated.View
-      entering={SlideInDown.springify().damping(18).stiffness(140)}
+      entering={SlideInDown.duration(280)}
       exiting={SlideOutDown.duration(200)}
       style={styles.wrapper}
       pointerEvents="box-none"
@@ -126,37 +226,109 @@ export default function FloatingWorkoutBar() {
         onPress={handleResume}
         style={({ pressed }) => [
           styles.container,
+          hasActiveRest && styles.containerWithRest,
           pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 },
         ]}
       >
-        {/* Left: Animated pulse badge & workout icon */}
-        <View style={styles.iconBox}>
-          <Animated.View style={[styles.pulseDot, animatedPulseStyle]} />
-          <Dumbbell size={20} color={colors.primaryAction} strokeWidth={2.2} />
+        {/* Left: Animated icon */}
+        <View style={[styles.iconBox, hasActiveRest && styles.iconBoxResting]}>
+          <Animated.View
+            style={[
+              styles.pulseDot,
+              hasActiveRest && { backgroundColor: '#F59E0B' },
+              animatedPulseStyle,
+            ]}
+          />
+          {hasActiveRest ? (
+            <Timer size={20} color="#F59E0B" strokeWidth={2.4} />
+          ) : (
+            <Dumbbell size={20} color={colors.primaryAction} strokeWidth={2.2} />
+          )}
         </View>
 
-        {/* Middle: Workout info & live stats */}
+        {/* Center: Workout info & live rest timer stats */}
         <View style={styles.infoBox}>
-          <Text style={styles.workoutTitle} numberOfLines={1}>
-            {workoutName}
-          </Text>
-          <View style={styles.metaRow}>
-            <View style={styles.timerBadge}>
-              <Clock size={12} color={colors.textSecondary} strokeWidth={2} />
-              <Text style={styles.metaText}>{formatTime(elapsedSeconds)}</Text>
-            </View>
-            <Text style={styles.dotSeparator}>•</Text>
-            <Text style={styles.metaText}>
-              {completedSetsCount}{totalSetsCount > 0 ? `/${totalSetsCount}` : ''} {t('set')}
+          <View style={styles.titleRow}>
+            <Text style={styles.workoutTitle} numberOfLines={1}>
+              {workoutName}
             </Text>
+            {hasActiveRest && (
+              <View style={styles.restingBadge}>
+                <Text style={styles.restingBadgeText}>{t('rest_period')}</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.metaRow}>
+            {hasActiveRest ? (
+              <>
+                <View style={styles.restCountdownBadge}>
+                  <Text
+                    style={[
+                      styles.restCountdownDigits,
+                      isRestWarning && styles.restCountdownWarning,
+                    ]}
+                  >
+                    {formattedRest}
+                  </Text>
+                </View>
+                <Text style={styles.dotSeparator}>•</Text>
+                <View style={styles.timerBadge}>
+                  <Clock size={11} color={colors.textSecondary} strokeWidth={2} />
+                  <Text style={styles.metaText}>{formatTime(elapsedSeconds)}</Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.timerBadge}>
+                  <Clock size={12} color={colors.textSecondary} strokeWidth={2} />
+                  <Text style={styles.metaText}>{formatTime(elapsedSeconds)}</Text>
+                </View>
+                <Text style={styles.dotSeparator}>•</Text>
+                <Text style={styles.metaText}>
+                  {completedSetsCount}
+                  {totalSetsCount > 0 ? `/${totalSetsCount}` : ''} {t('set')}
+                </Text>
+              </>
+            )}
           </View>
         </View>
 
-        {/* Right: Resume button badge */}
-        <View style={styles.resumeButton}>
-          <Text style={styles.resumeButtonText}>{t('resume')}</Text>
-          <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.5} />
-        </View>
+        {/* Right side: Quick Rest Actions if resting, or simple Resume badge */}
+        {hasActiveRest ? (
+          <View style={styles.restActionGroup}>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={styles.quickPlusBtn}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                adjustRestTimer(15);
+              }}
+            >
+              <Plus size={12} color={colors.textPrimary} strokeWidth={2.5} />
+              <Text style={styles.quickPlusText}>15{t('seconds_short')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.quickSkipBtn}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                completeRestTimer();
+              }}
+            >
+              <Text style={styles.quickSkipText}>{t('skip')}</Text>
+              <FastForward size={12} color="#FFFFFF" strokeWidth={2.4} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.resumeButton}>
+            <Text style={styles.resumeButtonText}>{t('resume')}</Text>
+            <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.5} />
+          </View>
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -166,9 +338,9 @@ const getStyles = (colors: any) =>
   StyleSheet.create({
     wrapper: {
       position: 'absolute',
-      bottom: 104, // Positions nicely above the 68px floating pill bottom bar
-      left: 20,
-      right: 20,
+      bottom: 104, // Positions above bottom bar
+      left: 16,
+      right: 16,
       zIndex: 9999,
       elevation: 9999,
     },
@@ -176,32 +348,39 @@ const getStyles = (colors: any) =>
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.cardSurface,
-      borderRadius: 16,
+      borderRadius: 18,
       paddingVertical: 12,
       paddingHorizontal: 14,
       borderWidth: 1.5,
-      borderColor: colors.primaryAction,
+      borderColor: colors.borderSubtle,
       ...Platform.select({
         ios: {
-          shadowColor: colors.primaryAction,
+          shadowColor: '#000',
           shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.25,
-          shadowRadius: 10,
+          shadowOpacity: 0.3,
+          shadowRadius: 12,
         },
         android: {
           elevation: 8,
         },
       }),
     },
+    containerWithRest: {
+      borderColor: 'rgba(245, 158, 11, 0.45)',
+      backgroundColor: colors.cardSurface,
+    },
     iconBox: {
-      width: 38,
-      height: 38,
-      borderRadius: 10,
+      width: 40,
+      height: 40,
+      borderRadius: 12,
       backgroundColor: colors.surfaceHighlight,
       justifyContent: 'center',
       alignItems: 'center',
       position: 'relative',
       marginRight: 12,
+    },
+    iconBoxResting: {
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
     },
     pulseDot: {
       position: 'absolute',
@@ -216,12 +395,33 @@ const getStyles = (colors: any) =>
       flex: 1,
       justifyContent: 'center',
     },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 2,
+    },
     workoutTitle: {
-      fontSize: 15,
+      fontFamily: AppFonts.bold,
+      fontSize: 14,
       fontWeight: '700',
       color: colors.textPrimary,
       letterSpacing: -0.2,
-      marginBottom: 2,
+      maxWidth: '75%',
+    },
+    restingBadge: {
+      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    restingBadgeText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#F59E0B',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     metaRow: {
       flexDirection: 'row',
@@ -234,11 +434,27 @@ const getStyles = (colors: any) =>
       gap: 3,
     },
     metaText: {
+      fontFamily: AppFonts.medium,
       fontSize: 12,
       fontWeight: '600',
       color: colors.textSecondary,
     },
+    restCountdownBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    restCountdownDigits: {
+      fontFamily: AppFonts.extraBold,
+      fontSize: 14,
+      fontWeight: '800',
+      color: '#F59E0B',
+      fontVariant: ['tabular-nums'],
+    },
+    restCountdownWarning: {
+      color: '#EF4444',
+    },
     dotSeparator: {
+      fontFamily: AppFonts.medium,
       fontSize: 12,
       color: colors.textMuted,
     },
@@ -247,14 +463,53 @@ const getStyles = (colors: any) =>
       alignItems: 'center',
       gap: 2,
       backgroundColor: colors.primaryAction,
-      paddingVertical: 7,
+      paddingVertical: 8,
       paddingHorizontal: 12,
       borderRadius: 20,
-      marginLeft: 8,
+      marginLeft: 6,
     },
     resumeButtonText: {
-      color: '#FFFFFF',
+      fontFamily: AppFonts.bold,
+      color: '#000000',
       fontSize: 13,
+      fontWeight: '800',
+    },
+    restActionGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginLeft: 6,
+    },
+    quickPlusBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      backgroundColor: colors.surfaceHighlight,
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+    },
+    quickPlusText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 11,
       fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    quickSkipBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: '#F59E0B',
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+    },
+    quickSkipText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#000000',
     },
   });
