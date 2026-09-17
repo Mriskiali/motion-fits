@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,6 +6,8 @@ import {
   ScrollView,
   Pressable,
   Platform,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -17,51 +19,128 @@ import {
   CheckCircle2,
   Plus,
   ChevronRight,
+  Footprints,
+  RotateCw,
+  Check,
+  User,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { format, startOfWeek, addDays, isSameDay, subDays } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addDays, isSameDay, isBefore, startOfDay } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale/id';
 import { useUserStore } from '@/store/useUserStore';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
+import { useStepStore } from '@/store/useStepStore';
+import { openHealthConnectStore } from '@/utils/healthConnect';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
-import { useOnboardingStore } from '@/store/useOnboardingStore';
-import SpotlightGuideOverlay from '@/components/SpotlightGuideOverlay';
+import { updateWidget } from '@/utils/widgetBridge';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const isTourActive = useOnboardingStore((state) => state.isTourActive);
-  const currentStep = useOnboardingStore((state) => state.currentStep);
-  const nextStep = useOnboardingStore((state) => state.nextStep);
-  const skipTour = useOnboardingStore((state) => state.skipTour);
+  const name = useUserStore((state) => state.name);
   const streak = useUserStore((state) => state.streak);
+  const checkStreakExpiry = useUserStore((state) => state.checkStreakExpiry);
   const weeklyGoal = useUserStore((state) => state.weeklyGoal);
   const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
   const sessions = useWorkoutStore((state) => state.sessions);
   const templates = useWorkoutStore((state) => state.templates);
   const scheduledWorkouts = useWorkoutStore((state) => state.scheduledWorkouts);
+  const activeSession = useWorkoutStore((state) => state.activeSession);
+
+  // Step Tracker Store
+  const todaySteps = useStepStore((state) => state.todaySteps);
+  const dailyStepGoal = useStepStore((state) => state.dailyStepGoal);
+  const isConnected = useStepStore((state) => state.isConnected);
+  const isAvailable = useStepStore((state) => state.isAvailable);
+  const availabilityStatus = useStepStore((state) => state.availabilityStatus);
+  const isSyncing = useStepStore((state) => state.isSyncing);
+  const syncSteps = useStepStore((state) => state.syncSteps);
+  const connectSteps = useStepStore((state) => state.connect);
+  const checkStepStatus = useStepStore((state) => state.checkStatus);
+
   const colors = useThemeColors();
-  const styles = getStyles(colors);
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { t, language } = useTranslation();
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  // Week Days (Mon - Sun)
-  const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
+  // Keep selectedDate, streak, and steps synchronized on mount & app resume / across midnight
+  useEffect(() => {
+    checkStreakExpiry();
+    checkStepStatus();
 
-  // Compute Real This-Week Workout Stats
+    const handleAppState = (state: AppStateStatus) => {
+      if (state === 'active') {
+        checkStreakExpiry();
+        setSelectedDate((prev) => (isSameDay(prev, new Date()) ? prev : new Date()));
+        if (useStepStore.getState().isConnected) {
+          useStepStore.getState().syncSteps();
+        }
+      }
+    };
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => sub.remove();
+  }, [checkStreakExpiry, checkStepStatus]);
+
+  // Week Days (Mon - Sun): Active calendar week bounds (resets every Monday)
+  const weekStart = useMemo(() => startOfWeek(selectedDate, { weekStartsOn: 1 }), [selectedDate]);
+  const weekEnd = useMemo(() => endOfWeek(selectedDate, { weekStartsOn: 1 }), [selectedDate]);
+  const weekDays = useMemo(() => Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i)), [weekStart]);
+
+  // Compute Real This-Week Workout Stats (strictly within the active Monday-Sunday calendar week)
   const thisWeekSessions = useMemo(() => {
-    return sessions.filter((s) => new Date(s.date) > subDays(new Date(), 7));
-  }, [sessions]);
+    return sessions.filter((s) => {
+      const sessionDate = new Date(s.date);
+      return sessionDate >= weekStart && sessionDate <= weekEnd;
+    });
+  }, [sessions, weekStart, weekEnd]);
 
   const thisWeekSessionsCount = thisWeekSessions.length;
+
+  // Number of distinct days the user completed workouts this week (for the "X / Y Hari" goal)
+  const thisWeekWorkoutDaysCount = useMemo(() => {
+    const uniqueDays = new Set(
+      thisWeekSessions.map((s) => format(new Date(s.date), 'yyyy-MM-dd'))
+    );
+    return uniqueDays.size;
+  }, [thisWeekSessions]);
+
+  // Sync latest stats to Android Home Screen Widget
+  useEffect(() => {
+    updateWidget({
+      streak,
+      weeklyWorkoutsDone: thisWeekWorkoutDaysCount,
+      weeklyGoal: weeklyGoal || 3,
+      todaySteps,
+    });
+  }, [streak, thisWeekWorkoutDaysCount, weeklyGoal, todaySteps]);
 
   const thisWeekTotalMinutes = useMemo(() => {
     const totalSecs = thisWeekSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
     return Math.round(totalSecs / 60);
   }, [thisWeekSessions]);
+
+  const thisWeekVolumeLifted = useMemo(() => {
+    return thisWeekSessions.reduce((totalVol, s) => {
+      const template = templates.find((t) => t.id === s.templateId);
+      const sessionVol = s.completedExercises?.reduce((exVol, cEx) => {
+        const templateEx = template?.exercises.find((e) => e.id === cEx.exerciseId);
+        const defaultWeight = templateEx?.weight || 0;
+
+        const setsVol = (cEx.completedSets || []).reduce((setVol, reps, setIdx) => {
+          const detail = cEx.setsDetails?.[setIdx];
+          const actualReps = typeof detail?.reps === 'number' ? detail.reps : (typeof reps === 'number' ? reps : 0);
+          const actualWeight = typeof detail?.weight === 'number' ? detail.weight : defaultWeight;
+          return setVol + (actualReps * actualWeight);
+        }, 0);
+
+        return exVol + setsVol;
+      }, 0) || 0;
+
+      return totalVol + sessionVol;
+    }, 0);
+  }, [thisWeekSessions, templates]);
 
   const thisWeekSetsCount = useMemo(() => {
     return thisWeekSessions.reduce((acc, s) => {
@@ -78,6 +157,22 @@ export default function DashboardScreen() {
     return Math.round(thisWeekTotalMinutes / thisWeekSessionsCount);
   }, [thisWeekTotalMinutes, thisWeekSessionsCount]);
 
+  const formatActiveTime = (minutes: number) => {
+    if (minutes < 60) {
+      return `${minutes} ${t('min_short')}`;
+    }
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? `${h}j ${m}m` : `${h} ${t('hours_short')}`;
+  };
+
+  const formatVolume = (kg: number) => {
+    if (kg >= 1000) {
+      return `${(kg / 1000).toFixed(1)} ton`;
+    }
+    return `${kg.toLocaleString()} kg`;
+  };
+
   // Last Completed Session
   const lastSession = sessions.length > 0 ? sessions[sessions.length - 1] : null;
   const lastSessionTemplate = lastSession
@@ -91,15 +186,23 @@ export default function DashboardScreen() {
     return t('good_evening');
   };
 
+  const todayDateStr = format(new Date(), 'yyyy-MM-dd');
+  const todayScheduledTemplateId = scheduledWorkouts[todayDateStr];
+  const todayScheduledTemplate = templates.find((t) => t.id === todayScheduledTemplateId);
+
   const handleStartWorkout = () => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    router.push('/(tabs)/workout');
+    if (activeSession) {
+      router.push('/workout/active');
+    } else {
+      router.push('/(tabs)/workout');
+    }
   };
 
   // Weekly Goal Progress Percent
-  const goalPercent = Math.min(100, Math.round((thisWeekSessionsCount / (weeklyGoal || 3)) * 100));
+  const goalPercent = Math.min(100, Math.round((thisWeekWorkoutDaysCount / (weeklyGoal || 3)) * 100));
 
   return (
     <View style={styles.canvasContainer}>
@@ -107,25 +210,64 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Header (Clean Greeting & Full Date) */}
+        {/* 1. Header (Top Bar: Greeting & Streak Badge) */}
         <View style={styles.headerBar}>
-          <Text style={styles.greetingTitle}>{getGreeting()}</Text>
-          <Text style={styles.dateSubtitle}>
-            {format(selectedDate, 'EEEE, d MMMM yyyy', {
-              locale: language === 'id' ? idLocale : undefined,
-            })}
-          </Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greetingTitle}>
+              {getGreeting()}
+              {name && name !== 'Athlete' ? (
+                <>
+                  {', '}
+                  <Text style={styles.userName}>{name}</Text>
+                </>
+              ) : (
+                '!'
+              )}
+            </Text>
+            <Text style={styles.dateSubtitle}>
+              {format(selectedDate, 'EEEE, d MMMM yyyy', {
+                locale: language === 'id' ? idLocale : undefined,
+              })}
+            </Text>
+          </View>
+          <View style={styles.headerRight}>
+            {streak > 0 && (
+              <View style={styles.headerStreakBadge}>
+                <Flame size={13} color="#F59E0B" />
+                <Text style={styles.headerStreakText}>
+                  {streak} {t('day_streak') || 'Hari'}
+                </Text>
+              </View>
+            )}
+            <Pressable
+              onPress={() => router.push('/(tabs)/settings')}
+              style={styles.avatarButton}
+              accessibilityLabel={t('settings')}
+            >
+              {name && name !== 'Athlete' ? (
+                <Text style={styles.avatarText}>
+                  {name.charAt(0).toUpperCase()}
+                </Text>
+              ) : (
+                <User size={16} color={colors.primaryAction} />
+              )}
+            </Pressable>
+          </View>
         </View>
 
-        {/* 2. Weekly Date Scroller with High-Contrast Text */}
+        {/* 2. 7-Day Horizon Strip with Glowing Today Ring & Emerald Dots */}
         <View style={styles.dateScrollerRow}>
           {weekDays.map((date, idx) => {
             const isSelected = isSameDay(date, selectedDate);
             const isCurrentToday = isSameDay(date, new Date());
             const dateStr = format(date, 'yyyy-MM-dd');
-            const hasWorkout = !!scheduledWorkouts[dateStr] || sessions.some(
+            const isPastDay = isBefore(startOfDay(date), startOfDay(new Date()));
+            const isSessionCompleted = sessions.some(
               (s) => format(new Date(s.date), 'yyyy-MM-dd') === dateStr
             );
+            const hasWorkout = isPastDay
+              ? isSessionCompleted
+              : (isSessionCompleted || !!scheduledWorkouts[dateStr]);
             return (
               <Pressable
                 key={idx}
@@ -143,12 +285,14 @@ export default function DashboardScreen() {
                 <View
                   style={[
                     styles.dayNumberBadge,
+                    isCurrentToday && styles.dayNumberBadgeToday,
                     isSelected && styles.dayNumberBadgeSelected,
                   ]}
                 >
                   <Text
                     style={[
                       styles.dayNumberText,
+                      isCurrentToday && styles.dayNumberTextToday,
                       isSelected && styles.dayNumberTextSelected,
                     ]}
                   >
@@ -158,7 +302,7 @@ export default function DashboardScreen() {
                 <View
                   style={[
                     styles.dot,
-                    hasWorkout && { backgroundColor: isSelected ? colors.dateBadgeSelected : colors.primaryAction },
+                    hasWorkout && { backgroundColor: isSelected ? '#000000' : '#10B981' },
                     !hasWorkout && { backgroundColor: 'transparent' },
                   ]}
                 />
@@ -167,43 +311,35 @@ export default function DashboardScreen() {
           })}
         </View>
 
-        {/* 3. Hero Card: Weekly Goal & Real Training Progress */}
+        {/* 3. Hero Card: Weekly Target with Precision Linear Bar */}
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroGoalHeading}>
-                {thisWeekSessionsCount} / {weeklyGoal}{' '}
-                <Text style={styles.heroGoalUnit}>{t('days_count')}</Text>
+                {t('weekly_goal') || 'Target Mingguan'}: <Text style={styles.heroGoalValue}>{thisWeekWorkoutDaysCount} / {weeklyGoal}</Text> {t('days_count') || 'Latihan'}
               </Text>
-              <Text style={styles.heroGoalSub}>{t('weekly_goal')}</Text>
             </View>
-
-            {streak > 0 && (
-              <View style={styles.streakBadge}>
-                <Flame size={15} color={colors.warning} />
-                <Text style={styles.streakText}>
-                  {streak} {t('day_streak')}
-                </Text>
-              </View>
-            )}
+            <View style={styles.heroGoalPercentBadge}>
+              <Text style={styles.heroGoalPercentText}>{goalPercent}%</Text>
+            </View>
           </View>
 
-          {/* Progress Bar */}
+          {/* Precision Linear Bar (h-1.5 rounded-full bg-slate-800 with emerald fill) */}
           <View style={styles.heroProgressTrack}>
             <View
               style={[
                 styles.heroProgressFill,
-                { width: `${goalPercent}%`, backgroundColor: colors.accentLime },
+                { width: `${goalPercent}%`, backgroundColor: '#10B981' },
               ]}
             />
           </View>
 
           <View style={styles.heroBottomMeta}>  
-            <Text style={styles.heroProgressLabel}>{goalPercent}% {t('goal_reached')}</Text>
+            <Text style={styles.heroProgressLabel}>{goalPercent}% {t('goal_reached') || 'tercapai'}</Text>
             <Text style={styles.heroTargetLabel}>
-              {weeklyGoal - thisWeekSessionsCount > 0
-                ? `${weeklyGoal - thisWeekSessionsCount} ${
-                    weeklyGoal - thisWeekSessionsCount === 1 && language === 'en'
+              {weeklyGoal - thisWeekWorkoutDaysCount > 0
+                ? `${weeklyGoal - thisWeekWorkoutDaysCount} ${
+                    weeklyGoal - thisWeekWorkoutDaysCount === 1 && language === 'en'
                       ? t('day_remaining')
                       : t('days_remaining')
                   }`
@@ -212,30 +348,176 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* Step Tracker Card */}
+        {(() => {
+          const stepPercent = Math.min(100, Math.round((todaySteps / Math.max(1, dailyStepGoal)) * 100));
+          const distanceKm = (todaySteps * 0.00075).toFixed(2);
+          const caloriesKcal = Math.round(todaySteps * 0.04);
+          const remainingSteps = Math.max(0, dailyStepGoal - todaySteps);
+
+          return (
+            <View style={styles.stepCard}>
+              {isConnected ? (
+                <>
+                  <View style={styles.stepCardHeader}>
+                    <View style={styles.stepCardHeaderLeft}>
+                      <View style={[styles.stepIconBadge, { backgroundColor: 'rgba(249, 115, 22, 0.12)' }]}>
+                        <Footprints size={18} color="#F97316" strokeWidth={2.2} />
+                      </View>
+                      <View>
+                        <Text style={styles.stepCardTitle}>{t('steps_today')}</Text>
+                        <Text style={styles.stepCardSub}>Google Health Connect</Text>
+                      </View>
+                    </View>
+                    <View style={styles.stepCardHeaderRight}>
+                      <Pressable
+                        onPress={() => {
+                          if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          syncSteps();
+                        }}
+                        disabled={isSyncing}
+                        style={({ pressed }) => [
+                          styles.stepSyncButton,
+                          pressed && { opacity: 0.7 },
+                        ]}
+                      >
+                        <RotateCw
+                          size={16}
+                          color={isSyncing ? colors.textMuted : '#F97316'}
+                          strokeWidth={2.2}
+                        />
+                      </Pressable>
+                      <View style={styles.stepPercentBadge}>
+                        <Text style={styles.stepPercentText}>{stepPercent}%</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Step Counts */}
+                  <View style={styles.stepCountRow}>
+                    <Text style={styles.stepCountBig}>
+                      {todaySteps.toLocaleString()}{' '}
+                      <Text style={styles.stepCountGoal}>
+                        / {dailyStepGoal.toLocaleString()} {t('steps_goal_label')}
+                      </Text>
+                    </Text>
+                  </View>
+
+                  {/* Progress Bar */}
+                  <View style={styles.stepProgressTrack}>
+                    <View
+                      style={[
+                        styles.stepProgressFill,
+                        { width: `${stepPercent}%`, backgroundColor: '#F97316' },
+                      ]}
+                    />
+                  </View>
+
+                  {/* Sub-metrics: Distance & Calories */}
+                  <View style={styles.stepMetricsRow}>
+                    <View style={styles.stepMetricItem}>
+                      <Text style={styles.stepMetricValue}>{distanceKm}</Text>
+                      <Text style={styles.stepMetricLabel}>{t('distance_km')}</Text>
+                    </View>
+                    <View style={styles.stepMetricDivider} />
+                    <View style={styles.stepMetricItem}>
+                      <Text style={styles.stepMetricValue}>{caloriesKcal}</Text>
+                      <Text style={styles.stepMetricLabel}>{t('calories_kcal')}</Text>
+                    </View>
+                    <View style={styles.stepMetricDivider} />
+                    <View style={styles.stepMetricItem}>
+                      <Text style={styles.stepMetricValue}>{remainingSteps.toLocaleString()}</Text>
+                      <Text style={styles.stepMetricLabel}>
+                        {remainingSteps === 0 ? t('target_achieved') : `${t('steps_goal_label')} lagi`}
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.stepConnectContainer}>
+                  <View style={styles.stepConnectLeft}>
+                    <View style={[styles.stepIconBadge, { backgroundColor: 'rgba(249, 115, 22, 0.12)' }]}>
+                      <Footprints size={20} color="#F97316" strokeWidth={2.2} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stepCardTitle}>{t('step_counter')}</Text>
+                      <Text style={styles.stepConnectDesc}>
+                        {availabilityStatus === 'update_required'
+                          ? t('health_connect_unavailable')
+                          : t('health_connect_desc')}
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    onPress={async () => {
+                      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      if (availabilityStatus === 'update_required') {
+                        openHealthConnectStore();
+                      } else {
+                        await connectSteps();
+                      }
+                    }}
+                    style={({ pressed }) => [
+                      styles.stepConnectBtn,
+                      pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                    ]}
+                  >
+                    <Text style={styles.stepConnectBtnText}>
+                      {availabilityStatus === 'update_required'
+                        ? t('install_health_connect')
+                        : t('connect_health_connect')}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          );
+        })()}
+
         {/* 4. This Week's Snapshot (Bento Tiles) */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t('this_week_summary')}</Text>
         </View>
 
         <View style={styles.bentoGrid}>
-          {/* Tile 1: Active Training Time This Week (Wide Card) */}
-          <View style={[styles.bentoTile, styles.bentoTileWide]}>
+          {/* Tile 1: Workouts Completed This Week */}
+          <View style={styles.bentoTile}>
             <View style={styles.bentoHeader}>
-              <Text style={styles.bentoCategory}>{t('active_time')}</Text>
-              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                <Clock size={18} color="#F59E0B" strokeWidth={2.2} />
+              <Text style={styles.bentoCategory} numberOfLines={1}>
+                {t('workouts_completed') || 'Latihan Selesai'}
+              </Text>
+              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(56, 189, 248, 0.12)' }]}>
+                <Dumbbell size={16} color="#38BDF8" strokeWidth={2.2} />
               </View>
             </View>
-            <Text style={styles.bentoValue}>
-              {thisWeekTotalMinutes} <Text style={styles.bentoUnit}>{t('min_short')}</Text>
+            <Text style={styles.bentoValue} numberOfLines={1} adjustsFontSizeToFit>
+              {thisWeekSessionsCount} <Text style={{ fontSize: 13, color: colors.textSecondary, fontFamily: AppFonts.semiBold }}>{t('workout') || 'Latihan'}</Text>
             </Text>
             <Text style={styles.bentoSubtext}>{t('this_week')}</Text>
           </View>
 
-          {/* Tile 2: Total Sets This Week */}
+          {/* Tile 2: Active Training Time This Week */}
           <View style={styles.bentoTile}>
             <View style={styles.bentoHeader}>
-              <Text style={styles.bentoCategory}>{t('sets')}</Text>
+              <Text style={styles.bentoCategory} numberOfLines={1}>
+                {t('active_time')}
+              </Text>
+              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                <Clock size={16} color="#F59E0B" strokeWidth={2.2} />
+              </View>
+            </View>
+            <Text style={styles.bentoValue} numberOfLines={1} adjustsFontSizeToFit>
+              {formatActiveTime(thisWeekTotalMinutes)}
+            </Text>
+            <Text style={styles.bentoSubtext}>{t('this_week')}</Text>
+          </View>
+
+          {/* Tile 3: Total Sets This Week */}
+          <View style={styles.bentoTile}>
+            <View style={styles.bentoHeader}>
+              <Text style={styles.bentoCategory} numberOfLines={1}>
+                {t('sets')}
+              </Text>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(34, 197, 94, 0.12)' }]}>
                 <CheckCheck size={16} color="#22C55E" strokeWidth={2.2} />
               </View>
@@ -244,10 +526,12 @@ export default function DashboardScreen() {
             <Text style={styles.bentoSubtext}>{t('total_sets_completed')}</Text>
           </View>
 
-          {/* Tile 3: Avg Duration Per Session This Week */}
+          {/* Tile 4: Avg Duration Per Session This Week */}
           <View style={styles.bentoTile}>
             <View style={styles.bentoHeader}>
-              <Text style={styles.bentoCategory}>{t('avg_per_session')}</Text>
+              <Text style={styles.bentoCategory} numberOfLines={1}>
+                {t('avg_per_session')}
+              </Text>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
                 <Timer size={16} color="#6366F1" strokeWidth={2.2} />
               </View>
@@ -288,39 +572,32 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {/* 6. Start Workout CTA Button */}
+        {/* 6. Hero Tactile CTA Button */}
         <Pressable
           onPress={handleStartWorkout}
           style={({ pressed }) => [
             styles.startWorkoutButton,
-            pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 },
+            pressed && { transform: [{ scale: 0.98 }], opacity: 0.92 },
           ]}
         >
           <View style={styles.plusIconWrapper}>
-            <Plus size={18} color="#FFFFFF" strokeWidth={2.5} />
+            {activeSession ? (
+              <RotateCw size={17} color="#000000" strokeWidth={2.5} />
+            ) : (
+              <Plus size={18} color="#000000" strokeWidth={2.6} />
+            )}
           </View>
-          <Text style={styles.startWorkoutButtonText}>{t('start_workout')}</Text>
+          <Text style={styles.startWorkoutButtonText}>
+            {activeSession
+              ? (t('resume_workout') || 'Lanjutkan Latihan')
+              : todayScheduledTemplate
+              ? `${t('start_workout') || 'Mulai Latihan'}: ${todayScheduledTemplate.name}`
+              : (t('start_workout') || 'Mulai Latihan')}
+          </Text>
         </Pressable>
 
         <View style={{ height: 110 }} />
       </ScrollView>
-
-      {/* Interactive Onboarding: Step 1 Dashboard */}
-      {isTourActive && currentStep === 'dashboard_overview' && (
-        <SpotlightGuideOverlay
-          stepNumber={1}
-          totalSteps={5}
-          title={t('onboarding_step1_title')}
-          message={t('onboarding_step1_desc')}
-          nextLabel={t('onboarding_step1_btn')}
-          onNext={() => {
-            nextStep();
-            router.push('/(tabs)/workout');
-          }}
-          onSkip={skipTour}
-          position="top"
-        />
-      )}
     </View>
   );
 }
@@ -339,21 +616,69 @@ const getStyles = (c: ThemeColors) =>
 
     // Header Bar
     headerBar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       marginBottom: 20,
     },
+    headerLeft: {
+      flex: 1,
+      marginRight: 12,
+    },
     greetingTitle: {
-      fontFamily: AppFonts.extraBold,
-      fontSize: 28,
+      fontFamily: AppFonts.bold,
+      fontSize: 24,
       fontWeight: '800',
       color: c.textPrimary,
-      letterSpacing: -0.6,
+      letterSpacing: -0.4,
+    },
+    userName: {
+      color: c.primaryAction,
     },
     dateSubtitle: {
       fontFamily: AppFonts.medium,
+      fontSize: 12,
+      color: c.textMuted,
+      marginTop: 2,
+    },
+    headerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    headerStreakBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: 'rgba(245, 158, 11, 0.1)',
+      borderWidth: 1,
+      borderColor: 'rgba(245, 158, 11, 0.2)',
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 10,
+    },
+    headerStreakText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#F59E0B',
+      fontVariant: ['tabular-nums'],
+    },
+    avatarButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: c.surfaceHighlight,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      fontFamily: AppFonts.bold,
       fontSize: 14,
-      color: c.textSecondary,
-      fontWeight: '500',
-      marginTop: 4,
+      fontWeight: '800',
+      color: c.textPrimary,
     },
 
     // Date Scroller
@@ -362,10 +687,10 @@ const getStyles = (c: ThemeColors) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       backgroundColor: c.cardSurface,
-      borderRadius: 24,
-      paddingVertical: 14,
+      borderRadius: 16,
+      paddingVertical: 12,
       paddingHorizontal: 8,
-      marginBottom: 24,
+      marginBottom: 20,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       ...Platform.select({
@@ -383,107 +708,108 @@ const getStyles = (c: ThemeColors) =>
     dayColumn: {
       flex: 1,
       alignItems: 'center',
-      gap: 6,
+      gap: 5,
     },
     dayAbbr: {
       fontFamily: AppFonts.semiBold,
       fontSize: 11,
       fontWeight: '600',
-      color: c.textSecondary,
-      letterSpacing: 0.3,
+      color: c.textMuted,
+      letterSpacing: 0.5,
     },
     dayAbbrToday: {
       color: c.primaryAction,
-      fontWeight: '700',
+      fontWeight: '800',
     },
     dayNumberBadge: {
       width: 34,
       height: 34,
-      borderRadius: 17,
+      borderRadius: 10,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',
     },
+    dayNumberBadgeToday: {
+      borderWidth: 1.5,
+      borderColor: c.primaryAction,
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    },
     dayNumberBadgeSelected: {
-      backgroundColor: c.dateBadgeSelected,
+      backgroundColor: c.primaryAction,
+      borderColor: c.primaryAction,
     },
     dayNumberText: {
       fontFamily: AppFonts.bold,
       fontSize: 15,
       fontWeight: '700',
       color: c.textPrimary,
+      fontVariant: ['tabular-nums'],
+    },
+    dayNumberTextToday: {
+      color: c.primaryAction,
+      fontWeight: '800',
     },
     dayNumberTextSelected: {
       fontFamily: AppFonts.extraBold,
       fontWeight: '800',
-      color: c.dateTextSelected,
+      color: '#000000',
     },
     dot: {
-      width: 5,
-      height: 5,
-      borderRadius: 2.5,
+      width: 4,
+      height: 4,
+      borderRadius: 2,
     },
 
-    // Hero Goal Card
+    // Hero Goal Card (Slim Target Box)
     heroCard: {
-      backgroundColor: c.heroBackground,
-      borderRadius: 24,
-      padding: 20,
-      marginBottom: 24,
+      backgroundColor: c.cardSurface,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 14,
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.08)',
+      borderColor: c.borderSubtle,
     },
     heroTopRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: 16,
+      alignItems: 'center',
+      marginBottom: 8,
     },
     heroGoalHeading: {
-      fontFamily: AppFonts.extraBold,
-      fontSize: 22,
-      fontWeight: '800',
-      color: '#FFFFFF',
-      letterSpacing: -0.3,
-    },
-    heroGoalUnit: {
       fontFamily: AppFonts.semiBold,
-      fontSize: 16,
-      fontWeight: '600',
-      color: c.heroTextSecondary,
-    },
-    heroGoalSub: {
-      fontFamily: AppFonts.medium,
       fontSize: 13,
-      color: c.heroTextSecondary,
-      fontWeight: '500',
-      marginTop: 2,
+      color: c.textSecondary,
     },
-    streakBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 20,
-    },
-    streakText: {
+    heroGoalValue: {
       fontFamily: AppFonts.bold,
-      fontSize: 12,
-      fontWeight: '700',
-      color: '#FFFFFF',
+      fontSize: 15,
+      fontWeight: '800',
+      color: c.textPrimary,
+      fontVariant: ['tabular-nums'],
+    },
+    heroGoalPercentBadge: {
+      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+      paddingHorizontal: 7,
+      paddingVertical: 2.5,
+      borderRadius: 6,
+    },
+    heroGoalPercentText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#10B981',
+      fontVariant: ['tabular-nums'],
     },
     heroProgressTrack: {
-      height: 8,
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
-      borderRadius: 4,
+      height: 5,
+      backgroundColor: '#1E293B',
+      borderRadius: 999,
       overflow: 'hidden',
-      marginBottom: 10,
+      marginBottom: 6,
     },
     heroProgressFill: {
       height: '100%',
-      borderRadius: 4,
+      borderRadius: 999,
     },
     heroBottomMeta: {
       flexDirection: 'row',
@@ -492,54 +818,213 @@ const getStyles = (c: ThemeColors) =>
     },
     heroProgressLabel: {
       fontFamily: AppFonts.semiBold,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '600',
-      color: c.accentLime,
+      color: '#10B981',
     },
     heroTargetLabel: {
       fontFamily: AppFonts.medium,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '500',
-      color: c.heroTextSecondary,
+      color: c.textMuted,
+    },
+
+    // Step Tracker Card
+    stepCard: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: c.shadowColor,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: c.shadowOpacity,
+          shadowRadius: 3,
+        },
+        android: {
+          elevation: c.elevation,
+        },
+      }),
+    },
+    stepCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    stepCardHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    stepCardHeaderRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    stepIconBadge: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepCardTitle: {
+      fontFamily: AppFonts.bold,
+      fontSize: 15,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    stepCardSub: {
+      fontFamily: AppFonts.medium,
+      fontSize: 12,
+      color: c.textMuted,
+      marginTop: 1,
+    },
+    stepSyncButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: 'rgba(249, 115, 22, 0.1)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepPercentBadge: {
+      backgroundColor: 'rgba(249, 115, 22, 0.12)',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    stepPercentText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#F97316',
+    },
+    stepCountRow: {
+      marginBottom: 6,
+    },
+    stepCountBig: {
+      fontFamily: AppFonts.extraBold,
+      fontSize: 20,
+      fontWeight: '800',
+      color: c.textPrimary,
+      letterSpacing: -0.3,
+    },
+    stepCountGoal: {
+      fontFamily: AppFonts.medium,
+      fontSize: 13,
+      fontWeight: '500',
+      color: c.textMuted,
+    },
+    stepProgressTrack: {
+      height: 6,
+      backgroundColor: c.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+      borderRadius: 3,
+      overflow: 'hidden',
+      marginBottom: 10,
+    },
+    stepProgressFill: {
+      height: '100%',
+      borderRadius: 3,
+    },
+    stepMetricsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingTop: 2,
+    },
+    stepMetricItem: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    stepMetricDivider: {
+      width: 1,
+      height: 18,
+      backgroundColor: c.borderSubtle,
+    },
+    stepMetricValue: {
+      fontFamily: AppFonts.bold,
+      fontSize: 13,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    stepMetricLabel: {
+      fontFamily: AppFonts.medium,
+      fontSize: 11,
+      color: c.textMuted,
+      marginTop: 1,
+    },
+    stepConnectContainer: {
+      gap: 10,
+    },
+    stepConnectLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    stepConnectDesc: {
+      fontFamily: AppFonts.medium,
+      fontSize: 12,
+      color: c.textMuted,
+      marginTop: 2,
+      lineHeight: 16,
+    },
+    stepConnectBtn: {
+      backgroundColor: '#F97316',
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepConnectBtnText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#FFFFFF',
     },
 
     // Section Header
     sectionHeader: {
-      marginBottom: 12,
+      marginBottom: 8,
     },
     sectionContainer: {
-      marginBottom: 20,
+      marginBottom: 14,
     },
     sectionTitle: {
       fontFamily: AppFonts.bold,
-      fontSize: 18,
+      fontSize: 16,
       fontWeight: '700',
       color: c.textPrimary,
       letterSpacing: -0.3,
-      marginBottom: 12,
+      marginBottom: 8,
     },
 
     // Bento Grid
     bentoGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 12,
-      marginBottom: 24,
+      gap: 8,
+      marginBottom: 14,
     },
     bentoTile: {
-      width: '48%',
+      width: '48.5%',
       backgroundColor: c.cardSurface,
-      borderRadius: 20,
-      padding: 16,
+      borderRadius: 14,
+      padding: 12,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       justifyContent: 'space-between',
       ...Platform.select({
         ios: {
           shadowColor: c.shadowColor,
-          shadowOffset: { width: 0, height: 4 },
+          shadowOffset: { width: 0, height: 2 },
           shadowOpacity: c.shadowOpacity,
-          shadowRadius: c.shadowRadius,
+          shadowRadius: 3,
         },
         android: {
           elevation: c.elevation,
@@ -553,7 +1038,7 @@ const getStyles = (c: ThemeColors) =>
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 8,
+      marginBottom: 6,
     },
     bentoCategory: {
       fontFamily: AppFonts.bold,
@@ -565,29 +1050,29 @@ const getStyles = (c: ThemeColors) =>
       marginRight: 4,
     },
     bentoIconBadge: {
-      width: 30,
-      height: 30,
-      borderRadius: 10,
+      width: 26,
+      height: 26,
+      borderRadius: 8,
       alignItems: 'center',
       justifyContent: 'center',
     },
     bentoValue: {
       fontFamily: AppFonts.extraBold,
-      fontSize: 24,
+      fontSize: 20,
       fontWeight: '800',
       color: c.textPrimary,
       letterSpacing: -0.5,
-      marginBottom: 4,
+      marginBottom: 2,
     },
     bentoUnit: {
       fontFamily: AppFonts.semiBold,
-      fontSize: 14,
+      fontSize: 12,
       fontWeight: '600',
       color: c.textSecondary,
     },
     bentoSubtext: {
       fontFamily: AppFonts.medium,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '500',
       color: c.textMuted,
     },
@@ -597,17 +1082,17 @@ const getStyles = (c: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: c.cardSurface,
-      borderRadius: 20,
-      padding: 16,
+      borderRadius: 14,
+      padding: 12,
       borderWidth: 1,
       borderColor: c.borderSubtle,
-      gap: 12,
+      gap: 10,
       ...Platform.select({
         ios: {
           shadowColor: c.shadowColor,
-          shadowOffset: { width: 0, height: 4 },
+          shadowOffset: { width: 0, height: 2 },
           shadowOpacity: c.shadowOpacity,
-          shadowRadius: c.shadowRadius,
+          shadowRadius: 3,
         },
         android: {
           elevation: c.elevation,
@@ -615,16 +1100,16 @@ const getStyles = (c: ThemeColors) =>
       }),
     },
     activityIconBox: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
+      width: 38,
+      height: 38,
+      borderRadius: 10,
       backgroundColor: c.surfaceHighlight,
       alignItems: 'center',
       justifyContent: 'center',
     },
     activityTitle: {
       fontFamily: AppFonts.bold,
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '700',
       color: c.textPrimary,
       marginBottom: 2,
@@ -639,8 +1124,8 @@ const getStyles = (c: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: c.cardSurface,
-      borderRadius: 20,
-      padding: 24,
+      borderRadius: 14,
+      padding: 16,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       borderStyle: 'dashed',
@@ -659,24 +1144,25 @@ const getStyles = (c: ThemeColors) =>
       marginTop: 2,
     },
 
-    // Start Workout Button
+    // Start Workout Button (Tactile Kinetic Gold CTA)
     startWorkoutButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      height: 56,
+      height: 52,
       backgroundColor: c.primaryAction,
-      borderRadius: 20,
+      borderRadius: 14,
       gap: 10,
+      marginTop: 4,
       ...Platform.select({
         ios: {
-          shadowColor: c.primaryAction,
+          shadowColor: '#F59E0B',
           shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.25,
-          shadowRadius: 12,
+          shadowOpacity: 0.35,
+          shadowRadius: 10,
         },
         android: {
-          elevation: 3,
+          elevation: 6,
         },
       }),
     },
@@ -684,15 +1170,15 @@ const getStyles = (c: ThemeColors) =>
       width: 28,
       height: 28,
       borderRadius: 14,
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: 'rgba(0, 0, 0, 0.15)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     startWorkoutButtonText: {
-      fontFamily: AppFonts.extraBold,
-      fontSize: 16,
+      fontFamily: AppFonts.bold,
+      fontSize: 15,
       fontWeight: '800',
-      color: '#FFFFFF',
-      letterSpacing: 0.3,
+      color: '#000000',
+      letterSpacing: 0.2,
     },
   });

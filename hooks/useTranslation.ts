@@ -2,7 +2,7 @@ import id from '../locales/id.json';
 import en from '../locales/en.json';
 import { useUserStore } from '../store/useUserStore';
 
-const dictionaries = {
+const dictionaries: Record<string, Record<string, string>> = {
   id,
   en,
 };

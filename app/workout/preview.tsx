@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { format } from 'date-fns';
 import {
   ArrowLeft,
   Edit3,
@@ -18,25 +19,32 @@ import {
   Timer,
   Repeat,
   Hourglass,
+  Play,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useUserStore } from '@/store/useUserStore';
+import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
+import { AppFonts } from '@/constants/theme';
 import { formatDurationBadge } from '@/utils/time';
 
 export default function PreviewWorkoutScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t, language } = useTranslation();
-  const { hapticsEnabled } = useUserStore();
+  const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
+  const showAlert = useAlertStore((state) => state.showAlert);
 
   const templates = useWorkoutStore((state) => state.templates);
+  const activeSession = useWorkoutStore((state) => state.activeSession);
+  const startSession = useWorkoutStore((state) => state.startSession);
+  const scheduleWorkout = useWorkoutStore((state) => state.scheduleWorkout);
   const template = templates.find((item) => item.id === id);
 
   const colors = useThemeColors();
-  const styles = getStyles(colors);
+  const styles = useMemo(() => getStyles(colors), [colors]);
 
   if (!template) {
     return (
@@ -100,6 +108,49 @@ export default function PreviewWorkoutScreen() {
     router.push(`/workout/create?id=${template.id}`);
   };
 
+  const handleStartWorkout = () => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    }
+
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+    // If there's already an active session for this template, resume it
+    if (activeSession && activeSession.templateId === template.id) {
+      router.push('/workout/active');
+      return;
+    }
+
+    // If there's an active session for a DIFFERENT template, ask the user
+    if (activeSession) {
+      showAlert(
+        t('active_workout'),
+        t('active_session_alert_msg'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('resume'),
+            onPress: () => {
+              router.push('/workout/active');
+            },
+          },
+          {
+            text: t('start_new'),
+            style: 'destructive',
+            onPress: () => {
+              startSession(template.id);
+              router.push('/workout/active');
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    startSession(template.id);
+    router.push('/workout/active');
+  };
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -140,9 +191,6 @@ export default function PreviewWorkoutScreen() {
           </View>
 
           <Text style={styles.title}>{template.name}</Text>
-          {template.subtitle ? (
-            <Text style={styles.subtitle}>{template.subtitle}</Text>
-          ) : null}
 
           {/* Muscle Target Chips with Subtle Gradient Background */}
           <View style={styles.muscleTagsRow}>
@@ -159,11 +207,13 @@ export default function PreviewWorkoutScreen() {
         <View style={styles.statsGrid}>
           {/* 1. Exercises Count */}
           <View style={styles.statCard}>
-            <View style={[styles.statIconBadge, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
-              <Dumbbell size={18} color="#3B82F6" strokeWidth={2.2} />
+            <View style={[styles.statIconBadge, { backgroundColor: colors.actionIconBg }]}>
+              <Dumbbell size={18} color={colors.primaryAction} strokeWidth={2.2} />
             </View>
             <Text style={styles.statValue}>{totalExercises}</Text>
-            <Text style={styles.statCaption}>{t('exercises_count')}</Text>
+            <Text style={styles.statCaption} numberOfLines={1}>
+              {language === 'id' ? 'Total Gerakan' : t('exercises_count')}
+            </Text>
           </View>
 
           {/* 2. Total Sets */}
@@ -172,7 +222,7 @@ export default function PreviewWorkoutScreen() {
               <Layers size={18} color="#22C55E" strokeWidth={2.2} />
             </View>
             <Text style={styles.statValue}>{totalSets}</Text>
-            <Text style={styles.statCaption}>{t('total_sets')}</Text>
+            <Text style={styles.statCaption} numberOfLines={1}>{t('total_sets')}</Text>
           </View>
 
           {/* 3. Estimated Duration */}
@@ -181,7 +231,9 @@ export default function PreviewWorkoutScreen() {
               <Clock size={18} color="#F59E0B" strokeWidth={2.2} />
             </View>
             <Text style={styles.statValue}>{estimatedDurationMinutes} {t('min_short')}</Text>
-            <Text style={styles.statCaption}>{t('estimated_duration')}</Text>
+            <Text style={styles.statCaption} numberOfLines={1}>
+              {language === 'id' ? 'Estimasi Waktu' : t('estimated_duration')}
+            </Text>
           </View>
         </View>
 
@@ -209,7 +261,7 @@ export default function PreviewWorkoutScreen() {
               <View
                 style={[
                   styles.cardAccentBar,
-                  { backgroundColor: isTimeBased ? '#10B981' : '#3B82F6' },
+                  { backgroundColor: isTimeBased ? colors.successBadge : colors.primaryAction },
                 ]}
               />
 
@@ -219,13 +271,13 @@ export default function PreviewWorkoutScreen() {
                   <View
                     style={[
                       styles.orderBadge,
-                      { backgroundColor: isTimeBased ? 'rgba(16, 185, 129, 0.12)' : 'rgba(59, 130, 246, 0.12)' },
+                      { backgroundColor: isTimeBased ? 'rgba(16, 185, 129, 0.12)' : colors.actionIconBg },
                     ]}
                   >
                     <Text
                       style={[
                         styles.orderBadgeText,
-                        { color: isTimeBased ? '#10B981' : '#3B82F6' },
+                        { color: isTimeBased ? colors.successBadge : colors.primaryAction },
                       ]}
                     >
                       {orderNum}
@@ -244,17 +296,45 @@ export default function PreviewWorkoutScreen() {
                         ]}
                       >
                         {isTimeBased ? (
-                          <Timer size={12} color="#10B981" strokeWidth={2.2} />
+                          <Timer size={12} color={colors.successBadge} strokeWidth={2.2} />
                         ) : (
-                          <Repeat size={12} color="#3B82F6" strokeWidth={2.2} />
+                          <Repeat size={12} color={colors.primaryAction} strokeWidth={2.2} />
                         )}
                         <Text
                           style={[
                             styles.typePillText,
-                            { color: isTimeBased ? '#10B981' : '#3B82F6' },
+                            { color: isTimeBased ? colors.successBadge : colors.primaryAction },
                           ]}
                         >
-                          {isTimeBased ? t('duration') : t('reps_label')}
+                          {isTimeBased
+                            ? (language === 'id' ? 'BERBASIS WAKTU' : 'TIME')
+                            : (language === 'id' ? 'REPETISI' : 'REPS')}
+                        </Text>
+                      </View>
+
+                      {/* Weight Mode Badges */}
+                      {exercise.weightMode === 'weighted' && (
+                        <View style={[styles.typePill, styles.typePillWeighted]}>
+                          <Dumbbell size={12} color="#F59E0B" strokeWidth={2.2} />
+                          <Text style={[styles.typePillText, { color: '#F59E0B' }]}>
+                            {exercise.weight ? `${exercise.weight} ${t('weight_unit')}` : t('weighted')}
+                          </Text>
+                        </View>
+                      )}
+
+                      {exercise.weightMode === 'bodyweight' && (
+                        <View style={[styles.typePill, styles.typePillBW]}>
+                          <Text style={[styles.typePillText, { color: '#818CF8', fontWeight: '800' }]}>
+                            {t('bodyweight_short')}
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Rest duration pill */}
+                      <View style={[styles.typePill, styles.typePillRest]}>
+                        <Clock size={11} color={colors.textSecondary} strokeWidth={2} />
+                        <Text style={[styles.typePillText, { color: colors.textSecondary }]}>
+                          {template.defaultRestTime || 60}{t('sec_short')} {t('rest_duration_label')}
                         </Text>
                       </View>
                     </View>
@@ -266,9 +346,9 @@ export default function PreviewWorkoutScreen() {
                   {/* Sets Metric */}
                   <View style={styles.metricItem}>
                     <View style={styles.metricIconWrap}>
-                      <Repeat size={14} color={colors.textSecondary} strokeWidth={2} />
+                      <Repeat size={13} color={colors.textSecondary} strokeWidth={2} />
                     </View>
-                    <View>
+                    <View style={styles.metricTextBox}>
                       <Text style={styles.metricLabel}>{t('sets').toUpperCase()}</Text>
                       <Text style={styles.metricValue}>
                         {exercise.sets} <Text style={styles.metricUnit}>{t('set')}</Text>
@@ -282,14 +362,14 @@ export default function PreviewWorkoutScreen() {
                   <View style={styles.metricItem}>
                     <View style={styles.metricIconWrap}>
                       {isTimeBased ? (
-                        <Hourglass size={14} color={colors.textSecondary} strokeWidth={2} />
+                        <Hourglass size={13} color={colors.textSecondary} strokeWidth={2} />
                       ) : (
-                        <Flame size={14} color={colors.textSecondary} strokeWidth={2} />
+                        <Flame size={13} color={colors.textSecondary} strokeWidth={2} />
                       )}
                     </View>
-                    <View>
+                    <View style={styles.metricTextBox}>
                       <Text style={styles.metricLabel}>
-                        {isTimeBased ? t('duration').toUpperCase() : t('target').toUpperCase()}
+                        {isTimeBased ? t('time_metric_label').toUpperCase() : t('target_metric_label').toUpperCase()}
                       </Text>
                       <Text style={styles.metricValue}>
                         {isTimeBased
@@ -303,21 +383,51 @@ export default function PreviewWorkoutScreen() {
                       </Text>
                     </View>
                   </View>
+
+                  {/* Weight Metric (if weighted) */}
+                  {exercise.weightMode === 'weighted' && !!exercise.weight && (
+                    <>
+                      <View style={styles.metricSeparator} />
+                      <View style={styles.metricItem}>
+                        <View style={styles.metricIconWrap}>
+                          <Dumbbell size={13} color="#F59E0B" strokeWidth={2} />
+                        </View>
+                        <View style={styles.metricTextBox}>
+                          <Text style={styles.metricLabel}>{t('weight_metric_label').toUpperCase()}</Text>
+                          <Text style={styles.metricValue}>
+                            {exercise.weight} <Text style={styles.metricUnit}>{t('weight_unit')}</Text>
+                          </Text>
+                        </View>
+                      </View>
+                    </>
+                  )}
                 </View>
               </View>
             </View>
           );
         })}
 
-        {/* Bottom space for pleasant scrolling */}
-        <View style={{ height: 48 }} />
+        {/* Bottom space for pleasant scrolling above the sticky CTA */}
+        <View style={{ height: 72 }} />
       </ScrollView>
+
+      {/* Sticky Bottom CTA Button */}
+      <View style={styles.bottomBarDock}>
+        <TouchableOpacity
+          style={styles.startCtaBtn}
+          onPress={handleStartWorkout}
+          activeOpacity={0.85}
+        >
+          <Play size={16} color="#000000" fill="#000000" />
+          <Text style={styles.startCtaBtnText}>{t('start_workout_cta')}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const getStyles = (c: ThemeColors) => {
-  const isDark = c.background === '#0B0C0E';
+  const isDark = c.isDark;
 
   return StyleSheet.create({
     container: {
@@ -328,23 +438,23 @@ const getStyles = (c: ThemeColors) => {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: Platform.OS === 'ios' ? 56 : 44,
-      paddingBottom: 16,
+      paddingHorizontal: 16,
+      paddingTop: Platform.OS === 'ios' ? 52 : 38,
+      paddingBottom: 10,
       backgroundColor: c.background,
       borderBottomWidth: 1,
       borderBottomColor: c.borderSubtle,
     },
     headerTitle: {
-      fontSize: 17,
-      fontWeight: '800',
+      fontFamily: AppFonts.bold,
+      fontSize: 16,
       color: c.textPrimary,
       letterSpacing: -0.3,
     },
     headerIconBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 14,
+      width: 36,
+      height: 36,
+      borderRadius: 10,
       backgroundColor: c.cardSurface,
       borderWidth: 1,
       borderColor: c.borderSubtle,
@@ -353,8 +463,34 @@ const getStyles = (c: ThemeColors) => {
       ...Platform.select({
         ios: {
           shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: isDark ? 0.3 : 0.06,
+          shadowRadius: 4,
+        },
+        android: {
+          elevation: 1,
+        },
+      }),
+    },
+    scrollContent: {
+      paddingHorizontal: 14,
+      paddingTop: 12,
+      paddingBottom: 20,
+    },
+
+    // Hero Section
+    heroCard: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
           shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: isDark ? 0.3 : 0.08,
+          shadowOpacity: isDark ? 0.3 : 0.05,
           shadowRadius: 6,
         },
         android: {
@@ -362,132 +498,110 @@ const getStyles = (c: ThemeColors) => {
         },
       }),
     },
-    scrollContent: {
-      padding: 20,
-    },
-
-    // Hero Section
-    heroCard: {
-      backgroundColor: c.cardSurface,
-      borderRadius: 24,
-      padding: 20,
-      marginBottom: 20,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: isDark ? 0.4 : 0.08,
-          shadowRadius: 12,
-        },
-        android: {
-          elevation: 3,
-        },
-      }),
-    },
     heroHeaderRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 12,
+      marginBottom: 8,
     },
     heroBadgePill: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
-      backgroundColor: isDark ? 'rgba(59, 130, 246, 0.12)' : 'rgba(59, 130, 246, 0.08)',
-      paddingVertical: 5,
-      paddingHorizontal: 12,
-      borderRadius: 999,
+      gap: 5,
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      paddingVertical: 3,
+      paddingHorizontal: 8,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: 'rgba(245, 158, 11, 0.25)',
     },
     heroDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: c.primaryAction,
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: '#F59E0B',
     },
     heroBadgeText: {
-      fontSize: 11,
-      fontWeight: '800',
-      color: c.primaryAction,
-      letterSpacing: 1,
+      fontFamily: AppFonts.bold,
+      fontSize: 10,
+      color: '#F59E0B',
+      letterSpacing: 0.8,
     },
     title: {
-      fontSize: 28,
-      fontWeight: '900',
+      fontFamily: AppFonts.extraBold,
+      fontSize: 18,
       color: c.textPrimary,
-      letterSpacing: -0.6,
-      marginBottom: 6,
-    },
-    subtitle: {
-      fontSize: 14,
-      color: c.textSecondary,
-      lineHeight: 20,
-      marginBottom: 16,
+      letterSpacing: -0.4,
+      marginBottom: 8,
     },
     muscleTagsRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 8,
-      marginTop: 4,
+      gap: 6,
+      marginTop: 2,
     },
     muscleTagPill: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
+      gap: 4,
       backgroundColor: c.surfaceHighlight,
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 12,
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
     muscleTagText: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: c.textPrimary,
+      fontFamily: AppFonts.semiBold,
+      fontSize: 11,
+      color: c.textSecondary,
     },
 
     // Stats Grid
     statsGrid: {
       flexDirection: 'row',
-      gap: 12,
-      marginBottom: 26,
+      gap: 8,
+      marginBottom: 12,
     },
     statCard: {
       flex: 1,
       backgroundColor: c.cardSurface,
-      borderRadius: 20,
-      paddingVertical: 16,
-      paddingHorizontal: 10,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 6,
       alignItems: 'center',
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
       ...Platform.select({
         ios: {
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: isDark ? 0.3 : 0.06,
-          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: isDark ? 0.25 : 0.05,
+          shadowRadius: 4,
         },
         android: {
-          elevation: 2,
+          elevation: 1,
         },
       }),
     },
     statIconBadge: {
-      width: 36,
-      height: 36,
-      borderRadius: 12,
+      width: 28,
+      height: 28,
+      borderRadius: 8,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 8,
+      marginBottom: 4,
     },
     statValue: {
-      fontSize: 20,
-      fontWeight: '900',
+      fontFamily: AppFonts.extraBold,
+      fontSize: 16,
       color: c.textPrimary,
       fontVariant: ['tabular-nums'],
     },
     statCaption: {
+      fontFamily: AppFonts.medium,
       fontSize: 11,
       color: c.textSecondary,
-      fontWeight: '600',
       marginTop: 2,
       textAlign: 'center',
     },
@@ -497,36 +611,38 @@ const getStyles = (c: ThemeColors) => {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 14,
-      marginTop: 4,
-      paddingHorizontal: 4,
+      marginBottom: 8,
+      marginTop: 2,
+      paddingHorizontal: 2,
     },
     sectionHeaderLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: 6,
     },
     sectionIndicator: {
-      width: 4,
-      height: 18,
-      borderRadius: 2,
-      backgroundColor: c.primaryAction,
+      width: 3,
+      height: 14,
+      borderRadius: 1.5,
+      backgroundColor: '#F59E0B',
     },
     sectionTitle: {
-      fontSize: 18,
-      fontWeight: '800',
+      fontFamily: AppFonts.bold,
+      fontSize: 15,
       color: c.textPrimary,
-      letterSpacing: -0.3,
+      letterSpacing: -0.2,
     },
     countBadge: {
       backgroundColor: c.surfaceHighlight,
-      paddingVertical: 4,
-      paddingHorizontal: 10,
-      borderRadius: 8,
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
     countBadgeText: {
-      fontSize: 12,
-      fontWeight: '700',
+      fontFamily: AppFonts.semiBold,
+      fontSize: 11,
       color: c.textSecondary,
     },
 
@@ -534,18 +650,20 @@ const getStyles = (c: ThemeColors) => {
     exerciseCard: {
       position: 'relative',
       backgroundColor: c.cardSurface,
-      borderRadius: 22,
-      marginBottom: 14,
+      borderRadius: 12,
+      marginBottom: 8,
       overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
       ...Platform.select({
         ios: {
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: isDark ? 0.35 : 0.07,
-          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: isDark ? 0.25 : 0.05,
+          shadowRadius: 4,
         },
         android: {
-          elevation: 3,
+          elevation: 1,
         },
       }),
     },
@@ -554,63 +672,74 @@ const getStyles = (c: ThemeColors) => {
       left: 0,
       top: 0,
       bottom: 0,
-      width: 4,
+      width: 3,
     },
     exerciseCardBody: {
-      padding: 16,
-      paddingLeft: 18,
+      padding: 10,
+      paddingLeft: 12,
     },
     exerciseTopRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      marginBottom: 14,
+      gap: 10,
+      marginBottom: 8,
     },
     orderBadge: {
-      width: 38,
-      height: 38,
-      borderRadius: 14,
+      width: 26,
+      height: 26,
+      borderRadius: 7,
       alignItems: 'center',
       justifyContent: 'center',
     },
     orderBadgeText: {
-      fontSize: 14,
-      fontWeight: '900',
+      fontFamily: AppFonts.extraBold,
+      fontSize: 12,
       fontVariant: ['tabular-nums'],
     },
     exerciseInfo: {
       flex: 1,
     },
     exerciseName: {
-      fontSize: 16,
-      fontWeight: '800',
+      fontFamily: AppFonts.bold,
+      fontSize: 15,
       color: c.textPrimary,
-      letterSpacing: -0.3,
-      marginBottom: 4,
+      letterSpacing: -0.2,
+      marginBottom: 3,
     },
     typeBadgeRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      gap: 6,
+      flexWrap: 'wrap',
     },
     typePill: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingVertical: 2,
-      paddingHorizontal: 8,
-      borderRadius: 6,
+      paddingVertical: 2.5,
+      paddingHorizontal: 7,
+      borderRadius: 4,
     },
     typePillReps: {
-      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      backgroundColor: 'rgba(245, 158, 11, 0.1)',
     },
     typePillTime: {
       backgroundColor: 'rgba(16, 185, 129, 0.1)',
     },
+    typePillWeighted: {
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    },
+    typePillBW: {
+      backgroundColor: 'rgba(99, 102, 241, 0.12)',
+    },
+    typePillRest: {
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)',
+    },
     typePillText: {
+      fontFamily: AppFonts.bold,
       fontSize: 11,
-      fontWeight: '700',
       textTransform: 'uppercase',
-      letterSpacing: 0.4,
+      letterSpacing: 0.3,
     },
 
     // Metrics Row
@@ -618,47 +747,52 @@ const getStyles = (c: ThemeColors) => {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: c.surfaceHighlight,
-      borderRadius: 16,
-      paddingVertical: 12,
-      paddingHorizontal: 16,
+      borderRadius: 8,
+      paddingVertical: 7,
+      paddingHorizontal: 10,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
     metricItem: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 6,
+    },
+    metricTextBox: {
+      flex: 1,
     },
     metricIconWrap: {
-      width: 28,
-      height: 28,
-      borderRadius: 8,
+      width: 22,
+      height: 22,
+      borderRadius: 6,
       backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     metricLabel: {
-      fontSize: 9,
-      fontWeight: '700',
+      fontFamily: AppFonts.semiBold,
+      fontSize: 11,
       color: c.textSecondary,
-      letterSpacing: 0.8,
+      letterSpacing: 0.5,
     },
     metricValue: {
-      fontSize: 15,
-      fontWeight: '900',
+      fontFamily: AppFonts.extraBold,
+      fontSize: 14,
       color: c.textPrimary,
       fontVariant: ['tabular-nums'],
       marginTop: 1,
     },
     metricUnit: {
-      fontSize: 12,
-      fontWeight: '600',
+      fontFamily: AppFonts.medium,
+      fontSize: 11,
       color: c.textSecondary,
     },
     metricSeparator: {
       width: 1,
-      height: 28,
+      height: 22,
       backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-      marginHorizontal: 12,
+      marginHorizontal: 8,
     },
 
     // Not Found
@@ -666,36 +800,89 @@ const getStyles = (c: ThemeColors) => {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      padding: 24,
+      padding: 20,
     },
     notFoundIconBox: {
-      width: 72,
-      height: 72,
-      borderRadius: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 16,
       backgroundColor: c.cardSurface,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
     notFoundText: {
-      fontSize: 16,
+      fontFamily: AppFonts.medium,
+      fontSize: 14,
       color: c.textSecondary,
-      marginBottom: 24,
-      fontWeight: '600',
+      marginBottom: 16,
     },
     backButtonPrompt: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingVertical: 12,
-      paddingHorizontal: 24,
+      gap: 6,
+      paddingVertical: 8,
+      paddingHorizontal: 18,
       backgroundColor: c.cardSurface,
-      borderRadius: 14,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
     backButtonPromptText: {
-      fontSize: 14,
-      fontWeight: '700',
+      fontFamily: AppFonts.bold,
+      fontSize: 13,
       color: c.textPrimary,
+    },
+    bottomBarDock: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: c.background,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: Platform.OS === 'ios' ? 28 : 14,
+      borderTopWidth: 1,
+      borderTopColor: c.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: isDark ? 0.4 : 0.08,
+          shadowRadius: 8,
+        },
+        android: {
+          elevation: 8,
+        },
+      }),
+    },
+    startCtaBtn: {
+      backgroundColor: '#F59E0B',
+      borderRadius: 12,
+      height: 46,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#F59E0B',
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.35,
+          shadowRadius: 6,
+        },
+        android: {
+          elevation: 3,
+        },
+      }),
+    },
+    startCtaBtnText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 14,
+      color: '#000000',
+      letterSpacing: 0.2,
     },
   });
 };

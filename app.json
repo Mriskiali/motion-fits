@@ -25,10 +25,17 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "permissions": [
-        "RECEIVE_BOOT_COMPLETED",
-        "SCHEDULE_EXACT_ALARM",
-        "POST_NOTIFICATIONS",
-        "VIBRATE"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.health.READ_STEPS"
       ],
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.workoutapps.v2"
@@ -51,7 +58,28 @@
       "@react-native-community/datetimepicker",
       "expo-sharing",
       "expo-audio",
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/timerendsound.wav"
+          ]
+        }
+      ],
+      [
+        "react-native-health-connect",
+        {
+          "rationaleActivity": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -59,8 +87,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "94cd26bd-d716-487e-9bb8-de93b3621d8d"
+        "projectId": "38e4e579-789e-4753-8024-4cf2c344be15"
       }
+    },
+    "owner": "ourworlds",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/38e4e579-789e-4753-8024-4cf2c344be15"
     }
   }
 }

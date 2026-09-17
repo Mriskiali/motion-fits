@@ -21,7 +21,7 @@ export default function SplashScreenOverlay({
   isReady,
 }: SplashScreenOverlayProps) {
   const colors = useThemeColors();
-  const isDark = colors.background === '#0B0C0E';
+  const isDark = colors.isDark;
 
   // Animation values
   const opacity = useSharedValue(1);
@@ -88,7 +88,7 @@ export default function SplashScreenOverlay({
     <Animated.View
       style={[
         styles.container,
-        { backgroundColor: isDark ? '#0B0C0E' : '#F8FAFC' },
+        { backgroundColor: colors.background },
         containerAnimatedStyle,
       ]}
       pointerEvents="auto"
@@ -98,7 +98,7 @@ export default function SplashScreenOverlay({
         <View
           style={[
             styles.ambientGlow,
-            { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.18)' : 'rgba(59, 130, 246, 0.12)' },
+            { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(217, 119, 6, 0.12)' },
           ]}
         />
 
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       ios: {
-        shadowColor: '#3B82F6',
+        shadowColor: '#F59E0B',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.35,
         shadowRadius: 24,
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   titleAccent: {
-    color: '#3B82F6',
+    color: '#F59E0B',
   },
   subtitle: {
     fontSize: 13,

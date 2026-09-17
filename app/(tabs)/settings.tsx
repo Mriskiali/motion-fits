@@ -1,49 +1,7 @@
-import { useRouter } from "expo-router";
-import { AppFonts } from "@/constants/theme";
-import { useThemeColors, ThemeColors } from "@/hooks/useThemeColors";
-import { useTranslation } from "@/hooks/useTranslation";
-import { useAlertStore } from "@/store/useAlertStore";
-import { useUserStore } from "@/store/useUserStore";
-import { useWorkoutStore } from "@/store/useWorkoutStore";
-import { useOnboardingStore } from "@/store/useOnboardingStore";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  cancelAllReminders,
-  requestPermissionsAsync,
-  scheduleDailyReminder,
-} from "@/utils/notifications";
-import {
-  playTimerSound,
-  stopTimerSound,
-  subscribeAudioPlayback,
-  triggerButtonVibration,
-} from "@/utils/soundPlayer";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Haptics from "expo-haptics";
-import * as Sharing from "expo-sharing";
-import {
-  Activity,
-  Bell,
-  Clock,
-  Compass,
-  Download,
-  Globe,
-  Info,
-  Minus,
-  Moon,
-  Music,
-  Play,
-  Plus,
-  Smartphone,
-  Square,
-  Sun,
-  Target,
-  Timer,
-  Upload,
-  Volume2,
-} from "lucide-react-native";
-import { useState, useEffect } from "react";
-import {
+  AppState,
+  AppStateStatus,
   Platform,
   ScrollView,
   StyleSheet,
@@ -53,6 +11,59 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
+import { AppFonts } from "@/constants/theme";
+import { useThemeColors, ThemeColors } from "@/hooks/useThemeColors";
+import { useTranslation } from "@/hooks/useTranslation";
+import { useAlertStore } from "@/store/useAlertStore";
+import { useUserStore } from "@/store/useUserStore";
+import { useWorkoutStore } from "@/store/useWorkoutStore";
+import { useStepStore } from "@/store/useStepStore";
+import {
+  openHealthConnectStore,
+  openHealthConnectSettingsSafe,
+} from "@/utils/healthConnect";
+import {
+  cancelAllReminders,
+  requestPermissionsAsync,
+  scheduleDailyReminder,
+} from "@/utils/notifications";
+import {
+  playPreviewSound,
+  stopTimerSound,
+  subscribeAudioPlayback,
+  triggerButtonVibration,
+} from "@/utils/soundPlayer";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Haptics from "expo-haptics";
+import * as Sharing from "expo-sharing";
+import AudioTrimmerCard from "@/components/AudioTrimmerCard";
+import {
+  Activity,
+  Bell,
+  ChevronRight,
+  Clock,
+  Download,
+  ExternalLink,
+  Footprints,
+  Globe,
+  Minus,
+  Moon,
+  Play,
+  Plus,
+  RotateCw,
+  Smartphone,
+  Sparkles,
+  Square,
+  Sun,
+  Target,
+  Timer,
+  Upload,
+  User,
+  Volume2,
+} from "lucide-react-native";
+
 let DocumentPicker: any = null;
 try {
   DocumentPicker = require("expo-document-picker");
@@ -61,62 +72,89 @@ try {
 }
 
 export default function SettingsScreen() {
-  const {
-    weeklyGoal,
-    theme,
-    setWeeklyGoal,
-    setTheme,
-    remindersEnabled,
-    reminderTime,
-    setRemindersEnabled,
-    setReminderTime,
-    language,
-    setLanguage,
-    defaultRestTimer,
-    setDefaultRestTimer,
-    autoStartTimer,
-    setAutoStartTimer,
-    hapticsEnabled,
-    setHapticsEnabled,
-    keepScreenAwake,
-    setKeepScreenAwake,
-    audioNotification,
-    setAudioNotification,
-    customAudioName,
-    resetOnboarding,
-  } = useUserStore();
-  const router = useRouter();
-  const startTour = useOnboardingStore((state) => state.startTour);
-  const { showAlert } = useAlertStore();
-  const colors = useThemeColors();
-  const styles = getStyles(colors);
-  const { t } = useTranslation();
+  const name = useUserStore((s) => s.name);
+  const weeklyGoal = useUserStore((s) => s.weeklyGoal);
+  const theme = useUserStore((s) => s.theme);
+  const remindersEnabled = useUserStore((s) => s.remindersEnabled);
+  const reminderTime = useUserStore((s) => s.reminderTime);
+  const language = useUserStore((s) => s.language);
+  const defaultRestTimer = useUserStore((s) => s.defaultRestTimer);
+  const autoStartTimer = useUserStore((s) => s.autoStartTimer);
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
+  const keepScreenAwake = useUserStore((s) => s.keepScreenAwake);
+  const audioNotification = useUserStore((s) => s.audioNotification);
+  const customAudioName = useUserStore((s) => s.customAudioName);
+  const streak = useUserStore((s) => s.streak);
 
-  const handleReplayTutorial = () => {
-    showAlert(
-      t("repeat_tutorial_title"),
-      t("repeat_tutorial_desc"),
-      [
-        { text: t("cancel"), style: "cancel" },
-        {
-          text: t("start_tutorial"),
-          onPress: () => {
-            resetOnboarding();
-            useOnboardingStore.getState().setStep('welcome');
-            router.push("/(tabs)");
-          },
-        },
-      ]
-    );
-  };
+  const setWeeklyGoal = useUserStore((s) => s.setWeeklyGoal);
+  const setTheme = useUserStore((s) => s.setTheme);
+  const setRemindersEnabled = useUserStore((s) => s.setRemindersEnabled);
+  const setReminderTime = useUserStore((s) => s.setReminderTime);
+  const setLanguage = useUserStore((s) => s.setLanguage);
+  const setDefaultRestTimer = useUserStore((s) => s.setDefaultRestTimer);
+  const setAutoStartTimer = useUserStore((s) => s.setAutoStartTimer);
+  const setHapticsEnabled = useUserStore((s) => s.setHapticsEnabled);
+  const setKeepScreenAwake = useUserStore((s) => s.setKeepScreenAwake);
+  const setAudioNotification = useUserStore((s) => s.setAudioNotification);
+  const setName = useUserStore((s) => s.setName);
+  const displayName = name && name !== "Athlete" ? name : "";
+
+  const router = useRouter();
+  const showAlert = useAlertStore((s) => s.showAlert);
+  const colors = useThemeColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
+  const { t } = useTranslation();
 
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [countdownRemaining, setCountdownRemaining] = useState<number | null>(null);
+  const [isSliderDragging, setIsSliderDragging] = useState(false);
 
+  // Subscribe to playback state
   useEffect(() => {
     return subscribeAudioPlayback((playing) => {
       setIsPlayingAudio(playing);
+      if (!playing) {
+        setCountdownRemaining(null);
+      }
     });
+  }, []);
+
+  // Audio preview countdown timer
+  useEffect(() => {
+    let interval: any = null;
+    if (isPlayingAudio) {
+      const dur = useUserStore.getState().customAudioDuration || 5;
+      setCountdownRemaining(dur);
+      interval = setInterval(() => {
+        setCountdownRemaining((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(interval);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setCountdownRemaining(null);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isPlayingAudio]);
+
+  // CRITICAL FIX: Stop preview sound when app is minimized or navigated away!
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state !== "active") {
+        stopTimerSound();
+      }
+    });
+
+    return () => {
+      sub.remove();
+      stopTimerSound();
+    };
   }, []);
 
   const triggerHaptic = (duration: number = 70) => {
@@ -124,7 +162,9 @@ export default function SettingsScreen() {
   };
 
   const playPreview = (soundOption: string) => {
-    playTimerSound(soundOption, 10000);
+    const dur = useUserStore.getState().customAudioDuration || 5;
+    const off = useUserStore.getState().customAudioStartOffset || 0;
+    playPreviewSound(soundOption, dur, off);
   };
 
   const handleIncrementGoal = () => {
@@ -136,19 +176,61 @@ export default function SettingsScreen() {
     setWeeklyGoal(Math.max(1, weeklyGoal - 1));
   };
 
+  const dailyStepGoal = useStepStore((s) => s.dailyStepGoal);
+  const setDailyStepGoal = useStepStore((s) => s.setDailyStepGoal);
+  const isStepConnected = useStepStore((s) => s.isConnected);
+  const isStepAvailable = useStepStore((s) => s.isAvailable);
+  const stepAvailabilityStatus = useStepStore((s) => s.availabilityStatus);
+  const isStepSyncing = useStepStore((s) => s.isSyncing);
+  const connectSteps = useStepStore((s) => s.connect);
+  const disconnectSteps = useStepStore((s) => s.disconnect);
+  const syncSteps = useStepStore((s) => s.syncSteps);
+
+  const handleIncrementStepGoal = () => {
+    triggerHaptic();
+    setDailyStepGoal(Math.min(50000, dailyStepGoal + 1000));
+  };
+  const handleDecrementStepGoal = () => {
+    triggerHaptic();
+    setDailyStepGoal(Math.max(1000, dailyStepGoal - 1000));
+  };
+
+  const handleToggleHealthConnect = async () => {
+    triggerHaptic();
+    if (isStepConnected) {
+      disconnectSteps();
+    } else {
+      if (stepAvailabilityStatus === "update_required") {
+        openHealthConnectStore();
+      } else {
+        const success = await connectSteps();
+        if (!success && stepAvailabilityStatus === "not_installed_or_unlinked") {
+          showAlert(
+            t("health_connect"),
+            t("health_connect_unavailable"),
+            [
+              { text: t("install_health_connect"), onPress: () => openHealthConnectStore() },
+              { text: t("ok") },
+            ]
+          );
+        }
+      }
+    }
+  };
+
   const toggleReminders = async (value: boolean) => {
     triggerHaptic();
     if (value) {
       const granted = await requestPermissionsAsync();
       if (granted) {
         setRemindersEnabled(true);
-        await scheduleDailyReminder(reminderTime);
+        await scheduleDailyReminder(reminderTime, language);
       } else {
         setRemindersEnabled(false);
         showAlert(
           t("error"),
           t("grant_notification_permission"),
-          [{ text: t("ok") }],
+          [{ text: t("ok") }]
         );
       }
     } else {
@@ -165,7 +247,7 @@ export default function SettingsScreen() {
       const timeString = `${hours}:${minutes}`;
       setReminderTime(timeString);
       if (remindersEnabled) {
-        await scheduleDailyReminder(timeString);
+        await scheduleDailyReminder(timeString, language);
       }
     }
   };
@@ -181,8 +263,20 @@ export default function SettingsScreen() {
     triggerHaptic();
     try {
       const data = {
+        version: 2,
+        exportedAt: new Date().toISOString(),
         user: useUserStore.getState(),
-        workout: useWorkoutStore.getState(),
+        workout: {
+          templates: useWorkoutStore.getState().templates,
+          sessions: useWorkoutStore.getState().sessions,
+          scheduledWorkouts: useWorkoutStore.getState().scheduledWorkouts,
+        },
+        steps: {
+          dailyStepGoal: useStepStore.getState().dailyStepGoal,
+          todaySteps: useStepStore.getState().todaySteps,
+          stepHistory: useStepStore.getState().stepHistory,
+          lastSyncTime: useStepStore.getState().lastSyncTime,
+        },
       };
       const jsonStr = JSON.stringify(data, null, 2);
       const fileUri = `${FileSystem.documentDirectory}MotionFit_Export.json`;
@@ -219,7 +313,7 @@ export default function SettingsScreen() {
         const fileContent = await FileSystem.readAsStringAsync(fileUri);
         const parsed = JSON.parse(fileContent);
 
-        if (!parsed || (!parsed.user && !parsed.workout)) {
+        if (!parsed || (!parsed.user && !parsed.workout && !parsed.steps)) {
           showAlert(t("error"), t("invalid_backup_file"), [{ text: t("ok") }]);
           return;
         }
@@ -234,7 +328,18 @@ export default function SettingsScreen() {
                 useUserStore.setState(parsed.user);
               }
               if (parsed.workout) {
-                useWorkoutStore.setState(parsed.workout);
+                useWorkoutStore.setState({
+                  ...parsed.workout,
+                  activeSession: null,
+                });
+              }
+              if (parsed.steps) {
+                useStepStore.setState({
+                  dailyStepGoal: parsed.steps.dailyStepGoal ?? useStepStore.getState().dailyStepGoal,
+                  todaySteps: parsed.steps.todaySteps ?? useStepStore.getState().todaySteps,
+                  stepHistory: parsed.steps.stepHistory ?? useStepStore.getState().stepHistory,
+                  lastSyncTime: parsed.steps.lastSyncTime ?? useStepStore.getState().lastSyncTime,
+                });
               }
               triggerHaptic();
               showAlert(t("completed"), t("import_success"), [
@@ -277,7 +382,6 @@ export default function SettingsScreen() {
         const pickedAsset = result.assets[0];
         let persistentUri = pickedAsset.uri;
 
-        // Copy to permanent app documents folder to prevent cache purging
         try {
           if (FileSystem.documentDirectory) {
             const rawExt = pickedAsset.name?.split(".").pop() || "mp3";
@@ -288,18 +392,15 @@ export default function SettingsScreen() {
             persistentUri = destUri;
           }
         } catch (copyErr) {
-          console.warn(
-            "Failed to copy audio to documents, using cache URI:",
-            copyErr,
-          );
+          console.warn("Failed to copy audio to documents, using cache URI:", copyErr);
         }
 
-        setAudioNotification(persistentUri, pickedAsset.name || "Custom Sound");
+        setAudioNotification(persistentUri, pickedAsset.name || "Custom Audio");
         playPreview(persistentUri);
         showAlert(
           t("completed"),
           `${pickedAsset.name}\n\n${t("sound_mode_reminder")}`,
-          [{ text: t("ok") }],
+          [{ text: t("ok") }]
         );
       }
     } catch (error) {
@@ -308,23 +409,35 @@ export default function SettingsScreen() {
     }
   };
 
-  const handlePlayCustomPreview = () => {
+  const handlePlayCustomPreview = useCallback((offset?: number, duration?: number) => {
     triggerHaptic(50);
-    if (isPlayingAudio) {
-      stopTimerSound();
-    } else {
-      playPreview(audioNotification);
-    }
-  };
+    const dur = duration !== undefined ? duration : (useUserStore.getState().customAudioDuration || 5);
+    const off = offset !== undefined ? offset : (useUserStore.getState().customAudioStartOffset || 0);
+    playPreviewSound(audioNotification, dur, off);
+  }, [audioNotification, hapticsEnabled]);
+
+  const handleStopCustomPreview = useCallback(() => {
+    stopTimerSound();
+  }, []);
+
+  const handleSliderDragStart = useCallback(() => {
+    setIsSliderDragging(true);
+  }, []);
+
+  const handleSliderDragEnd = useCallback(() => {
+    setIsSliderDragging(false);
+  }, []);
 
   const isDarkMode = theme === "dark";
 
   return (
     <View style={styles.container}>
       <ScrollView
+        scrollEnabled={!isSliderDragging}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Header Bar */}
         <View style={styles.headerBar}>
           <Text style={styles.headerTitle}>{t("settings")}</Text>
           <Text style={styles.headerSub}>
@@ -332,436 +445,347 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        {/* 1. Weekly Goal Card */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t("weekly_goal")}</Text>
-          <View style={styles.goalCard}>
-            <View style={styles.goalTopRow}>
-              <View style={styles.goalIconBox}>
-                <Target size={20} color={colors.primaryAction} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.goalCardTitle}>{t("weekly_goal")}</Text>
-                <Text style={styles.cardDescription}>
-                  {t("weekly_goal_desc")}
-                </Text>
+        {/* Compact Profile Row */}
+        <View style={styles.profileCard}>
+          <View style={styles.profileAvatar}>
+            {displayName ? (
+              <Text style={styles.avatarText}>
+                {displayName.charAt(0).toUpperCase()}
+              </Text>
+            ) : (
+              <User size={18} color={colors.primaryAction} strokeWidth={2.2} />
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <TextInput
+                style={styles.profileNameInput}
+                value={displayName}
+                placeholder={language === "id" ? "Nama Pengguna" : "User Name"}
+                placeholderTextColor={colors.textMuted}
+                onChangeText={(val) => setName(val)}
+                maxLength={20}
+              />
+              <View style={styles.proBadge}>
+                <Sparkles size={9} color="#F59E0B" />
+                <Text style={styles.proBadgeText}>MOTIONFIT</Text>
               </View>
             </View>
-
-            <View style={styles.stepperContainer}>
-              <TouchableOpacity
-                onPress={handleDecrementGoal}
-                style={styles.stepperButton}
-                activeOpacity={0.7}
-              >
-                <Minus color={colors.textPrimary} size={20} />
-              </TouchableOpacity>
-
-              <View style={styles.stepperValueContainer}>
-                <Text style={styles.stepperValue}>{weeklyGoal}</Text>
-                <Text style={styles.stepperLabel}>{t("days_per_week")}</Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={handleIncrementGoal}
-                style={styles.stepperButton}
-                activeOpacity={0.7}
-              >
-                <Plus color={colors.textPrimary} size={20} />
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.profileMeta}>
+              {streak} {t("day_streak")} • {weeklyGoal} {t("days_per_week")}
+            </Text>
           </View>
         </View>
 
-        {/* 2. Preferences & Options List */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            {t("preferences") || "Preferences"}
+        {/* 1. LANGKAH & KESEHATAN */}
+        <View style={styles.groupSection}>
+          <Text style={styles.groupHeader}>
+            {language === "id" ? "Langkah & Kesehatan" : "Steps & Health"}
           </Text>
-
-          <View style={styles.settingsGroup}>
-            {/* Language */}
-            <View style={styles.settingItem}>
-              <View style={styles.settingItemLeft}>
-                <View style={styles.iconBox}>
-                  <Globe color={colors.primaryAction} size={18} />
-                </View>
-                <Text style={styles.settingText}>{t("language")}</Text>
+          <View style={styles.groupCard}>
+            {/* Target Langkah */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                <Footprints size={15} color={colors.primaryAction} />
               </View>
-              <View style={styles.segmentedControl}>
-                <TouchableOpacity
-                  style={[
-                    styles.segmentBtn,
-                    language === "id" && styles.segmentBtnActive,
-                  ]}
-                  onPress={() => {
-                    if (hapticsEnabled)
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setLanguage("id");
-                    if (remindersEnabled) {
-                      scheduleDailyReminder(reminderTime, "id");
-                    }
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      language === "id" && styles.segmentTextActive,
-                    ]}
-                  >
-                    ID
-                  </Text>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("daily_step_goal")}</Text>
+                <Text style={styles.rowSubLabel}>{t("daily_step_goal_desc")}</Text>
+              </View>
+              <View style={styles.inlineStepper}>
+                <TouchableOpacity onPress={handleDecrementStepGoal} style={styles.inlineStepperBtn} activeOpacity={0.7}>
+                  <Minus size={13} color={colors.textPrimary} />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.segmentBtn,
-                    language === "en" && styles.segmentBtnActive,
-                  ]}
-                  onPress={() => {
-                    if (hapticsEnabled)
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setLanguage("en");
-                    if (remindersEnabled) {
-                      scheduleDailyReminder(reminderTime, "en");
-                    }
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      language === "en" && styles.segmentTextActive,
-                    ]}
-                  >
-                    EN
-                  </Text>
+                <Text style={styles.inlineStepperValue}>{dailyStepGoal.toLocaleString()}</Text>
+                <TouchableOpacity onPress={handleIncrementStepGoal} style={styles.inlineStepperBtn} activeOpacity={0.7}>
+                  <Plus size={13} color={colors.textPrimary} />
                 </TouchableOpacity>
               </View>
             </View>
 
-            <View style={styles.settingSeparator} />
+            <View style={styles.rowDivider} />
 
-            {/* Theme Selector */}
-            <View style={styles.settingItem}>
-              <View style={styles.settingItemLeft}>
-                <View style={styles.iconBox}>
-                  {isDarkMode ? (
-                    <Moon color="#3b82f6" size={18} />
-                  ) : (
-                    <Sun color="#f59e0b" size={18} />
-                  )}
-                </View>
-                <Text style={styles.settingText}>{t("theme")}</Text>
+            {/* Health Connect */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                <Activity size={15} color={colors.primaryAction} />
               </View>
-              <View style={styles.segmentedControl}>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("health_connect")}</Text>
+                <Text style={styles.rowSubLabel}>
+                  {isStepConnected
+                    ? t("health_connect_connected")
+                    : stepAvailabilityStatus === "update_required"
+                    ? t("health_connect_unavailable")
+                    : t("health_connect_not_connected")}
+                </Text>
+              </View>
+              <Switch
+                value={isStepConnected}
+                onValueChange={handleToggleHealthConnect}
+                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            {isStepConnected && (
+              <View style={styles.subActionRowCompact}>
                 <TouchableOpacity
-                  style={[
-                    styles.segmentBtn,
-                    !isDarkMode && styles.segmentBtnActive,
-                  ]}
+                  style={styles.subActionChip}
                   onPress={() => {
-                    if (hapticsEnabled)
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    triggerHaptic();
+                    syncSteps();
+                  }}
+                  disabled={isStepSyncing}
+                >
+                  <RotateCw color={colors.primaryAction} size={12} />
+                  <Text style={styles.subActionChipText}>
+                    {isStepSyncing ? t("syncing") : t("sync_steps")}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.subActionChip}
+                  onPress={() => {
+                    triggerHaptic();
+                    openHealthConnectSettingsSafe();
+                  }}
+                >
+                  <ExternalLink color={colors.textSecondary} size={12} />
+                  <Text style={styles.subActionChipText}>Pengaturan</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {!isStepConnected && stepAvailabilityStatus === "update_required" && (
+              <View style={styles.subActionContainer}>
+                <TouchableOpacity
+                  style={styles.subActionChip}
+                  onPress={() => {
+                    triggerHaptic();
+                    openHealthConnectStore();
+                  }}
+                >
+                  <ExternalLink color={colors.primaryAction} size={12} />
+                  <Text style={[styles.subActionChipText, { color: colors.primaryAction }]}>
+                    {t("install_health_connect")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* 2. LATIHAN & TARGET */}
+        <View style={styles.groupSection}>
+          <Text style={styles.groupHeader}>{t("workout") || "Latihan & Istirahat"}</Text>
+          <View style={styles.groupCard}>
+            {/* Target Mingguan */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                <Target size={15} color={colors.primaryAction} />
+              </View>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("weekly_goal")}</Text>
+                <Text style={styles.rowSubLabel}>{t("weekly_goal_desc")}</Text>
+              </View>
+              <View style={styles.inlineStepper}>
+                <TouchableOpacity onPress={handleDecrementGoal} style={styles.inlineStepperBtn} activeOpacity={0.7}>
+                  <Minus size={13} color={colors.textPrimary} />
+                </TouchableOpacity>
+                <Text style={styles.inlineStepperValue}>{weeklyGoal} hr</Text>
+                <TouchableOpacity onPress={handleIncrementGoal} style={styles.inlineStepperBtn} activeOpacity={0.7}>
+                  <Plus size={13} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.rowDivider} />
+
+            {/* Timer Istirahat Otomatis */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                <Timer size={15} color={colors.primaryAction} />
+              </View>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("default_rest_timer")}</Text>
+                <Text style={styles.rowSubLabel}>{t("default_rest_timer_desc")}</Text>
+              </View>
+              <Switch
+                value={autoStartTimer}
+                onValueChange={(val) => {
+                  triggerHaptic();
+                  setAutoStartTimer(val);
+                }}
+                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            {/* Durasi Detik Istirahat (Muncul hanya jika Timer Otomatis Aktif) */}
+            {autoStartTimer && (
+              <>
+                <View style={styles.rowDivider} />
+                <View style={[styles.compactRow, { paddingLeft: 42 }]}>
+                  <View style={styles.rowLabelWrap}>
+                    <Text style={styles.rowLabel}>{t("rest_duration")}</Text>
+                    <Text style={styles.rowSubLabel}>{t("rest_duration_desc")}</Text>
+                  </View>
+                  <View style={styles.inlineStepper}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        triggerHaptic();
+                        setDefaultRestTimer(Math.max(5, (defaultRestTimer || 90) - 15));
+                      }}
+                      style={styles.inlineStepperBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Minus size={13} color={colors.textPrimary} />
+                    </TouchableOpacity>
+
+                    <TextInput
+                      style={styles.inlineStepperInput}
+                      keyboardType="number-pad"
+                      value={String(defaultRestTimer || "")}
+                      placeholder="90"
+                      placeholderTextColor={colors.textMuted}
+                      maxLength={3}
+                      selectTextOnFocus
+                      onChangeText={(val) => {
+                        const clean = val.replace(/[^0-9]/g, "");
+                        if (clean === "") {
+                          setDefaultRestTimer(0);
+                        } else {
+                          const parsed = parseInt(clean, 10);
+                          if (!isNaN(parsed)) {
+                            setDefaultRestTimer(Math.min(600, parsed));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!defaultRestTimer || defaultRestTimer < 5) {
+                          setDefaultRestTimer(5);
+                        }
+                      }}
+                    />
+                    <Text style={styles.inlineUnitText}>{t("seconds_short")}</Text>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        triggerHaptic();
+                        setDefaultRestTimer(Math.min(600, (defaultRestTimer || 90) + 15));
+                      }}
+                      style={styles.inlineStepperBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Plus size={13} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* 2. PREFERENSI SISTEM */}
+        <View style={styles.groupSection}>
+          <Text style={styles.groupHeader}>{t("preferences")}</Text>
+          <View style={styles.groupCard}>
+            {/* Bahasa */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                <Globe size={15} color={colors.primaryAction} />
+              </View>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("language")}</Text>
+              </View>
+              <View style={styles.compactSegmented}>
+                <TouchableOpacity
+                  style={[styles.compactSegmentBtn, language === "id" && styles.compactSegmentBtnActive]}
+                  onPress={() => {
+                    triggerHaptic(50);
+                    setLanguage("id");
+                    if (remindersEnabled) scheduleDailyReminder(reminderTime, "id");
+                  }}
+                >
+                  <Text style={[styles.compactSegmentText, language === "id" && styles.compactSegmentTextActive]}>ID</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.compactSegmentBtn, language === "en" && styles.compactSegmentBtnActive]}
+                  onPress={() => {
+                    triggerHaptic(50);
+                    setLanguage("en");
+                    if (remindersEnabled) scheduleDailyReminder(reminderTime, "en");
+                  }}
+                >
+                  <Text style={[styles.compactSegmentText, language === "en" && styles.compactSegmentTextActive]}>EN</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.rowDivider} />
+
+            {/* Tema */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                {isDarkMode ? <Moon size={15} color={colors.primaryAction} /> : <Sun size={15} color={colors.primaryAction} />}
+              </View>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("theme")}</Text>
+              </View>
+              <View style={styles.compactSegmented}>
+                <TouchableOpacity
+                  style={[styles.compactSegmentBtn, !isDarkMode && styles.compactSegmentBtnActive]}
+                  onPress={() => {
+                    triggerHaptic(50);
                     setTheme("light");
                   }}
                 >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      !isDarkMode && styles.segmentTextActive,
-                    ]}
-                  >
-                    Light
-                  </Text>
+                  <Text style={[styles.compactSegmentText, !isDarkMode && styles.compactSegmentTextActive]}>Light</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[
-                    styles.segmentBtn,
-                    isDarkMode && styles.segmentBtnActive,
-                  ]}
+                  style={[styles.compactSegmentBtn, isDarkMode && styles.compactSegmentBtnActive]}
                   onPress={() => {
-                    if (hapticsEnabled)
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    triggerHaptic(50);
                     setTheme("dark");
                   }}
                 >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      isDarkMode && styles.segmentTextActive,
-                    ]}
-                  >
-                    Dark
-                  </Text>
+                  <Text style={[styles.compactSegmentText, isDarkMode && styles.compactSegmentTextActive]}>Dark</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            <View style={styles.settingSeparator} />
+            <View style={styles.rowDivider} />
 
-            {/* Haptics */}
-            <View style={styles.settingItem}>
-              <View style={styles.settingItemLeft}>
-                <View style={styles.iconBox}>
-                  <Activity color={colors.warning} size={18} />
-                </View>
-                <Text style={styles.settingText}>{t("haptics")}</Text>
+            {/* Haptik */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                <Activity size={15} color={colors.primaryAction} />
+              </View>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("haptics")}</Text>
               </View>
               <Switch
                 value={hapticsEnabled}
                 onValueChange={(val) => {
-                  if (val) triggerButtonVibration(true, 150);
+                  if (val) triggerButtonVibration(true, 120);
                   setHapticsEnabled(val);
                 }}
-                trackColor={{
-                  false: colors.borderSubtle,
-                  true: colors.primaryAction,
-                }}
+                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
                 thumbColor="#fff"
               />
             </View>
 
-            <View style={styles.settingSeparator} />
+            <View style={styles.rowDivider} />
 
-            {/* Default Rest Timer */}
-            <View style={styles.settingItemCol}>
-              <View style={styles.settingRowBetween}>
-                <View style={styles.settingItemLeft}>
-                  <View style={styles.iconBox}>
-                    <Timer color={colors.successBadge} size={18} />
-                  </View>
-                  <Text style={styles.settingText}>
-                    {t("default_prefix")} {t("rest_timer")}
-                  </Text>
-                </View>
-                <Switch
-                  value={autoStartTimer}
-                  onValueChange={(val) => {
-                    if (hapticsEnabled)
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setAutoStartTimer(val);
-                  }}
-                  trackColor={{
-                    false: colors.borderSubtle,
-                    true: colors.primaryAction,
-                  }}
-                  thumbColor="#fff"
-                />
+            {/* Layar Tetap Menyala */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                <Smartphone size={15} color={colors.primaryAction} />
               </View>
-
-              {autoStartTimer && (
-                <View style={styles.manualInputContainer}>
-                  <TextInput
-                    style={styles.manualInput}
-                    keyboardType="numeric"
-                    placeholder={t("rest_timer_placeholder") || "90"}
-                    placeholderTextColor={colors.textMuted}
-                    value={String(defaultRestTimer)}
-                    onChangeText={(val) => {
-                      const parsed = parseInt(val);
-                      if (!isNaN(parsed) && parsed > 0) {
-                        setDefaultRestTimer(parsed);
-                      } else if (val === "") {
-                        setDefaultRestTimer(0);
-                      }
-                    }}
-                  />
-                  <Text style={styles.unitText}>{t("seconds")}</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.settingSeparator} />
-
-            {/* Audio Notification */}
-            <View style={styles.settingItemCol}>
-              <View style={styles.settingItemLeft}>
-                <View style={styles.iconBox}>
-                  <Volume2 color={colors.accent} size={18} />
-                </View>
-                <Text style={styles.settingText}>
-                  {t("audio_notification")}
-                </Text>
-              </View>
-
-              <View style={styles.audioSegmentedControl}>
-                <TouchableOpacity
-                  style={[
-                    styles.segmentBtn,
-                    audioNotification === "default_notification" &&
-                      styles.segmentBtnActive,
-                    { flex: 1, alignItems: "center" },
-                  ]}
-                  onPress={() => {
-                    triggerHaptic(70);
-                    setAudioNotification("default_notification");
-                    playPreview("default_notification");
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      audioNotification === "default_notification" &&
-                        styles.segmentTextActive,
-                    ]}
-                  >
-                    {t("default")}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.segmentBtn,
-                    audioNotification !== "default_notification" &&
-                      styles.segmentBtnActive,
-                    { flex: 1, alignItems: "center" },
-                  ]}
-                  onPress={handlePickAudio}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      audioNotification !== "default_notification" &&
-                        styles.segmentTextActive,
-                    ]}
-                  >
-                    {t("custom")}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {audioNotification !== "default_notification" && (
-                <View style={styles.customAudioCard}>
-                  {/* File Name Info Row */}
-                  <View style={styles.customAudioFileRow}>
-                    <View style={styles.customAudioIconBox}>
-                      <Music size={13} color={colors.primaryAction} />
-                    </View>
-                    <Text
-                      style={styles.customAudioFileName}
-                      numberOfLines={1}
-                      ellipsizeMode="middle"
-                    >
-                      {customAudioName || "Custom Sound"}
-                    </Text>
-                  </View>
-
-                  {/* Action Buttons Row */}
-                  <View style={styles.customAudioActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.customAudioActionBtn,
-                        isPlayingAudio && {
-                          borderColor: colors.danger,
-                          backgroundColor: "rgba(239, 68, 68, 0.08)",
-                        },
-                      ]}
-                      onPress={handlePlayCustomPreview}
-                    >
-                      {isPlayingAudio ? (
-                        <>
-                          <Square size={13} color={colors.danger} fill={colors.danger} />
-                          <Text
-                            style={[
-                              styles.customAudioActionText,
-                              { color: colors.danger, fontWeight: "700" },
-                            ]}
-                          >
-                            {t("stop_preview")}
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <Play size={13} color={colors.primaryAction} />
-                          <Text
-                            style={[
-                              styles.customAudioActionText,
-                              { color: colors.primaryAction },
-                            ]}
-                          >
-                            {t("play_preview")} (10s)
-                          </Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.customAudioActionBtn}
-                      onPress={handlePickAudio}
-                    >
-                      <Text style={styles.customAudioActionText}>
-                        {t("change_file")}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.customAudioHintRow}>
-                    <Info size={12} color={colors.textSecondary} />
-                    <Text style={styles.customAudioHintText}>
-                      {t("sound_mode_reminder_short")}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.settingSeparator} />
-
-            {/* Reminders */}
-            <View style={styles.settingItem}>
-              <View style={styles.settingItemLeft}>
-                <View style={styles.iconBox}>
-                  <Bell color={colors.primaryAction} size={18} />
-                </View>
-                <Text style={styles.settingText}>{t("workout_reminders")}</Text>
-              </View>
-              <Switch
-                value={remindersEnabled}
-                onValueChange={toggleReminders}
-                trackColor={{
-                  false: colors.borderSubtle,
-                  true: colors.primaryAction,
-                }}
-                thumbColor="#fff"
-              />
-            </View>
-
-            {remindersEnabled && (
-              <>
-                <View style={styles.settingSeparator} />
-                <TouchableOpacity
-                  style={styles.settingItem}
-                  onPress={() => setShowTimePicker(true)}
-                >
-                  <View style={styles.settingItemLeft}>
-                    <View style={styles.iconBox}>
-                      <Clock color="#3b82f6" size={18} />
-                    </View>
-                    <Text style={styles.settingText}>{t("reminder_time")}</Text>
-                  </View>
-                  <Text style={styles.timeValueText}>{reminderTime}</Text>
-                </TouchableOpacity>
-
-                {showTimePicker && (
-                  <DateTimePicker
-                    value={getReminderDate()}
-                    mode="time"
-                    is24Hour={true}
-                    display="default"
-                    onValueChange={handleTimeChange}
-                  />
-                )}
-              </>
-            )}
-
-            <View style={styles.settingSeparator} />
-
-            {/* Keep Screen Awake */}
-            <View style={styles.settingItem}>
-              <View style={styles.settingItemLeft}>
-                <View style={styles.iconBox}>
-                  <Smartphone color="#8B5CF6" size={18} />
-                </View>
-                <Text style={styles.settingText}>{t("keep_screen_awake")}</Text>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("keep_screen_awake")}</Text>
+                <Text style={styles.rowSubLabel}>{t("keep_screen_awake_desc")}</Text>
               </View>
               <Switch
                 value={keepScreenAwake}
@@ -769,398 +793,515 @@ export default function SettingsScreen() {
                   triggerHaptic();
                   setKeepScreenAwake(val);
                 }}
-                trackColor={{
-                  false: colors.borderSubtle,
-                  true: colors.primaryAction,
-                }}
+                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* 3. SUARA & PENGINGAT */}
+        <View style={styles.groupSection}>
+          <Text style={styles.groupHeader}>{t("audio_notification")}</Text>
+          <View style={styles.groupCard}>
+            {/* Mode Suara Alarm */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                <Volume2 size={15} color={colors.primaryAction} />
+              </View>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("audio_notification")}</Text>
+              </View>
+              <View style={styles.compactSegmented}>
+                <TouchableOpacity
+                  style={[styles.compactSegmentBtn, audioNotification === "default_notification" && styles.compactSegmentBtnActive]}
+                  onPress={() => {
+                    triggerHaptic(60);
+                    setAudioNotification("default_notification");
+                    playPreview("default_notification");
+                  }}
+                >
+                  <Text style={[styles.compactSegmentText, audioNotification === "default_notification" && styles.compactSegmentTextActive]}>
+                    {t("default")}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.compactSegmentBtn, audioNotification !== "default_notification" && audioNotification !== "none" && styles.compactSegmentBtnActive]}
+                  onPress={handlePickAudio}
+                >
+                  <Text style={[styles.compactSegmentText, audioNotification !== "default_notification" && audioNotification !== "none" && styles.compactSegmentTextActive]}>
+                    {t("custom")}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.compactSegmentBtn, audioNotification === "none" && styles.compactSegmentBtnActive]}
+                  onPress={() => {
+                    triggerHaptic(60);
+                    stopTimerSound();
+                    setAudioNotification("none");
+                  }}
+                >
+                  <Text style={[styles.compactSegmentText, audioNotification === "none" && styles.compactSegmentTextActive]}>
+                    {t("silent")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Custom Audio Trimmer Card */}
+            {audioNotification !== "default_notification" && audioNotification !== "none" && (
+              <View style={{ paddingHorizontal: 10, paddingBottom: 10 }}>
+                <AudioTrimmerCard
+                  isPlayingAudio={isPlayingAudio}
+                  countdownRemaining={countdownRemaining}
+                  onPlayPreview={handlePlayCustomPreview}
+                  onStopPreview={handleStopCustomPreview}
+                  onPickAudio={handlePickAudio}
+                  onSliderDragStart={handleSliderDragStart}
+                  onSliderDragEnd={handleSliderDragEnd}
+                />
+              </View>
+            )}
+
+            {/* Default Audio Preview Action */}
+            {audioNotification === "default_notification" && (
+              <View style={styles.subActionContainer}>
+                <TouchableOpacity
+                  style={[styles.compactPreviewBtn, isPlayingAudio && styles.compactPreviewBtnStop]}
+                  onPress={() => handlePlayCustomPreview()}
+                  activeOpacity={0.85}
+                >
+                  {isPlayingAudio ? (
+                    <>
+                      <Square size={12} color="#FFFFFF" fill="#FFFFFF" />
+                      <Text style={[styles.compactPreviewBtnText, { color: "#FFFFFF" }]}>
+                        {t("stop_audio")} ({countdownRemaining ?? 5}s)
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Play size={12} color="#000000" fill="#000000" />
+                      <Text style={styles.compactPreviewBtnText}>
+                        {t("preview_audio")} (5s)
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={styles.rowDivider} />
+
+            {/* Pengingat Harian */}
+            <View style={styles.compactRow}>
+              <View style={styles.rowIconBox}>
+                <Bell size={15} color={colors.primaryAction} />
+              </View>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("workout_reminders")}</Text>
+                <Text style={styles.rowSubLabel}>
+                  {remindersEnabled ? `${t("reminder_time")}: ${reminderTime}` : (language === "id" ? "Pengingat latihan harian" : "Daily workout reminders")}
+                </Text>
+              </View>
+              <Switch
+                value={remindersEnabled}
+                onValueChange={toggleReminders}
+                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
                 thumbColor="#fff"
               />
             </View>
 
-            <View style={styles.settingSeparator} />
-
-            {/* Export Data */}
-            <TouchableOpacity style={styles.settingItem} onPress={handleExport}>
-              <View style={styles.settingItemLeft}>
-                <View style={styles.iconBox}>
-                  <Download color="#f97316" size={18} />
-                </View>
-                <Text style={styles.settingText}>{t("export_data")}</Text>
+            {remindersEnabled && (
+              <View style={styles.subActionContainer}>
+                <TouchableOpacity
+                  style={styles.timePickerCompactBtn}
+                  onPress={() => setShowTimePicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Clock size={13} color={colors.primaryAction} />
+                    <Text style={styles.timePickerCompactLabel}>{t("reminder_time")}</Text>
+                  </View>
+                  <Text style={styles.timePickerCompactValue}>{reminderTime}</Text>
+                </TouchableOpacity>
               </View>
+            )}
+
+            {showTimePicker && (
+              <DateTimePicker
+                value={getReminderDate()}
+                mode="time"
+                is24Hour={true}
+                display="default"
+                onValueChange={handleTimeChange}
+              />
+            )}
+          </View>
+        </View>
+
+
+        {/* 5. DATA & CADANGAN */}
+        <View style={styles.groupSection}>
+          <Text style={styles.groupHeader}>Data & Cadangan</Text>
+          <View style={styles.groupCard}>
+            <TouchableOpacity style={styles.compactActionRow} onPress={handleExport} activeOpacity={0.7}>
+              <View style={styles.rowIconBox}>
+                <Download size={15} color={colors.primaryAction} />
+              </View>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("export_data")}</Text>
+              </View>
+              <ChevronRight size={16} color={colors.textMuted} />
             </TouchableOpacity>
 
-            <View style={styles.settingSeparator} />
+            <View style={styles.rowDivider} />
 
-            {/* Import Data */}
-            <TouchableOpacity style={styles.settingItem} onPress={handleImport}>
-              <View style={styles.settingItemLeft}>
-                <View style={styles.iconBox}>
-                  <Upload color="#10B981" size={18} />
-                </View>
-                <Text style={styles.settingText}>{t("import_data")}</Text>
+            <TouchableOpacity style={styles.compactActionRow} onPress={handleImport} activeOpacity={0.7}>
+              <View style={styles.rowIconBox}>
+                <Upload size={15} color={colors.primaryAction} />
               </View>
-            </TouchableOpacity>
-
-            <View style={styles.settingSeparator} />
-
-            {/* Replay App Guide & Interactive Tutorial */}
-            <TouchableOpacity style={styles.settingItem} onPress={handleReplayTutorial}>
-              <View style={styles.settingItemLeft}>
-                <View style={[styles.iconBox, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
-                  <Compass color={colors.primaryAction} size={18} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingText}>{t("app_guide")}</Text>
-                  <Text style={styles.settingSubtext}>{t("app_guide_desc")}</Text>
-                </View>
+              <View style={styles.rowLabelWrap}>
+                <Text style={styles.rowLabel}>{t("import_data")}</Text>
               </View>
+              <ChevronRight size={16} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={{ height: 110 }} />
+        {/* Footer */}
+        <View style={styles.versionFooter}>
+          <Text style={styles.versionText}>
+            MotionFit v1.0.0 (Build 12) • Athletic Performance Engine
+          </Text>
+        </View>
+
+        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
 }
 
-const getStyles = (c: ThemeColors) =>
-  StyleSheet.create({
+const getStyles = (c: ThemeColors) => {
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
     },
     scrollContent: {
-      paddingTop: Platform.OS === "ios" ? 60 : 44,
-      paddingHorizontal: 20,
-      paddingBottom: 24,
+      paddingTop: Platform.OS === "ios" ? 56 : 40,
+      paddingHorizontal: 16,
+      paddingBottom: 32,
     },
     headerBar: {
-      marginBottom: 20,
+      marginBottom: 16,
     },
     headerTitle: {
       fontFamily: AppFonts.extraBold,
-      fontSize: 28,
-      fontWeight: "800",
-      color: c.textPrimary,
-      letterSpacing: -0.6,
-    },
-    headerSub: {
-      fontFamily: AppFonts.medium,
-      fontSize: 14,
-      color: c.textSecondary,
-      fontWeight: "500",
-      marginTop: 4,
-    },
-    section: {
-      marginBottom: 24,
-    },
-    sectionTitle: {
-      fontFamily: AppFonts.bold,
-      fontSize: 18,
-      fontWeight: "700",
-      color: c.textPrimary,
-      letterSpacing: -0.3,
-      marginBottom: 12,
-    },
-
-    // Goal Card
-    goalCard: {
-      backgroundColor: c.cardSurface,
-      borderRadius: 22,
-      padding: 20,
-      borderWidth: 1,
-      borderColor: c.borderSubtle,
-      ...Platform.select({
-        ios: {
-          shadowColor: c.shadowColor,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: c.shadowOpacity,
-          shadowRadius: c.shadowRadius,
-        },
-        android: {
-          elevation: c.elevation,
-        },
-      }),
-    },
-    goalTopRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      marginBottom: 18,
-    },
-    goalIconBox: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
-      backgroundColor: c.surfaceHighlight,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    goalCardTitle: {
-      fontFamily: AppFonts.bold,
-      fontSize: 16,
-      fontWeight: "700",
-      color: c.textPrimary,
-      marginBottom: 2,
-    },
-    cardDescription: {
-      fontFamily: AppFonts.medium,
-      color: c.textSecondary,
-      fontSize: 12,
-      fontWeight: "500",
-    },
-    stepperContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 20,
-      backgroundColor: c.surfaceHighlight,
-      borderRadius: 18,
-      paddingVertical: 14,
-      paddingHorizontal: 20,
-    },
-    stepperButton: {
-      backgroundColor: c.cardSurface,
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1,
-      borderColor: c.borderSubtle,
-    },
-    stepperValueContainer: {
-      alignItems: "center",
-      minWidth: 110,
-    },
-    stepperValue: {
-      fontFamily: AppFonts.extraBold,
-      fontSize: 32,
+      fontSize: 24,
       fontWeight: "800",
       color: c.textPrimary,
       letterSpacing: -0.5,
     },
-    stepperLabel: {
-      fontFamily: AppFonts.semiBold,
-      color: c.textSecondary,
-      fontSize: 12,
-      fontWeight: "600",
-      marginTop: 2,
-    },
-
-    // Settings Group
-    settingsGroup: {
-      backgroundColor: c.cardSurface,
-      borderRadius: 22,
-      borderWidth: 1,
-      borderColor: c.borderSubtle,
-      overflow: "hidden",
-      ...Platform.select({
-        ios: {
-          shadowColor: c.shadowColor,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: c.shadowOpacity,
-          shadowRadius: c.shadowRadius,
-        },
-        android: {
-          elevation: c.elevation,
-        },
-      }),
-    },
-    settingItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 18,
-      paddingVertical: 16,
-    },
-    settingItemCol: {
-      paddingHorizontal: 18,
-      paddingVertical: 16,
-    },
-    settingRowBetween: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    settingItemLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-    },
-    iconBox: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: c.surfaceHighlight,
-    },
-    settingText: {
-      fontFamily: AppFonts.semiBold,
-      color: c.textPrimary,
-      fontSize: 15,
-      fontWeight: "600",
-    },
-    settingSubtext: {
+    headerSub: {
       fontFamily: AppFonts.medium,
+      fontSize: 13,
       color: c.textSecondary,
-      fontSize: 12,
       fontWeight: "500",
       marginTop: 2,
     },
-    settingSeparator: {
-      height: 1,
-      backgroundColor: c.borderSubtle,
-      marginLeft: 66,
-    },
-    timeValueText: {
-      fontFamily: AppFonts.bold,
-      color: c.primaryAction,
-      fontSize: 15,
-      fontWeight: "700",
-    },
 
-    // Segmented Controls
-    segmentedControl: {
-      flexDirection: "row",
-      backgroundColor: c.surfaceHighlight,
-      borderRadius: 12,
-      padding: 3,
-    },
-    audioSegmentedControl: {
-      flexDirection: "row",
-      backgroundColor: c.surfaceHighlight,
-      borderRadius: 12,
-      padding: 3,
-      marginTop: 14,
-    },
-    segmentBtn: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 9,
-    },
-    segmentBtnActive: {
+    // Profile Card (Compact Apple Health style)
+    profileCard: {
       backgroundColor: c.cardSurface,
-      ...Platform.select({
-        ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.1,
-          shadowRadius: 2,
-        },
-        android: {
-          elevation: 1,
-        },
-      }),
-    },
-    segmentText: {
-      fontFamily: AppFonts.semiBold,
-      color: c.textSecondary,
-      fontSize: 12,
-      fontWeight: "600",
-    },
-    segmentTextActive: {
-      fontFamily: AppFonts.bold,
-      color: c.textPrimary,
-      fontWeight: "800",
-    },
-
-    // Manual input for rest timer
-    manualInputContainer: {
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
       flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    profileAvatar: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: c.surfaceHighlight,
       alignItems: "center",
       justifyContent: "center",
-      gap: 10,
-      marginTop: 14,
-      backgroundColor: c.surfaceHighlight,
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
-    manualInput: {
-      width: 90,
-      height: 40,
-      backgroundColor: c.cardSurface,
+    profileNameInput: {
+      fontFamily: AppFonts.bold,
+      fontSize: 15,
+      fontWeight: "700",
       color: c.textPrimary,
-      fontSize: 18,
+      letterSpacing: -0.2,
+      padding: 0,
+      minWidth: 100,
+    },
+    avatarText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 15,
       fontWeight: "800",
-      textAlign: "center",
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: c.borderSubtle,
+      color: c.primaryAction,
     },
-    unitText: {
-      fontSize: 13,
-      color: c.textSecondary,
-      fontWeight: "600",
-    },
-
-    // Custom Audio Card
-    customAudioCard: {
-      marginTop: 12,
-      backgroundColor: c.surfaceHighlight,
-      borderRadius: 14,
-      padding: 12,
-      borderWidth: 1,
-      borderColor: c.borderSubtle,
-    },
-    customAudioFileRow: {
+    proBadge: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 8,
-      paddingBottom: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: c.borderSubtle,
-      marginBottom: 8,
+      gap: 3,
+      backgroundColor: "rgba(245, 158, 11, 0.12)",
+      paddingHorizontal: 5,
+      paddingVertical: 1.5,
+      borderRadius: 4,
     },
-    customAudioIconBox: {
+    proBadgeText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 10,
+      fontWeight: "800",
+      color: "#F59E0B",
+      letterSpacing: 0.5,
+    },
+    profileMeta: {
+      fontFamily: AppFonts.medium,
+      fontSize: 12,
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+
+    // Group Sections (iOS Grouped List)
+    groupSection: {
+      marginBottom: 16,
+    },
+    groupHeader: {
+      fontFamily: AppFonts.bold,
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      color: c.textMuted,
+      marginBottom: 6,
+      marginLeft: 4,
+    },
+    groupCard: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      overflow: "hidden",
+    },
+
+    // Compact Row
+    compactRow: {
+      minHeight: 48,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    compactActionRow: {
+      minHeight: 46,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    rowIconBox: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      backgroundColor: c.surfaceHighlight,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    rowLabelWrap: {
+      flex: 1,
+    },
+    rowLabel: {
+      fontFamily: AppFonts.semiBold,
+      fontSize: 13.5,
+      fontWeight: "600",
+      color: c.textPrimary,
+    },
+    rowSubLabel: {
+      fontFamily: AppFonts.regular,
+      fontSize: 12,
+      color: c.textMuted,
+      marginTop: 1,
+    },
+    rowDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: c.borderSubtle,
+      marginLeft: 50,
+    },
+
+    // Inline Stepper
+    inlineStepper: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 8,
+      paddingHorizontal: 4,
+      paddingVertical: 3,
+    },
+    inlineStepperBtn: {
       width: 24,
       height: 24,
       borderRadius: 6,
       backgroundColor: c.cardSurface,
       alignItems: "center",
       justifyContent: "center",
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
-    customAudioFileName: {
-      flex: 1,
+    inlineStepperValue: {
+      fontFamily: AppFonts.bold,
       fontSize: 13,
       fontWeight: "700",
       color: c.textPrimary,
+      paddingHorizontal: 4,
+      fontVariant: ["tabular-nums"],
+      minWidth: 28,
+      textAlign: "center",
     },
-    customAudioActions: {
+    inlineStepperInput: {
+      fontFamily: AppFonts.bold,
+      fontSize: 13,
+      fontWeight: "700",
+      color: c.textPrimary,
+      paddingVertical: 0,
+      paddingHorizontal: 2,
+      minWidth: 26,
+      textAlign: "center",
+      fontVariant: ["tabular-nums"],
+    },
+    inlineUnitText: {
+      fontFamily: AppFonts.medium,
+      fontSize: 11,
+      color: c.textSecondary,
+      marginRight: 2,
+    },
+
+    // Compact Segmented Controls
+    compactSegmented: {
+      flexDirection: "row",
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 8,
+      padding: 2,
+      gap: 2,
+    },
+    compactSegmentBtn: {
+      paddingVertical: 5,
+      paddingHorizontal: 10,
+      borderRadius: 6,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    compactSegmentBtnActive: {
+      backgroundColor: c.primaryAction,
+    },
+    compactSegmentText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 11.5,
+      fontWeight: "600",
+      color: c.textSecondary,
+    },
+    compactSegmentTextActive: {
+      color: "#000000",
+      fontWeight: "800",
+    },
+
+    // Sub Actions
+    subActionContainer: {
+      paddingHorizontal: 12,
+      paddingBottom: 10,
+      paddingTop: 2,
+    },
+    subActionRowCompact: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingBottom: 10,
+      paddingTop: 2,
+      marginLeft: 38,
+    },
+    subActionChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: c.surfaceHighlight,
+      paddingVertical: 5,
+      paddingHorizontal: 10,
+      borderRadius: 7,
+    },
+    subActionChipText: {
+      fontFamily: AppFonts.semiBold,
+      fontSize: 11,
+      fontWeight: "600",
+      color: c.textPrimary,
+    },
+    compactPreviewBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      backgroundColor: c.primaryAction,
+      borderRadius: 8,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      marginTop: 2,
+    },
+    compactPreviewBtnStop: {
+      backgroundColor: c.danger,
+    },
+    compactPreviewBtnText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#000000",
+    },
+    timePickerCompactBtn: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      gap: 10,
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      marginLeft: 38,
     },
-    customAudioActionBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingVertical: 4,
-      paddingHorizontal: 6,
+    timePickerCompactLabel: {
+      fontFamily: AppFonts.medium,
+      fontSize: 12,
+      color: c.textSecondary,
     },
-    customAudioActionText: {
+    timePickerCompactValue: {
+      fontFamily: AppFonts.bold,
       fontSize: 12,
       fontWeight: "700",
-      color: c.textSecondary,
+      color: c.primaryAction,
+      fontVariant: ["tabular-nums"],
     },
-    customAudioHintRow: {
-      flexDirection: "row",
+
+    // Footer
+    versionFooter: {
       alignItems: "center",
-      gap: 6,
-      marginTop: 8,
-      paddingTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: c.borderSubtle,
+      marginTop: 12,
+      marginBottom: 8,
     },
-    customAudioHintText: {
-      flex: 1,
+    versionText: {
+      fontFamily: AppFonts.medium,
       fontSize: 11,
-      fontWeight: "600",
-      color: c.textSecondary,
-      opacity: 0.85,
+      color: c.textMuted,
+      fontWeight: "500",
     },
   });
+};

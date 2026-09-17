@@ -9,12 +9,12 @@ import FloatingWorkoutBar from '@/components/FloatingWorkoutBar';
 export default function TabLayout() {
   const colors = useThemeColors();
   const { t } = useTranslation();
-  const isDark = colors.background === '#0B0C0E';
+  const isDark = colors.isDark;
 
-  const activeTabColor = isDark ? '#B7F34D' : '#1B4D3E';
-  const inactiveTabColor = isDark ? '#6B7280' : '#9CA3AF';
-  const pillBg = isDark ? 'rgba(20, 26, 22, 0.88)' : 'rgba(255, 255, 255, 0.92)';
-  const pillBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : '#E6E1D7';
+  const activeTabColor = colors.primaryAction;
+  const inactiveTabColor = isDark ? '#64748B' : '#8C857B';
+  const pillBg = isDark ? 'rgba(18, 19, 26, 0.96)' : 'rgba(255, 255, 255, 0.96)';
+  const pillBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(228, 223, 213, 0.9)';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -29,13 +29,16 @@ export default function TabLayout() {
             styles.tabBar,
             {
               borderColor: pillBorder,
+              backgroundColor: pillBg,
               ...Platform.select({
                 ios: {
-                  shadowColor: isDark ? '#000' : '#1A2E20',
-                  shadowOpacity: isDark ? 0.4 : 0.08,
+                  shadowColor: '#000',
+                  shadowOpacity: isDark ? 0.5 : 0.08,
+                  shadowRadius: 16,
+                  shadowOffset: { width: 0, height: 4 },
                 },
                 android: {
-                  elevation: isDark ? 8 : 4,
+                  elevation: isDark ? 10 : 4,
                 },
               }),
             },

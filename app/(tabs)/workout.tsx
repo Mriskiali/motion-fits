@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,32 +10,27 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { format, addDays, startOfWeek, isSameDay, isToday } from 'date-fns';
+import { format, addDays, startOfWeek, isSameDay, isToday, isBefore, startOfDay } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale/id';
-import { MoreVertical, Plus, Calendar, X, Edit3, Trash2, Dumbbell, Play } from 'lucide-react-native';
+import { MoreVertical, Plus, Calendar, X, Edit3, Trash2, Dumbbell, Play, ChevronRight } from 'lucide-react-native';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
-import { useOnboardingStore } from '@/store/useOnboardingStore';
-import SpotlightGuideOverlay from '@/components/SpotlightGuideOverlay';
 
 export default function WorkoutScreen() {
   const router = useRouter();
-  const isTourActive = useOnboardingStore((state) => state.isTourActive);
-  const currentStep = useOnboardingStore((state) => state.currentStep);
-  const nextStep = useOnboardingStore((state) => state.nextStep);
-  const skipTour = useOnboardingStore((state) => state.skipTour);
   const templates = useWorkoutStore((state) => state.templates);
+  const sessions = useWorkoutStore((state) => state.sessions);
   const scheduledWorkouts = useWorkoutStore((state) => state.scheduledWorkouts);
   const scheduleWorkout = useWorkoutStore((state) => state.scheduleWorkout);
   const startSession = useWorkoutStore((state) => state.startSession);
   const deleteTemplate = useWorkoutStore((state) => state.deleteTemplate);
-  const { showAlert } = useAlertStore();
+  const showAlert = useAlertStore((state) => state.showAlert);
   const colors = useThemeColors();
-  const styles = getStyles(colors);
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { t, language } = useTranslation();
 
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -47,12 +42,6 @@ export default function WorkoutScreen() {
   const scheduledTemplateId = scheduledWorkouts[selectedDateStr];
   const scheduledTemplate = templates.find((t) => t.id === scheduledTemplateId);
 
-  useEffect(() => {
-    if (isTourActive && currentStep === 'workout_planner' && !scheduledTemplateId && templates.length > 0) {
-      scheduleWorkout(selectedDateStr, templates[0].id);
-    }
-  }, [isTourActive, currentStep, scheduledTemplateId, templates, selectedDateStr, scheduleWorkout]);
-
   const activeSession = useWorkoutStore((state) => state.activeSession);
 
   const handleStartWorkout = (templateId: string) => {
@@ -60,7 +49,6 @@ export default function WorkoutScreen() {
 
     // If there's already an active session for this template, just resume it
     if (activeSession && activeSession.templateId === templateId) {
-      scheduleWorkout(selectedDateStr, templateId);
       router.push('/workout/active');
       return;
     }
@@ -75,9 +63,6 @@ export default function WorkoutScreen() {
           {
             text: t('resume'),
             onPress: () => {
-              if (activeSession.templateId) {
-                scheduleWorkout(selectedDateStr, activeSession.templateId);
-              }
               router.push('/workout/active');
             },
           },
@@ -85,7 +70,6 @@ export default function WorkoutScreen() {
             text: t('start_new'),
             style: 'destructive',
             onPress: () => {
-              scheduleWorkout(selectedDateStr, templateId);
               startSession(templateId);
               router.push('/workout/active');
             },
@@ -95,7 +79,6 @@ export default function WorkoutScreen() {
       return;
     }
 
-    scheduleWorkout(selectedDateStr, templateId);
     startSession(templateId);
     router.push('/workout/active');
   };
@@ -149,7 +132,13 @@ export default function WorkoutScreen() {
           const isSelected = isSameDay(date, selectedDate);
           const isCurrentDay = isToday(date);
           const dateStr = format(date, 'yyyy-MM-dd');
-          const hasWorkout = !!scheduledWorkouts[dateStr];
+          const isPastDay = isBefore(startOfDay(date), startOfDay(new Date()));
+          const isSessionCompleted = sessions.some(
+            (s) => format(new Date(s.date), 'yyyy-MM-dd') === dateStr
+          );
+          const hasWorkout = isPastDay
+            ? isSessionCompleted
+            : (isSessionCompleted || !!scheduledWorkouts[dateStr]);
 
           return (
             <Pressable
@@ -168,12 +157,14 @@ export default function WorkoutScreen() {
               <View
                 style={[
                   styles.dayNumberBadge,
+                  isCurrentDay && styles.dayNumberBadgeToday,
                   isSelected && styles.dayNumberBadgeSelected,
                 ]}
               >
                 <Text
                   style={[
                     styles.dayNumberText,
+                    isCurrentDay && styles.dayNumberTextToday,
                     isSelected && styles.dayNumberTextSelected,
                   ]}
                 >
@@ -183,7 +174,7 @@ export default function WorkoutScreen() {
               <View
                 style={[
                   styles.dot,
-                  hasWorkout && { backgroundColor: isSelected ? colors.dateBadgeSelected : colors.primaryAction },
+                  hasWorkout && { backgroundColor: isSelected ? '#000000' : '#10B981' },
                   !hasWorkout && { backgroundColor: 'transparent' },
                 ]}
               />
@@ -208,62 +199,46 @@ export default function WorkoutScreen() {
           <View style={styles.assignedCard}>
             <View style={styles.assignedHeader}>
               <View style={styles.assignedIconBox}>
-                <Dumbbell size={22} color={colors.accentLime} />
+                <Dumbbell size={20} color="#F59E0B" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.assignedTitle}>{scheduledTemplate.name}</Text>
-                {scheduledTemplate.subtitle ? (
-                  <Text style={styles.assignedSubtitle}>{scheduledTemplate.subtitle}</Text>
-                ) : (
-                  <Text style={styles.assignedSubtitle}>
-                    {scheduledTemplate.exercises.length} {t('exercises_count')}
-                  </Text>
-                )}
+                <Text style={styles.assignedSubtitle}>
+                  {scheduledTemplate.subtitle
+                    ? `${scheduledTemplate.subtitle} • ${scheduledTemplate.exercises.length} ${t('exercises_count')}`
+                    : `${scheduledTemplate.exercises.length} ${t('exercises_count')}`}
+                </Text>
               </View>
               <TouchableOpacity onPress={handleUnassign} style={styles.unassignButton}>
-                <X color={colors.textSecondary} size={18} />
+                <X color={colors.textSecondary} size={16} />
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity
-              style={[
-                styles.mainStartButton,
-                isTourActive && currentStep === 'workout_planner' && styles.mainStartButtonHighlight,
-                activeSession?.templateId === scheduledTemplate.id && {
-                  backgroundColor: colors.successBadge,
-                },
-              ]}
+              style={styles.mainStartButton}
               onPress={() => {
-                if (isTourActive && currentStep === 'workout_planner') {
-                  nextStep();
-                }
                 handleStartWorkout(scheduledTemplate.id);
               }}
             >
-              <Play size={18} color="#FFFFFF" fill="#FFFFFF" />
+              <Play size={16} color="#000000" fill="#000000" />
               <Text style={styles.mainStartButtonText}>
                 {activeSession?.templateId === scheduledTemplate.id
-                  ? t('resume_workout')
-                  : t('start_workout')}
+                  ? (t('resume_workout') || 'Lanjutkan Latihan')
+                  : (t('start_workout') || 'Mulai Latihan')}
               </Text>
-              {isTourActive && currentStep === 'workout_planner' && (
-                <View style={styles.tourButtonBadge}>
-                  <Text style={styles.tourButtonBadgeText}>👈 {t('onboarding_step2_tap_here')}</Text>
-                </View>
-              )}
             </TouchableOpacity>
           </View>
         ) : (
           <View style={[styles.assignedCard, styles.unassignedCard]}>
             <View style={styles.emptyIconBox}>
-              <Calendar color={colors.textMuted} size={28} />
+              <Calendar color={colors.textMuted} size={24} />
             </View>
             <Text style={styles.unassignedText}>{t('no_workout_scheduled')}</Text>
             <TouchableOpacity
               style={styles.assignButton}
               onPress={() => setIsAssigning(!isAssigning)}
             >
-              <Plus color="#FFFFFF" size={18} />
+              <Plus color="#F59E0B" size={16} strokeWidth={2.4} />
               <Text style={styles.assignButtonText}>
                 {isAssigning ? t('cancel') : t('assign_workout')}
               </Text>
@@ -288,7 +263,7 @@ export default function WorkoutScreen() {
                         </Text>
                       </View>
                       <View style={styles.inlineAddBadge}>
-                        <Plus color={colors.primaryAction} size={16} />
+                        <Plus color={colors.primaryAction} size={15} />
                       </View>
                     </TouchableOpacity>
                   ))
@@ -310,7 +285,7 @@ export default function WorkoutScreen() {
             onPress={() => router.push('/workout/create')}
             style={styles.addButton}
           >
-            <Plus color={colors.primaryAction} size={16} />
+            <Plus color="#F59E0B" size={14} strokeWidth={2.4} />
             <Text style={styles.addButtonText}>{t('create')}</Text>
           </TouchableOpacity>
         </View>
@@ -322,27 +297,26 @@ export default function WorkoutScreen() {
             onPress={() => router.push(`/workout/preview?id=${template.id}`)}
           >
             <View style={styles.templateIconWrapper}>
-              <Dumbbell size={20} color={colors.primaryAction} />
+              <Dumbbell size={18} color="#F59E0B" />
             </View>
 
             <View style={styles.templateInfo}>
               <Text style={styles.templateName}>{template.name}</Text>
-              {template.subtitle ? (
-                <Text style={styles.templateSubtitle}>{template.subtitle}</Text>
-              ) : null}
-              <View style={styles.exerciseBadge}>
-                <Text style={styles.exerciseBadgeText}>
-                  {template.exercises.length} {t('exercises_count')}
-                </Text>
-              </View>
+              <Text style={styles.templateSubtitle}>
+                {template.subtitle ? `${template.subtitle} • ` : ''}
+                {template.exercises.length} {t('exercises_count')}
+              </Text>
             </View>
 
-            <TouchableOpacity
-              style={styles.menuButton}
-              onPress={() => openBottomSheet(template)}
-            >
-              <MoreVertical color={colors.textSecondary} size={20} />
-            </TouchableOpacity>
+            <View style={styles.templateActions}>
+              <TouchableOpacity
+                style={styles.menuButton}
+                onPress={() => openBottomSheet(template)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MoreVertical color={colors.textSecondary} size={18} />
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         ))}
 
@@ -368,66 +342,87 @@ export default function WorkoutScreen() {
         <View style={{ height: 110 }} />
       </ScrollView>
 
-      {/* Bottom Sheet for Template Actions */}
-      <Modal visible={bottomSheetVisible} transparent animationType="slide">
+      {/* Centered Popup Dialog for Template Actions */}
+      <Modal visible={bottomSheetVisible} transparent animationType="fade" onRequestClose={closeBottomSheet}>
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={closeBottomSheet} />
-          <View style={styles.bottomSheet}>
-            <View style={styles.dragHandle} />
-            <Text style={styles.sheetTitle}>{activeTemplate?.name}</Text>
-
-            <TouchableOpacity style={styles.sheetAction} onPress={handleEditTemplate}>
-              <View
-                style={[
-                  styles.sheetIconBox,
-                  { backgroundColor: 'rgba(59, 130, 246, 0.12)' },
-                ]}
-              >
-                <Edit3 color="#3b82f6" size={18} />
+          <View style={styles.popupCard}>
+            <View style={styles.popupHeaderRow}>
+              <View style={styles.sheetHeaderIconBox}>
+                <Dumbbell size={18} color="#F59E0B" />
               </View>
-              <Text style={styles.sheetActionText}>{t('edit')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.sheetAction} onPress={handleDeleteTemplate}>
-              <View
-                style={[
-                  styles.sheetIconBox,
-                  { backgroundColor: 'rgba(239, 68, 68, 0.12)' },
-                ]}
-              >
-                <Trash2 color={colors.danger} size={18} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetTitle} numberOfLines={1}>
+                  {activeTemplate?.name}
+                </Text>
+                <Text style={styles.sheetSubtitle}>
+                  {activeTemplate?.exercises?.length || 0} {t('exercises_count')}
+                  {activeTemplate?.subtitle ? ` • ${activeTemplate.subtitle}` : ''}
+                </Text>
               </View>
-              <Text style={[styles.sheetActionText, { color: colors.danger }]}>
-                {t('delete')}
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={closeBottomSheet}
+                style={styles.popupCloseBtn}
+                activeOpacity={0.7}
+              >
+                <X size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity style={styles.sheetCancelBtn} onPress={closeBottomSheet}>
+            <View style={styles.sheetActionsList}>
+              <TouchableOpacity
+                style={styles.sheetActionCard}
+                onPress={handleEditTemplate}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.sheetIconBox,
+                    { backgroundColor: 'rgba(245, 158, 11, 0.12)' },
+                  ]}
+                >
+                  <Edit3 color="#F59E0B" size={18} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sheetActionText}>{t('edit')}</Text>
+                  <Text style={styles.sheetActionSub}>Ubah nama, gerakan, atau target latihan</Text>
+                </View>
+                <ChevronRight size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sheetActionCard}
+                onPress={handleDeleteTemplate}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.sheetIconBox,
+                    { backgroundColor: 'rgba(239, 68, 68, 0.12)' },
+                  ]}
+                >
+                  <Trash2 color={colors.danger} size={18} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetActionText, { color: colors.danger }]}>
+                    {t('delete')}
+                  </Text>
+                  <Text style={styles.sheetActionSub}>Hapus rutinitas ini secara permanen</Text>
+                </View>
+                <ChevronRight size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.sheetCancelBtn}
+              onPress={closeBottomSheet}
+              activeOpacity={0.8}
+            >
               <Text style={styles.sheetCancelText}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
-      {/* Interactive Onboarding Spotlight: Step 2 Workout Planner */}
-      {isTourActive && currentStep === 'workout_planner' && (
-        <SpotlightGuideOverlay
-          stepNumber={2}
-          totalSteps={5}
-          title={t('onboarding_step2_title')}
-          message={t('onboarding_step2_desc')}
-          nextLabel={t('onboarding_step2_btn')}
-          onNext={() => {
-            const targetId = scheduledTemplate?.id || templates[0]?.id;
-            if (targetId) {
-              nextStep();
-              handleStartWorkout(targetId);
-            }
-          }}
-          onSkip={skipTour}
-          position="top"
-        />
-      )}
     </View>
   );
 }
@@ -448,17 +443,17 @@ const getStyles = (c: ThemeColors) =>
     },
     headerTitle: {
       fontFamily: AppFonts.extraBold,
-      fontSize: 28,
+      fontSize: 24,
       fontWeight: '800',
       color: c.textPrimary,
-      letterSpacing: -0.6,
+      letterSpacing: -0.5,
     },
     headerSub: {
       fontFamily: AppFonts.medium,
-      fontSize: 14,
+      fontSize: 13,
       color: c.textSecondary,
       fontWeight: '500',
-      marginTop: 4,
+      marginTop: 2,
     },
 
     // Date Scroller
@@ -504,55 +499,68 @@ const getStyles = (c: ThemeColors) =>
     dayNumberBadge: {
       width: 34,
       height: 34,
-      borderRadius: 17,
+      borderRadius: 10,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',
     },
+    dayNumberBadgeToday: {
+      borderWidth: 1.5,
+      borderColor: c.primaryAction,
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    },
     dayNumberBadgeSelected: {
-      backgroundColor: c.dateBadgeSelected,
+      backgroundColor: c.primaryAction,
+      borderColor: c.primaryAction,
     },
     dayNumberText: {
       fontFamily: AppFonts.bold,
       fontSize: 15,
       fontWeight: '700',
       color: c.textPrimary,
+      fontVariant: ['tabular-nums'],
+    },
+    dayNumberTextToday: {
+      color: c.primaryAction,
+      fontWeight: '800',
     },
     dayNumberTextSelected: {
       fontFamily: AppFonts.extraBold,
       fontWeight: '800',
-      color: c.dateTextSelected,
+      color: '#000000',
     },
     dot: {
-      width: 5,
-      height: 5,
-      borderRadius: 2.5,
+      width: 4,
+      height: 4,
+      borderRadius: 2,
     },
 
     // Assigned Plan Section
     assignedContainer: {
-      marginBottom: 28,
+      marginBottom: 14,
     },
     sectionTitle: {
       fontFamily: AppFonts.bold,
-      fontSize: 18,
+      fontSize: 16,
       fontWeight: '700',
       color: c.textPrimary,
       letterSpacing: -0.3,
-      marginBottom: 12,
+      marginBottom: 8,
     },
     assignedCard: {
       backgroundColor: c.cardSurface,
-      borderRadius: 22,
-      padding: 20,
+      borderRadius: 14,
+      padding: 12,
       borderWidth: 1,
       borderColor: c.borderSubtle,
+      borderLeftWidth: 4,
+      borderLeftColor: '#F59E0B',
       ...Platform.select({
         ios: {
           shadowColor: c.shadowColor,
-          shadowOffset: { width: 0, height: 4 },
+          shadowOffset: { width: 0, height: 2 },
           shadowOpacity: c.shadowOpacity,
-          shadowRadius: c.shadowRadius,
+          shadowRadius: 3,
         },
         android: {
           elevation: c.elevation,
@@ -561,35 +569,39 @@ const getStyles = (c: ThemeColors) =>
     },
     unassignedCard: {
       alignItems: 'center',
-      paddingVertical: 28,
+      paddingVertical: 16,
       borderStyle: 'dashed',
+      borderColor: '#334155',
+      backgroundColor: 'transparent',
+      borderLeftWidth: 1,
+      borderLeftColor: '#334155',
     },
     emptyIconBox: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
+      width: 38,
+      height: 38,
+      borderRadius: 19,
       backgroundColor: c.surfaceHighlight,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 12,
+      marginBottom: 6,
     },
     assignedHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
-      marginBottom: 18,
+      gap: 10,
+      marginBottom: 10,
     },
     assignedIconBox: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
-      backgroundColor: c.surfaceHighlight,
+      width: 34,
+      height: 34,
+      borderRadius: 8,
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     assignedTitle: {
-      fontFamily: AppFonts.extraBold,
-      fontSize: 18,
+      fontFamily: AppFonts.bold,
+      fontSize: 15,
       fontWeight: '800',
       color: c.textPrimary,
       marginBottom: 2,
@@ -597,50 +609,50 @@ const getStyles = (c: ThemeColors) =>
     unassignButton: {
       padding: 6,
       backgroundColor: c.surfaceHighlight,
-      borderRadius: 10,
+      borderRadius: 8,
     },
     assignedSubtitle: {
       fontFamily: AppFonts.medium,
-      fontSize: 13,
+      fontSize: 12,
       color: c.textSecondary,
-      fontWeight: '500',
     },
     unassignedText: {
       fontFamily: AppFonts.medium,
-      color: c.textSecondary,
-      marginBottom: 16,
-      fontSize: 14,
-      fontWeight: '500',
+      color: c.textMuted,
+      marginBottom: 10,
+      fontSize: 12,
     },
     assignButton: {
-      backgroundColor: c.primaryAction,
-      borderRadius: 16,
-      paddingVertical: 12,
-      paddingHorizontal: 20,
+      backgroundColor: 'rgba(245, 158, 11, 0.1)',
+      borderWidth: 1,
+      borderColor: 'rgba(245, 158, 11, 0.25)',
+      borderRadius: 8,
+      paddingVertical: 7,
+      paddingHorizontal: 14,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
     },
     assignButtonText: {
-      fontFamily: AppFonts.extraBold,
-      color: '#FFFFFF',
-      fontSize: 14,
+      fontFamily: AppFonts.bold,
+      color: '#F59E0B',
+      fontSize: 12,
       fontWeight: '800',
     },
     inlinePicker: {
-      marginTop: 20,
+      marginTop: 12,
       width: '100%',
       borderTopWidth: 1,
       borderTopColor: c.borderSubtle,
-      paddingTop: 16,
+      paddingTop: 10,
     },
     inlinePickerTitle: {
       fontFamily: AppFonts.bold,
-      color: c.textSecondary,
-      fontSize: 12,
-      fontWeight: '700',
-      letterSpacing: 0.5,
-      marginBottom: 12,
+      color: c.textMuted,
+      fontSize: 11,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+      marginBottom: 8,
       textTransform: 'uppercase',
     },
     inlineTemplateItem: {
@@ -648,44 +660,44 @@ const getStyles = (c: ThemeColors) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       backgroundColor: c.surfaceHighlight,
-      padding: 14,
-      borderRadius: 14,
-      marginBottom: 8,
+      padding: 10,
+      borderRadius: 10,
+      marginBottom: 6,
     },
     inlineTemplateName: {
       fontFamily: AppFonts.bold,
       color: c.textPrimary,
       fontWeight: '700',
-      fontSize: 15,
+      fontSize: 13,
     },
     inlineTemplateSub: {
       fontFamily: AppFonts.medium,
-      color: c.textSecondary,
-      fontSize: 12,
-      marginTop: 2,
+      color: c.textMuted,
+      fontSize: 11,
+      marginTop: 1,
     },
     inlineAddBadge: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
+      width: 26,
+      height: 26,
+      borderRadius: 6,
       backgroundColor: c.cardSurface,
       alignItems: 'center',
       justifyContent: 'center',
     },
     mainStartButton: {
-      backgroundColor: c.primaryAction,
-      borderRadius: 18,
-      paddingVertical: 15,
+      backgroundColor: '#F59E0B',
+      borderRadius: 10,
+      paddingVertical: 10,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 8,
+      gap: 6,
       ...Platform.select({
         ios: {
-          shadowColor: c.primaryAction,
-          shadowOffset: { width: 0, height: 4 },
+          shadowColor: '#F59E0B',
+          shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.25,
-          shadowRadius: 8,
+          shadowRadius: 4,
         },
         android: {
           elevation: 3,
@@ -693,32 +705,24 @@ const getStyles = (c: ThemeColors) =>
       }),
     },
     mainStartButtonText: {
-      fontFamily: AppFonts.extraBold,
-      color: '#FFFFFF',
-      fontSize: 15,
+      fontFamily: AppFonts.bold,
+      color: '#000000',
+      fontSize: 14,
       fontWeight: '800',
-      letterSpacing: 0.3,
+      letterSpacing: 0.2,
     },
     mainStartButtonHighlight: {
       borderWidth: 2,
       borderColor: '#F59E0B',
-      ...Platform.select({
-        ios: {
-          shadowColor: '#F59E0B',
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.6,
-          shadowRadius: 10,
-        },
-        android: {
-          elevation: 6,
-        },
-      }),
     },
     tourButtonBadge: {
       backgroundColor: '#FEF3C7',
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
     },
     tourButtonBadgeText: {
       fontFamily: AppFonts.bold,
@@ -729,55 +733,46 @@ const getStyles = (c: ThemeColors) =>
 
     // Templates Section
     templatesContainer: {
-      marginBottom: 20,
+      marginBottom: 14,
     },
     sectionHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 14,
+      marginBottom: 8,
     },
     addButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: c.surfaceHighlight,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
+      backgroundColor: 'rgba(245, 158, 11, 0.1)',
+      borderWidth: 1,
+      borderColor: 'rgba(245, 158, 11, 0.25)',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
       gap: 4,
     },
     addButtonText: {
       fontFamily: AppFonts.bold,
-      color: c.primaryAction,
-      fontSize: 13,
-      fontWeight: '700',
+      color: '#F59E0B',
+      fontSize: 11,
+      fontWeight: '800',
     },
     templateCard: {
       backgroundColor: c.cardSurface,
-      borderRadius: 20,
-      padding: 16,
-      marginBottom: 12,
+      borderRadius: 12,
+      padding: 10,
+      marginBottom: 8,
       flexDirection: 'row',
       alignItems: 'center',
       borderWidth: 1,
       borderColor: c.borderSubtle,
-      gap: 14,
-      ...Platform.select({
-        ios: {
-          shadowColor: c.shadowColor,
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: c.shadowOpacity,
-          shadowRadius: c.shadowRadius,
-        },
-        android: {
-          elevation: c.elevation,
-        },
-      }),
+      gap: 10,
     },
     templateIconWrapper: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
+      width: 32,
+      height: 32,
+      borderRadius: 8,
       backgroundColor: c.surfaceHighlight,
       alignItems: 'center',
       justifyContent: 'center',
@@ -787,7 +782,7 @@ const getStyles = (c: ThemeColors) =>
     },
     templateName: {
       fontFamily: AppFonts.bold,
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '700',
       color: c.textPrimary,
       marginBottom: 2,
@@ -795,8 +790,25 @@ const getStyles = (c: ThemeColors) =>
     templateSubtitle: {
       fontFamily: AppFonts.medium,
       fontSize: 12,
-      color: c.textSecondary,
-      marginBottom: 4,
+      color: c.textMuted,
+    },
+    templateActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    quickPlayBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: '#F59E0B',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    menuButton: {
+      padding: 7,
+      borderRadius: 8,
+      backgroundColor: c.surfaceHighlight,
     },
     exerciseBadge: {
       alignSelf: 'flex-start',
@@ -812,73 +824,122 @@ const getStyles = (c: ThemeColors) =>
       color: c.textSecondary,
       fontWeight: '600',
     },
-    menuButton: {
-      padding: 8,
-    },
 
-    // Bottom Sheet Modal
+    // Centered Popup Modal
     modalOverlay: {
       flex: 1,
-      justifyContent: 'flex-end',
+      backgroundColor: c.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
     },
     modalBackdrop: {
       ...(StyleSheet.absoluteFill as any),
       backgroundColor: c.overlay,
     },
-    bottomSheet: {
+    popupCard: {
       backgroundColor: c.cardSurface,
-      borderTopLeftRadius: 32,
-      borderTopRightRadius: 32,
-      padding: 24,
-      paddingBottom: 48,
-      borderTopWidth: 1,
+      borderRadius: 24,
+      padding: 20,
+      width: '100%',
+      maxWidth: 350,
+      borderWidth: 1,
       borderColor: c.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.35,
+          shadowRadius: 18,
+        },
+        android: {
+          elevation: 12,
+        },
+      }),
     },
-    dragHandle: {
-      width: 36,
-      height: 4,
-      backgroundColor: c.borderSubtle,
-      borderRadius: 2,
-      alignSelf: 'center',
-      marginBottom: 20,
-    },
-    sheetTitle: {
-      fontSize: 18,
-      fontWeight: '800',
-      color: c.textPrimary,
-      marginBottom: 20,
-      textAlign: 'center',
-    },
-    sheetAction: {
+    popupHeaderRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 14,
+      gap: 12,
+      marginBottom: 18,
+      paddingBottom: 14,
       borderBottomWidth: 1,
       borderBottomColor: c.borderSubtle,
     },
-    sheetIconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
+    popupCloseBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: 14,
+      backgroundColor: c.surfaceHighlight,
+    },
+    sheetHeaderIconBox: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sheetTitle: {
+      fontSize: 16,
+      fontFamily: AppFonts.bold,
+      fontWeight: '800',
+      color: c.textPrimary,
+      letterSpacing: -0.2,
+    },
+    sheetSubtitle: {
+      fontSize: 12,
+      fontFamily: AppFonts.medium,
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+    sheetActionsList: {
+      gap: 10,
+    },
+    sheetActionCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 12,
+      backgroundColor: c.elevatedSurface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      gap: 12,
+    },
+    sheetIconBox: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     sheetActionText: {
-      fontSize: 16,
+      fontSize: 14,
+      fontFamily: AppFonts.bold,
       color: c.textPrimary,
-      fontWeight: '600',
+      fontWeight: '700',
+    },
+    sheetActionSub: {
+      fontSize: 11,
+      fontFamily: AppFonts.medium,
+      color: c.textMuted,
+      marginTop: 1,
     },
     sheetCancelBtn: {
-      marginTop: 20,
-      paddingVertical: 14,
+      marginTop: 16,
+      paddingVertical: 13,
       alignItems: 'center',
-      backgroundColor: c.surfaceHighlight,
-      borderRadius: 16,
+      backgroundColor: c.elevatedSurface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
     },
     sheetCancelText: {
       color: c.textSecondary,
-      fontSize: 15,
+      fontSize: 14,
+      fontFamily: AppFonts.bold,
       fontWeight: '700',
     },
   });
