@@ -22,6 +22,8 @@ import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
+import { useAuth } from '@clerk/expo';
+import { pushWorkoutSession, triggerBackgroundUserSync } from '@/services/syncService';
 import RestTimerOverlay from '@/components/RestTimerOverlay';
 import { useTranslation } from '@/hooks/useTranslation';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -31,6 +33,7 @@ import { AppFonts } from '@/constants/theme';
 
 export default function ActiveWorkoutScreen() {
   const router = useRouter();
+  const { userId } = useAuth();
   const activeSession = useWorkoutStore((s) => s.activeSession);
   const templates = useWorkoutStore((s) => s.templates);
   const logSession = useWorkoutStore((s) => s.logSession);
@@ -155,9 +158,14 @@ export default function ActiveWorkoutScreen() {
   }, [activeSession?.startTime]);
 
   const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSecs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${remainingSecs.toString().padStart(2, '0')}`;
   };
 
   const getActiveDurationUnit = (durSeconds: number): 'sec' | 'min' | 'hour' => {
@@ -229,6 +237,35 @@ export default function ActiveWorkoutScreen() {
     }
     return '—';
   };
+
+  const handleCloseRestTimer = useCallback(() => {
+    setRestTimerVisible(false);
+  }, []);
+
+  const handleCancelRestSet = useCallback(() => {
+    setRestTimerVisible(false);
+    setLastLoggedSet((prevLast) => {
+      if (prevLast) {
+        const session = useWorkoutStore.getState().activeSession;
+        const currentCompleted = session?.completedSetsMap || {};
+        const currentActualVals = session?.actualValuesMap || {};
+        const currentActualWeights = session?.actualWeightsMap || {};
+        const currentActiveRest = session?.activeRestTimer;
+        const exerciseSets = currentCompleted[prevLast.exerciseId] || [];
+        const updated = {
+          ...currentCompleted,
+          [prevLast.exerciseId]: exerciseSets.filter((i) => i !== prevLast.setIndex),
+        };
+        useWorkoutStore.getState().updateActiveSession(updated, currentActualVals, currentActiveRest, currentActualWeights);
+      }
+      return null;
+    });
+  }, []);
+
+  const handleRestTimerComplete = useCallback(() => {
+    setRestTimerVisible(false);
+    setLastLoggedSet(null);
+  }, []);
 
   const toggleLogSet = (exerciseId: string, setIndex: number) => {
     const exerciseSets = completedSets[exerciseId] || [];
@@ -354,17 +391,31 @@ export default function ActiveWorkoutScreen() {
               };
             });
 
-            // Log to store
-            logSession({
+            const sessionToLog = {
               ...activeSession,
               duration: elapsedTime,
               completedExercises: completedExercisesData,
-            });
+            };
+
+            // Log to store
+            logSession(sessionToLog);
+
+            // Auto-push to Turso cloud in background if authenticated
+            if (userId) {
+              pushWorkoutSession(userId, sessionToLog).catch((err) => {
+                console.warn('[AutoSync] Failed to push completed workout:', err);
+              });
+            }
 
             // Update user streak for today
             const todayStr = format(new Date(), 'yyyy-MM-dd');
             const { updateStreak } = useUserStore.getState();
             updateStreak(todayStr);
+
+            // Sync updated streak & last_workout_date to Turso cloud
+            if (userId) {
+              triggerBackgroundUserSync(userId);
+            }
 
             // Auto unassign if they just finished today's scheduled workout
             const { scheduledWorkouts, scheduleWorkout } = useWorkoutStore.getState();
@@ -546,7 +597,7 @@ export default function ActiveWorkoutScreen() {
               {/* Table Column Headers */}
               <View style={styles.tableHeaderRow}>
                 <Text style={styles.colHeaderSet}>{t('set').toUpperCase()}</Text>
-                <Text style={styles.colHeaderPrev}>PREV</Text>
+                <Text style={styles.colHeaderPrev}>{t('col_prev')}</Text>
                 {isWeighted && (
                   <>
                     <Text style={styles.colHeaderMetric}>{t('weight_unit').toUpperCase()}</Text>
@@ -555,14 +606,14 @@ export default function ActiveWorkoutScreen() {
                 )}
                 {isBodyweight && (
                   <>
-                    <Text style={styles.colHeaderMetric}>MODE</Text>
+                    <Text style={styles.colHeaderMetric}>{t('col_mode')}</Text>
                     <Text style={styles.colHeaderMetric}>{t('reps_label').toUpperCase()}</Text>
                   </>
                 )}
                 {isTimeBased && (
                   <>
                     <Text style={styles.colHeaderMetric}>{t('duration').toUpperCase()}</Text>
-                    <Text style={styles.colHeaderMetric}>UNIT</Text>
+                    <Text style={styles.colHeaderMetric}>{t('col_unit')}</Text>
                   </>
                 )}
                 <Text style={styles.colHeaderCheck}>✓</Text>
@@ -765,23 +816,9 @@ export default function ActiveWorkoutScreen() {
         exerciseId={lastLoggedSet?.exerciseId}
         setIndex={lastLoggedSet?.setIndex}
         isConfiguringDefault={!autoStartTimer}
-        onClose={() => setRestTimerVisible(false)} 
-        onCancelSet={() => {
-          setRestTimerVisible(false);
-          if (lastLoggedSet) {
-             const exerciseSets = completedSets[lastLoggedSet.exerciseId] || [];
-             const updated = {
-               ...completedSets,
-               [lastLoggedSet.exerciseId]: exerciseSets.filter(i => i !== lastLoggedSet.setIndex),
-             };
-             updateActiveSession(updated, actualValues);
-             setLastLoggedSet(null);
-          }
-        }}
-        onTimerComplete={() => {
-          setRestTimerVisible(false);
-          setLastLoggedSet(null);
-        }}
+        onClose={handleCloseRestTimer} 
+        onCancelSet={handleCancelRestSet}
+        onTimerComplete={handleRestTimerComplete}
       />
     </View>
   );

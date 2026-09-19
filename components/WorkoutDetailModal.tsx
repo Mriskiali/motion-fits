@@ -322,7 +322,7 @@ export default function WorkoutDetailModal({
                     <Text style={styles.exerciseNameText}>{ex.name}</Text>
                     <Text style={styles.exerciseMetaText}>
                       {ex.sets.length} Set • {ex.totalReps} Reps
-                      {ex.maxWeight ? ` • Beban Puncak ${ex.maxWeight} kg` : ''}
+                      {ex.maxWeight ? ` • ${t('peak_weight')} ${ex.maxWeight} kg` : ''}
                     </Text>
                   </View>
                   {ex.maxWeight && (
@@ -335,15 +335,15 @@ export default function WorkoutDetailModal({
 
                 {/* Table Header */}
                 <View style={styles.tableHeaderRow}>
-                  <Text style={[styles.tableColHeader, { width: 52 }]}>SET</Text>
+                  <Text style={[styles.tableColHeader, { width: 52 }]}>{t('set').toUpperCase()}</Text>
                   <Text style={[styles.tableColHeader, { flex: 1 }]}>
-                    {ex.isTimeBased ? 'DURASI' : 'REPETISI'}
+                    {ex.isTimeBased ? t('col_duration') : t('col_reps')}
                   </Text>
                   <Text style={[styles.tableColHeader, { width: 90, textAlign: 'right' }]}>
-                    BEBAN
+                    {t('col_weight')}
                   </Text>
                   <Text style={[styles.tableColHeader, { width: 75, textAlign: 'right' }]}>
-                    PROGRES
+                    {t('col_progress')}
                   </Text>
                 </View>
 
@@ -358,7 +358,7 @@ export default function WorkoutDetailModal({
                     {/* Reps or Time */}
                     <View style={{ flex: 1, paddingHorizontal: 6 }}>
                       <Text style={styles.setRepsText}>
-                        {setItem.reps} {setItem.isTimeBased ? 'detik' : 'reps'}
+                        {setItem.reps} {setItem.isTimeBased ? t('seconds_short') : 'reps'}
                       </Text>
                     </View>
 

@@ -30,6 +30,8 @@ const WAVEFORM_BARS = [
   0.25, 0.45, 0.7, 0.9, 0.6, 0.8, 1.0, 0.75, 0.5, 0.85, 0.95, 0.65, 0.4, 0.7,
   0.85, 1.0, 0.9, 0.55, 0.75, 0.8, 0.6, 0.45, 0.65, 0.85, 0.7, 0.5, 0.35, 0.2,
 ];
+const PRECOMPUTED_BAR_HEIGHTS = WAVEFORM_BARS.map((f) => Math.round(4 + f * 12));
+const TOTAL_BARS = WAVEFORM_BARS.length;
 
 interface SmoothSliderProps {
   value: number;
@@ -149,7 +151,7 @@ const SmoothSlider = React.memo(function SmoothSlider({
               throttleTimerRef.current = setTimeout(() => {
                 throttleTimerRef.current = null;
                 propsRef.current.onChange(lastValRef.current);
-              }, 40);
+              }, 60);
             }
           }
         },
@@ -246,40 +248,48 @@ const SmoothSlider = React.memo(function SmoothSlider({
   );
 });
 
-const WaveformDisplay = React.memo(function WaveformDisplay({
-  startOffset,
-  duration,
-  activeColor,
-  inactiveColor,
-}: {
-  startOffset: number;
-  duration: number;
-  activeColor: string;
-  inactiveColor: string;
-}) {
-  const totalSec = 60;
-  return (
-    <View style={styles.waveformContainer}>
-      {WAVEFORM_BARS.map((heightFactor, idx) => {
-        const barSec = (idx / (WAVEFORM_BARS.length - 1)) * totalSec;
-        const isActive = barSec >= startOffset && barSec <= startOffset + duration;
-        return (
-          <View
-            key={idx}
-            style={[
-              styles.waveformBar,
-              {
-                height: 4 + heightFactor * 12,
-                backgroundColor: isActive ? activeColor : inactiveColor,
-                opacity: isActive ? 1 : 0.35,
-              },
-            ]}
-          />
-        );
-      })}
-    </View>
-  );
-});
+const WaveformDisplay = React.memo(
+  function WaveformDisplay({
+    startOffset,
+    duration,
+    activeColor,
+    inactiveColor,
+  }: {
+    startOffset: number;
+    duration: number;
+    activeColor: string;
+    inactiveColor: string;
+  }) {
+    const totalSec = 60;
+    const endOffset = startOffset + duration;
+    return (
+      <View style={styles.waveformContainer}>
+        {PRECOMPUTED_BAR_HEIGHTS.map((barHeight, idx) => {
+          const barSec = (idx / (TOTAL_BARS - 1)) * totalSec;
+          const isActive = barSec >= startOffset && barSec <= endOffset;
+          return (
+            <View
+              key={idx}
+              style={[
+                styles.waveformBar,
+                {
+                  height: barHeight,
+                  backgroundColor: isActive ? activeColor : inactiveColor,
+                  opacity: isActive ? 1 : 0.35,
+                },
+              ]}
+            />
+          );
+        })}
+      </View>
+    );
+  },
+  (prev, next) =>
+    prev.startOffset === next.startOffset &&
+    prev.duration === next.duration &&
+    prev.activeColor === next.activeColor &&
+    prev.inactiveColor === next.inactiveColor
+);
 
 function AudioTrimmerCard({
   isPlayingAudio,
@@ -297,8 +307,20 @@ function AudioTrimmerCard({
   const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
 
   // Initialize from store once — decoupled from reactive store updates
-  const [localStartOffset, setLocalStartOffset] = useState(() => useUserStore.getState().customAudioStartOffset || 0);
-  const [localDuration, setLocalDuration] = useState(() => useUserStore.getState().customAudioDuration || 5);
+  const storeOffset = useUserStore((s) => s.customAudioStartOffset);
+  const storeDur = useUserStore((s) => s.customAudioDuration);
+
+  // Initialize from store once — sync when external store changes
+  const [localStartOffset, setLocalStartOffset] = useState(() => storeOffset || 0);
+  const [localDuration, setLocalDuration] = useState(() => storeDur || 5);
+
+  useEffect(() => {
+    setLocalStartOffset(storeOffset || 0);
+  }, [storeOffset]);
+
+  useEffect(() => {
+    setLocalDuration(storeDur || 5);
+  }, [storeDur]);
 
   const offsetRef = useRef(localStartOffset);
   offsetRef.current = localStartOffset;
@@ -308,8 +330,6 @@ function AudioTrimmerCard({
   const isPlayingAudioRef = useRef(isPlayingAudio);
   isPlayingAudioRef.current = isPlayingAudio;
 
-  const wasTestingRef = useRef(false);
-  const autoPlayTimeoutRef = useRef<any>(null);
   const storeCommitTimeoutRef = useRef<any>(null);
 
   // Debounced store persistence — prevents AsyncStorage bridge lock while user is actively adjusting
@@ -321,14 +341,11 @@ function AudioTrimmerCard({
       storeCommitTimeoutRef.current = null;
       useUserStore.getState().setCustomAudioStartOffset(offset);
       useUserStore.getState().setCustomAudioDuration(dur);
-    }, 600);
+    }, 300);
   }, []);
 
   useEffect(() => {
     return () => {
-      if (autoPlayTimeoutRef.current) {
-        clearTimeout(autoPlayTimeoutRef.current);
-      }
       if (storeCommitTimeoutRef.current) {
         clearTimeout(storeCommitTimeoutRef.current);
       }
@@ -347,43 +364,21 @@ function AudioTrimmerCard({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Called whenever user starts adjusting any parameter:
+  // Called whenever user starts dragging a slider or taps +/-:
   const handleAdjustmentStart = useCallback(() => {
     onSliderDragStart?.();
-    if (autoPlayTimeoutRef.current) {
-      clearTimeout(autoPlayTimeoutRef.current);
-      autoPlayTimeoutRef.current = null;
-    }
     if (storeCommitTimeoutRef.current) {
       clearTimeout(storeCommitTimeoutRef.current);
       storeCommitTimeoutRef.current = null;
     }
-    if (isPlayingAudioRef.current) {
-      wasTestingRef.current = true;
-      if (onStopPreview) {
-        onStopPreview();
-      }
+    if (isPlayingAudioRef.current && onStopPreview) {
+      onStopPreview();
     }
   }, [onSliderDragStart, onStopPreview]);
 
   const handleAdjustmentEnd = useCallback(() => {
     onSliderDragEnd?.();
   }, [onSliderDragEnd]);
-
-  // Called when user finishes adjusting: waits for idle (650ms) then auto-plays and commits to store
-  const scheduleAutoPlayOnIdle = useCallback((newOffset: number, newDur: number) => {
-    commitToStore(newOffset, newDur);
-    if (autoPlayTimeoutRef.current) {
-      clearTimeout(autoPlayTimeoutRef.current);
-    }
-    if (wasTestingRef.current) {
-      autoPlayTimeoutRef.current = setTimeout(() => {
-        if (wasTestingRef.current) {
-          onPlayPreview(newOffset, newDur);
-        }
-      }, 650);
-    }
-  }, [commitToStore, onPlayPreview]);
 
   // Stable handlers for SmoothSlider
   const handleOffsetChange = useCallback((val: number) => {
@@ -393,8 +388,8 @@ function AudioTrimmerCard({
   const handleOffsetComplete = useCallback((val: number) => {
     setLocalStartOffset(val);
     triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
-    scheduleAutoPlayOnIdle(val, durRef.current);
-  }, [scheduleAutoPlayOnIdle, triggerHaptic]);
+    commitToStore(val, durRef.current);
+  }, [commitToStore, triggerHaptic]);
 
   const handleDurationChange = useCallback((val: number) => {
     setLocalDuration(val);
@@ -403,23 +398,15 @@ function AudioTrimmerCard({
   const handleDurationComplete = useCallback((val: number) => {
     setLocalDuration(val);
     triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
-    scheduleAutoPlayOnIdle(offsetRef.current, val);
-  }, [scheduleAutoPlayOnIdle, triggerHaptic]);
+    commitToStore(offsetRef.current, val);
+  }, [commitToStore, triggerHaptic]);
 
   const handleTogglePreview = () => {
     if (isPlayingAudio) {
-      wasTestingRef.current = false;
-      if (autoPlayTimeoutRef.current) {
-        clearTimeout(autoPlayTimeoutRef.current);
-        autoPlayTimeoutRef.current = null;
-      }
       if (onStopPreview) {
         onStopPreview();
-      } else {
-        onPlayPreview(localStartOffset, localDuration);
       }
     } else {
-      wasTestingRef.current = true;
       onPlayPreview(localStartOffset, localDuration);
     }
   };
@@ -484,7 +471,7 @@ function AudioTrimmerCard({
               handleAdjustmentStart();
               const next = Math.max(0, localStartOffset - 1);
               setLocalStartOffset(next);
-              scheduleAutoPlayOnIdle(next, durRef.current);
+              commitToStore(next, durRef.current);
             }}
             activeOpacity={0.7}
           >
@@ -513,7 +500,7 @@ function AudioTrimmerCard({
               handleAdjustmentStart();
               const next = Math.min(60, localStartOffset + 1);
               setLocalStartOffset(next);
-              scheduleAutoPlayOnIdle(next, durRef.current);
+              commitToStore(next, durRef.current);
             }}
             activeOpacity={0.7}
           >
@@ -540,7 +527,7 @@ function AudioTrimmerCard({
               handleAdjustmentStart();
               const next = Math.max(3, localDuration - 1);
               setLocalDuration(next);
-              scheduleAutoPlayOnIdle(offsetRef.current, next);
+              commitToStore(offsetRef.current, next);
             }}
             activeOpacity={0.7}
           >
@@ -569,7 +556,7 @@ function AudioTrimmerCard({
               handleAdjustmentStart();
               const next = Math.min(30, localDuration + 1);
               setLocalDuration(next);
-              scheduleAutoPlayOnIdle(offsetRef.current, next);
+              commitToStore(offsetRef.current, next);
             }}
             activeOpacity={0.7}
           >

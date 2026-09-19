@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -84,6 +84,21 @@ export default function RestTimerOverlay({
   const completeRestTimer = useWorkoutStore((s) => s.completeRestTimer);
   const clearRestTimer = useWorkoutStore((s) => s.clearRestTimer);
   const completedRef = useRef(false);
+  const lastVibratedSecondRef = useRef<number | null>(null);
+
+  // Stable refs for callbacks and user settings so interval loop is NEVER torn down by external re-renders
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const onTimerCompleteRef = useRef(onTimerComplete);
+  onTimerCompleteRef.current = onTimerComplete;
+  const onCancelSetRef = useRef(onCancelSet);
+  onCancelSetRef.current = onCancelSet;
+  const hapticsEnabledRef = useRef(hapticsEnabled);
+  hapticsEnabledRef.current = hapticsEnabled;
+  const audioNotificationRef = useRef(audioNotification);
+  audioNotificationRef.current = audioNotification;
+  const completeRestTimerRef = useRef(completeRestTimer);
+  completeRestTimerRef.current = completeRestTimer;
 
   const activeTemplate = useWorkoutStore((s) =>
     s.templates.find((tpl) => tpl.id === s.activeSession?.templateId)
@@ -124,6 +139,27 @@ export default function RestTimerOverlay({
     }
   };
 
+  const handleFinish = useCallback(() => {
+    if (!completedRef.current) {
+      completedRef.current = true;
+      triggerTimerFinishedVibration(hapticsEnabledRef.current);
+      playTimerSound(audioNotificationRef.current);
+      showRestTimerFinishedNotification().catch(() => {});
+    }
+
+    if (notificationIdRef.current) {
+      cancelNotification(notificationIdRef.current);
+      notificationIdRef.current = null;
+    }
+    setIsRunning(false);
+    setIsMinimized(false);
+    completeRestTimerRef.current();
+    if (onTimerCompleteRef.current) {
+      onTimerCompleteRef.current();
+    }
+    onCloseRef.current();
+  }, []);
+
   useEffect(() => {
     if (visible) {
       setIsMinimized(false);
@@ -133,27 +169,28 @@ export default function RestTimerOverlay({
         const remaining = Math.ceil((storeRest.targetEndTime - Date.now()) / 1000);
         if (remaining <= 0) {
           // Already expired while away
-          completedRef.current = true;
-          setIsRunning(false);
-          completeRestTimer();
-          if (onTimerComplete) onTimerComplete();
-          onClose();
+          handleFinish();
           return;
         } else {
           // Resume existing running timer accurately
           completedRef.current = false;
+          lastVibratedSecondRef.current = null;
           targetEndTimeRef.current = storeRest.targetEndTime;
           setTimeLeft(remaining);
           setMaxTime(storeRest.totalDuration || Math.max(remaining, initialTime > 0 ? initialTime : 60));
           setIsConfiguring(false);
           setIsRunning(true);
           setIsEditing(false);
+          if (!notificationIdRef.current) {
+            setupNotification(remaining);
+          }
           return;
         }
       }
 
       // Brand new timer
       completedRef.current = false;
+      lastVibratedSecondRef.current = null;
       if (initialTime > 0) {
         targetEndTimeRef.current = Date.now() + initialTime * 1000;
         setTimeLeft(initialTime);
@@ -186,7 +223,7 @@ export default function RestTimerOverlay({
         notificationIdRef.current = null;
       }
     }
-  }, [visible]);
+  }, [visible, initialTime, exerciseId, setIndex, handleFinish]);
 
   // Sync timer immediately when app returns from background to foreground
   useEffect(() => {
@@ -197,11 +234,7 @@ export default function RestTimerOverlay({
           const rem = Math.ceil((currentRest.targetEndTime - Date.now()) / 1000);
           if (rem <= 0) {
             // Already expired while app was minimized/asleep
-            completedRef.current = true;
-            setIsRunning(false);
-            completeRestTimer();
-            if (onTimerComplete) onTimerComplete();
-            onClose();
+            handleFinish();
           } else {
             // Still running: update immediately to accurate remaining time
             targetEndTimeRef.current = currentRest.targetEndTime;
@@ -216,51 +249,41 @@ export default function RestTimerOverlay({
 
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub.remove();
-  }, [visible, isRunning, completeRestTimer, onTimerComplete, onClose]);
+  }, [visible, isRunning, handleFinish]);
 
+  // Bulletproof countdown interval: runs with 200ms precision and stable dependencies
   useEffect(() => {
     if (!visible || isConfiguring || !isRunning) return;
 
-    if (timeLeft <= 0) {
-      // Guard: skip notification/sound if already completed externally (e.g., AppState handler)
-      if (!completedRef.current) {
-        completedRef.current = true;
-        triggerTimerFinishedVibration(hapticsEnabled);
-        playTimerSound(audioNotification);
-        showRestTimerFinishedNotification().catch(() => {});
+    const tick = () => {
+      if (!targetEndTimeRef.current) return;
+      const now = Date.now();
+      const remainingMs = targetEndTimeRef.current - now;
+      const remainingSecs = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      setTimeLeft((prev) => (prev !== remainingSecs ? remainingSecs : prev));
+
+      if (remainingSecs <= 3 && remainingSecs > 0 && lastVibratedSecondRef.current !== remainingSecs) {
+        lastVibratedSecondRef.current = remainingSecs;
+        triggerCountdownTickVibration(hapticsEnabledRef.current);
       }
 
-      if (notificationIdRef.current) {
-        cancelNotification(notificationIdRef.current);
-        notificationIdRef.current = null;
+      if (remainingMs <= 0) {
+        handleFinish();
       }
-      setIsRunning(false);
-      setIsMinimized(false);
-      completeRestTimer();
-      if (onTimerComplete) {
-        onTimerComplete();
-      }
-      onClose();
-      return;
-    }
+    };
 
-    if (timeLeft <= 3 && timeLeft > 0) {
-      triggerCountdownTickVibration(hapticsEnabled);
-    }
+    // Immediate tick upon starting/resuming
+    tick();
 
-    const timerId = setInterval(() => {
-      if (targetEndTimeRef.current) {
-        const remaining = Math.max(0, Math.ceil((targetEndTimeRef.current - Date.now()) / 1000));
-        setTimeLeft(remaining);
-      }
-    }, 1000);
+    const timerId = setInterval(tick, 200);
 
     return () => clearInterval(timerId);
-  }, [timeLeft, visible, isConfiguring, isRunning]);
+  }, [visible, isConfiguring, isRunning, handleFinish]);
 
   const startCustomTimer = (seconds: number) => {
     if (seconds <= 0) return;
-    if (hapticsEnabled) {
+    if (hapticsEnabledRef.current) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       Vibration.vibrate(70);
     }
@@ -269,6 +292,8 @@ export default function RestTimerOverlay({
     const currentSet = setIndex ?? store.activeSession?.activeRestTimer?.setIndex ?? 0;
     store.startRestTimer(currentEx, currentSet, seconds);
 
+    completedRef.current = false;
+    lastVibratedSecondRef.current = null;
     targetEndTimeRef.current = Date.now() + seconds * 1000;
     setTimeLeft(seconds);
     setMaxTime(seconds);
@@ -280,7 +305,7 @@ export default function RestTimerOverlay({
   };
 
   const adjustTime = (amount: number) => {
-    if (hapticsEnabled) {
+    if (hapticsEnabledRef.current) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       Vibration.vibrate(70);
     }
@@ -294,6 +319,7 @@ export default function RestTimerOverlay({
       return;
     }
 
+    lastVibratedSecondRef.current = null;
     targetEndTimeRef.current = Date.now() + newTime * 1000;
     setTimeLeft(newTime);
     setMaxTime((currentMax) => (newTime > currentMax ? newTime : currentMax));
@@ -302,7 +328,7 @@ export default function RestTimerOverlay({
   };
 
   const handleApplyPresetInModal = (seconds: number) => {
-    if (hapticsEnabled) {
+    if (hapticsEnabledRef.current) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       Vibration.vibrate(50);
     }
@@ -311,6 +337,8 @@ export default function RestTimerOverlay({
     const currentSet = setIndex ?? store.activeSession?.activeRestTimer?.setIndex ?? 0;
     store.startRestTimer(currentEx, currentSet, seconds);
 
+    completedRef.current = false;
+    lastVibratedSecondRef.current = null;
     targetEndTimeRef.current = Date.now() + seconds * 1000;
     setTimeLeft(seconds);
     setMaxTime(seconds);
@@ -322,12 +350,14 @@ export default function RestTimerOverlay({
   const handleManualApplyInModal = () => {
     const parsed = parseInt(manualInput, 10);
     if (!isNaN(parsed) && parsed > 0) {
-      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      if (hapticsEnabledRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const store = useWorkoutStore.getState();
       const currentEx = exerciseId || store.activeSession?.activeRestTimer?.exerciseId || 'custom';
       const currentSet = setIndex ?? store.activeSession?.activeRestTimer?.setIndex ?? 0;
       store.startRestTimer(currentEx, currentSet, parsed);
 
+      completedRef.current = false;
+      lastVibratedSecondRef.current = null;
       targetEndTimeRef.current = Date.now() + parsed * 1000;
       setTimeLeft(parsed);
       setMaxTime(parsed);
@@ -342,26 +372,26 @@ export default function RestTimerOverlay({
 
   const handleSkip = async () => {
     completedRef.current = true;
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (hapticsEnabledRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (notificationIdRef.current) await cancelNotification(notificationIdRef.current);
     setIsRunning(false);
     setIsMinimized(false);
-    completeRestTimer();
-    if (onTimerComplete) {
-      onTimerComplete();
+    completeRestTimerRef.current();
+    if (onTimerCompleteRef.current) {
+      onTimerCompleteRef.current();
     }
-    onClose();
+    onCloseRef.current();
   };
 
   const handleCancelSet = async () => {
     completedRef.current = true;
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (hapticsEnabledRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (notificationIdRef.current) await cancelNotification(notificationIdRef.current);
     setIsRunning(false);
     setIsMinimized(false);
     clearRestTimer();
-    if (onCancelSet) onCancelSet();
-    onClose();
+    if (onCancelSetRef.current) onCancelSetRef.current();
+    onCloseRef.current();
   };
 
   // SVG Geometry

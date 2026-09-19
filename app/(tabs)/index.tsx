@@ -5,11 +5,13 @@ import {
   View,
   ScrollView,
   Pressable,
+  Image,
   Platform,
   AppState,
   AppStateStatus,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useUser } from '@clerk/expo';
 import {
   Flame,
   Dumbbell,
@@ -38,7 +40,9 @@ import { updateWidget } from '@/utils/widgetBridge';
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const { user } = useUser();
   const name = useUserStore((state) => state.name);
+  const effectiveName = user?.fullName || user?.firstName || (name && name !== 'Athlete' ? name : '');
   const streak = useUserStore((state) => state.streak);
   const checkStreakExpiry = useUserStore((state) => state.checkStreakExpiry);
   const weeklyGoal = useUserStore((state) => state.weeklyGoal);
@@ -215,10 +219,10 @@ export default function DashboardScreen() {
           <View style={styles.headerLeft}>
             <Text style={styles.greetingTitle}>
               {getGreeting()}
-              {name && name !== 'Athlete' ? (
+              {effectiveName ? (
                 <>
                   {', '}
-                  <Text style={styles.userName}>{name}</Text>
+                  <Text style={styles.userName}>{effectiveName}</Text>
                 </>
               ) : (
                 '!'
@@ -244,9 +248,11 @@ export default function DashboardScreen() {
               style={styles.avatarButton}
               accessibilityLabel={t('settings')}
             >
-              {name && name !== 'Athlete' ? (
+              {user?.imageUrl ? (
+                <Image source={{ uri: user.imageUrl }} style={styles.avatarImage} />
+              ) : effectiveName ? (
                 <Text style={styles.avatarText}>
-                  {name.charAt(0).toUpperCase()}
+                  {effectiveName.charAt(0).toUpperCase()}
                 </Text>
               ) : (
                 <User size={16} color={colors.primaryAction} />
@@ -665,20 +671,26 @@ const getStyles = (c: ThemeColors) =>
       fontVariant: ['tabular-nums'],
     },
     avatarButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 38,
+      height: 38,
+      borderRadius: 12,
       backgroundColor: c.surfaceHighlight,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       alignItems: 'center',
       justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    avatarImage: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
     },
     avatarText: {
       fontFamily: AppFonts.bold,
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '800',
-      color: c.textPrimary,
+      color: c.primaryAction,
     },
 
     // Date Scroller

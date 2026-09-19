@@ -72,7 +72,7 @@ export default function WorkoutSummaryModal({
 }: WorkoutSummaryModalProps) {
   const { t, language } = useTranslation();
   const colors = useThemeColors();
-  const { hapticsEnabled } = useUserStore();
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
   const cardRef = useRef<View>(null);
   const [isSharing, setIsSharing] = useState(false);
 
@@ -119,7 +119,7 @@ export default function WorkoutSummaryModal({
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'image/png',
-          dialogTitle: 'Bagikan Ringkasan Latihan',
+          dialogTitle: t('share_story'),
         });
       }
     } catch (error) {
@@ -181,7 +181,7 @@ export default function WorkoutSummaryModal({
                   {streak > 0 ? (
                     <>
                       <Trophy size={11} color="#F59E0B" />
-                      <Text style={styles.streakBadgeText}>{streak} HARI STREAK</Text>
+                      <Text style={styles.streakBadgeText}>{streak} {t('day_streak_upper')}</Text>
                     </>
                   ) : (
                     <Text style={styles.dateBadgeText}>{formattedDate}</Text>
@@ -194,7 +194,7 @@ export default function WorkoutSummaryModal({
                 <View style={styles.completedTagRow}>
                   <View style={styles.greenDot} />
                   <Text style={styles.celebrationSubtitle}>
-                    {language === 'id' ? 'WORKOUT BERES' : 'SESSION COMPLETED'} • {formattedDate}
+                    {t('workout_done')} • {formattedDate}
                   </Text>
                 </View>
                 <Text style={styles.cardWorkoutName} numberOfLines={2}>
@@ -244,7 +244,7 @@ export default function WorkoutSummaryModal({
                     {peakWeight > 0 ? `${peakWeight} kg` : 'Bodyweight'}
                   </Text>
                   <Text style={styles.statLabel}>
-                    {peakWeight > 0 ? (language === 'id' ? 'Beban Puncak' : 'Max Weight') : 'Mode Beban'}
+                    {peakWeight > 0 ? t('peak_weight') : t('weight_mode')}
                   </Text>
                 </View>
               </View>
@@ -255,11 +255,11 @@ export default function WorkoutSummaryModal({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <TrendingUp size={14} color="#10B981" />
                     <Text style={styles.exerciseHeaderLabel}>
-                      {language === 'id' ? 'RINGKASAN GERAKAN' : 'EXERCISES COMPLETED'}
+                      {t('exercises_completed')}
                     </Text>
                   </View>
                   <Text style={styles.exerciseCountSub}>
-                    {exercises.length} {language === 'id' ? 'Gerakan' : 'Exercises'}
+                    {exercises.length} {t('exercises_count')}
                   </Text>
                 </View>
 
@@ -284,7 +284,7 @@ export default function WorkoutSummaryModal({
 
                 {exercises.length > 5 && (
                   <Text style={styles.moreExercisesText}>
-                    +{exercises.length - 5} {language === 'id' ? 'gerakan lainnya selesai' : 'more exercises completed'}
+                    +{exercises.length - 5} {t('more_exercises_completed')}
                   </Text>
                 )}
               </View>

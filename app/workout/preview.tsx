@@ -8,7 +8,6 @@ import {
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { format } from 'date-fns';
 import {
   ArrowLeft,
   Edit3,
@@ -19,12 +18,10 @@ import {
   Timer,
   Repeat,
   Hourglass,
-  Play,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useUserStore } from '@/store/useUserStore';
-import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
@@ -35,12 +32,8 @@ export default function PreviewWorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t, language } = useTranslation();
   const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
-  const showAlert = useAlertStore((state) => state.showAlert);
 
   const templates = useWorkoutStore((state) => state.templates);
-  const activeSession = useWorkoutStore((state) => state.activeSession);
-  const startSession = useWorkoutStore((state) => state.startSession);
-  const scheduleWorkout = useWorkoutStore((state) => state.scheduleWorkout);
   const template = templates.find((item) => item.id === id);
 
   const colors = useThemeColors();
@@ -93,7 +86,12 @@ export default function PreviewWorkoutScreen() {
     if (/back|pull|row|lat|punggung/.test(allNames)) tags.push(t('muscle_back'));
     if (/leg|squat|calf|quad|hamstring|kaki/.test(allNames)) tags.push(t('muscle_legs'));
     if (/shoulder|press|delt|lateral|bahu/.test(allNames)) tags.push(t('muscle_shoulders'));
-    if (/arm|bicep|tricep|curl|lengan/.test(allNames)) tags.push(t('muscle_arms'));
+    if (/bicep|curl|bisep/.test(allNames)) tags.push(t('muscle_biceps'));
+    if (/tricep|dip|pushdown|trisep|skull/.test(allNames)) tags.push(t('muscle_triceps'));
+    if (tags.length === 0 && /arm|lengan/.test(allNames)) {
+      tags.push(t('muscle_biceps'));
+      tags.push(t('muscle_triceps'));
+    }
     if (/core|abs|plank|crunch|perut/.test(allNames)) tags.push(t('muscle_core'));
 
     return tags.length > 0 ? tags : [t('muscle_full_body')];
@@ -108,48 +106,6 @@ export default function PreviewWorkoutScreen() {
     router.push(`/workout/create?id=${template.id}`);
   };
 
-  const handleStartWorkout = () => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    }
-
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-
-    // If there's already an active session for this template, resume it
-    if (activeSession && activeSession.templateId === template.id) {
-      router.push('/workout/active');
-      return;
-    }
-
-    // If there's an active session for a DIFFERENT template, ask the user
-    if (activeSession) {
-      showAlert(
-        t('active_workout'),
-        t('active_session_alert_msg'),
-        [
-          { text: t('cancel'), style: 'cancel' },
-          {
-            text: t('resume'),
-            onPress: () => {
-              router.push('/workout/active');
-            },
-          },
-          {
-            text: t('start_new'),
-            style: 'destructive',
-            onPress: () => {
-              startSession(template.id);
-              router.push('/workout/active');
-            },
-          },
-        ]
-      );
-      return;
-    }
-
-    startSession(template.id);
-    router.push('/workout/active');
-  };
 
   return (
     <View style={styles.container}>
@@ -407,21 +363,9 @@ export default function PreviewWorkoutScreen() {
           );
         })}
 
-        {/* Bottom space for pleasant scrolling above the sticky CTA */}
-        <View style={{ height: 72 }} />
+        {/* Bottom space for comfortable scrolling */}
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Sticky Bottom CTA Button */}
-      <View style={styles.bottomBarDock}>
-        <TouchableOpacity
-          style={styles.startCtaBtn}
-          onPress={handleStartWorkout}
-          activeOpacity={0.85}
-        >
-          <Play size={16} color="#000000" fill="#000000" />
-          <Text style={styles.startCtaBtnText}>{t('start_workout_cta')}</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -834,55 +778,6 @@ const getStyles = (c: ThemeColors) => {
       fontFamily: AppFonts.bold,
       fontSize: 13,
       color: c.textPrimary,
-    },
-    bottomBarDock: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: c.background,
-      paddingHorizontal: 16,
-      paddingTop: 10,
-      paddingBottom: Platform.OS === 'ios' ? 28 : 14,
-      borderTopWidth: 1,
-      borderTopColor: c.borderSubtle,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: isDark ? 0.4 : 0.08,
-          shadowRadius: 8,
-        },
-        android: {
-          elevation: 8,
-        },
-      }),
-    },
-    startCtaBtn: {
-      backgroundColor: '#F59E0B',
-      borderRadius: 12,
-      height: 46,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#F59E0B',
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.35,
-          shadowRadius: 6,
-        },
-        android: {
-          elevation: 3,
-        },
-      }),
-    },
-    startCtaBtnText: {
-      fontFamily: AppFonts.bold,
-      fontSize: 14,
-      color: '#000000',
-      letterSpacing: 0.2,
     },
   });
 };

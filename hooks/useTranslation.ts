@@ -10,7 +10,7 @@ const dictionaries: Record<string, Record<string, string>> = {
 export type TranslationKey = keyof typeof en;
 
 export function useTranslation() {
-  const { language } = useUserStore();
+  const language = useUserStore((s) => s.language);
 
   const t = (key: TranslationKey): string => {
     return dictionaries[language]?.[key] || en[key] || key;

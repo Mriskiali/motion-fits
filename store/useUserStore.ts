@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { calculateStreakFromDates } from '@/utils/streak';
 
 export type Language = 'en' | 'id';
 
@@ -17,6 +17,7 @@ interface UserState {
   remindersEnabled: boolean;
   reminderTime: string; // ISO time or 'HH:mm'
   audioNotification: string;
+  customAudioUri: string | null;
   customAudioName: string;
   customAudioDuration: number; // Duration in seconds (e.g. 5)
   customAudioStartOffset: number; // Start offset in seconds (e.g. 0)
@@ -35,6 +36,7 @@ interface UserState {
   setRemindersEnabled: (enabled: boolean) => void;
   setReminderTime: (time: string) => void;
   setAudioNotification: (val: string, customName?: string) => void;
+  setCustomAudioUri: (uri: string | null) => void;
   setCustomAudioName: (name: string) => void;
   setCustomAudioDuration: (seconds: number) => void;
   setCustomAudioStartOffset: (seconds: number) => void;
@@ -43,9 +45,7 @@ interface UserState {
   recalculateStreak: (sessionDates: string[]) => void;
 }
 
-export const useUserStore = create<UserState>()(
-  persist(
-    (set, get) => ({
+export const useUserStore = create<UserState>()((set, get) => ({
       name: '',
       weeklyGoal: 3,
       theme: 'system',
@@ -60,6 +60,7 @@ export const useUserStore = create<UserState>()(
       remindersEnabled: false,
       reminderTime: '09:00', // Default 9 AM
       audioNotification: 'default_notification',
+      customAudioUri: null,
       customAudioName: 'Custom Sound',
       customAudioDuration: 5, // Default 5 seconds
       customAudioStartOffset: 0, // Default start at 0s
@@ -75,7 +76,16 @@ export const useUserStore = create<UserState>()(
       resetOnboarding: () => set({ hasCompletedOnboarding: false }),
       setRemindersEnabled: (enabled) => set({ remindersEnabled: enabled }),
       setReminderTime: (time) => set({ reminderTime: time }),
-      setAudioNotification: (val, customName) => set((state) => ({ audioNotification: val, customAudioName: customName || state.customAudioName })),
+      setAudioNotification: (val, customName) =>
+        set((state) => ({
+          audioNotification: val,
+          customAudioName: customName || state.customAudioName,
+          customAudioUri:
+            val !== 'default_notification' && val !== 'none' && val !== 'silent'
+              ? val
+              : state.customAudioUri,
+        })),
+      setCustomAudioUri: (uri) => set({ customAudioUri: uri }),
       setCustomAudioName: (name) => set({ customAudioName: name }),
       setCustomAudioDuration: (seconds) => set({ customAudioDuration: Math.max(1, seconds) }),
       setCustomAudioStartOffset: (seconds) => set({ customAudioStartOffset: Math.max(0, seconds) }),
@@ -127,63 +137,174 @@ export const useUserStore = create<UserState>()(
         }
       },
       recalculateStreak: (sessionDateStrings) => {
-        if (!sessionDateStrings || sessionDateStrings.length === 0) {
-          set({ streak: 0, lastWorkoutDate: null });
-          return;
-        }
-
-        const uniqueDayStrings = Array.from(
-          new Set(
-            sessionDateStrings.map((d) => {
-              const dt = new Date(d);
-              const yr = dt.getFullYear();
-              const mo = String(dt.getMonth() + 1).padStart(2, '0');
-              const da = String(dt.getDate()).padStart(2, '0');
-              return `${yr}-${mo}-${da}`;
-            })
-          )
-        ).sort((a, b) => b.localeCompare(a));
-
-        if (uniqueDayStrings.length === 0) {
-          set({ streak: 0, lastWorkoutDate: null });
-          return;
-        }
-
-        const mostRecentDateStr = uniqueDayStrings[0];
-        const [mY, mM, mD] = mostRecentDateStr.split('-').map(Number);
-        const mostRecentDate = new Date(mY, mM - 1, mD);
-
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-        const diffFromToday = Math.round((today.getTime() - mostRecentDate.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffFromToday > 1) {
-          set({ streak: 0, lastWorkoutDate: mostRecentDateStr });
-          return;
-        }
-
-        let currentStreak = 1;
-        let prevDate = mostRecentDate;
-
-        for (let i = 1; i < uniqueDayStrings.length; i++) {
-          const [cY, cM, cD] = uniqueDayStrings[i].split('-').map(Number);
-          const checkDate = new Date(cY, cM - 1, cD);
-
-          const dayDiff = Math.round((prevDate.getTime() - checkDate.getTime()) / (1000 * 60 * 60 * 24));
-          if (dayDiff === 1) {
-            currentStreak++;
-            prevDate = checkDate;
-          } else {
-            break;
-          }
-        }
-
-        set({ streak: currentStreak, lastWorkoutDate: mostRecentDateStr });
+        const result = calculateStreakFromDates(sessionDateStrings);
+        set({ streak: result.streak, lastWorkoutDate: result.lastWorkoutDate });
       },
-    }),
-    {
-      name: 'user-storage',
-      storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+    })
 );
+
+let activeProfileUserId: string | null = null;
+
+const serializeUserPartition = (state: UserState) => ({
+  name: state.name,
+  weeklyGoal: state.weeklyGoal,
+  streak: state.streak,
+  lastWorkoutDate: state.lastWorkoutDate,
+  theme: state.theme,
+  language: state.language,
+  defaultRestTimer: state.defaultRestTimer,
+  autoStartTimer: state.autoStartTimer,
+  hapticsEnabled: state.hapticsEnabled,
+  keepScreenAwake: state.keepScreenAwake,
+  hasCompletedOnboarding: state.hasCompletedOnboarding,
+  remindersEnabled: state.remindersEnabled,
+  reminderTime: state.reminderTime,
+  audioNotification: state.audioNotification,
+  customAudioUri: state.customAudioUri,
+  customAudioName: state.customAudioName,
+  customAudioDuration: state.customAudioDuration,
+  customAudioStartOffset: state.customAudioStartOffset,
+});
+
+// Reactive subscriber: automatically saves profile into the active user's partition
+useUserStore.subscribe((state) => {
+  if (activeProfileUserId) {
+    const partition = serializeUserPartition(state);
+    AsyncStorage.setItem(`user_partition_${activeProfileUserId}`, JSON.stringify(partition)).catch(() => {});
+  }
+});
+
+export const loadUserPartition = async (userId: string): Promise<void> => {
+  if (activeProfileUserId === userId) return;
+
+  if (activeProfileUserId && activeProfileUserId !== userId) {
+    const state = useUserStore.getState();
+    await AsyncStorage.setItem(
+      `user_partition_${activeProfileUserId}`,
+      JSON.stringify(serializeUserPartition(state))
+    ).catch(() => {});
+  }
+
+  activeProfileUserId = userId;
+
+  try {
+    const raw = await AsyncStorage.getItem(`user_partition_${userId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      useUserStore.setState({
+        name: parsed.name || '',
+        weeklyGoal: Number(parsed.weeklyGoal) || 3,
+        streak: Number(parsed.streak) || 0,
+        lastWorkoutDate: parsed.lastWorkoutDate || null,
+        theme: parsed.theme || 'system',
+        language: parsed.language || 'id',
+        defaultRestTimer: Number(parsed.defaultRestTimer) || 90,
+        autoStartTimer: parsed.autoStartTimer !== undefined ? Boolean(parsed.autoStartTimer) : true,
+        hapticsEnabled: parsed.hapticsEnabled !== undefined ? Boolean(parsed.hapticsEnabled) : true,
+        keepScreenAwake: parsed.keepScreenAwake !== undefined ? Boolean(parsed.keepScreenAwake) : true,
+        hasCompletedOnboarding: parsed.hasCompletedOnboarding !== undefined ? Boolean(parsed.hasCompletedOnboarding) : false,
+        remindersEnabled: parsed.remindersEnabled !== undefined ? Boolean(parsed.remindersEnabled) : false,
+        reminderTime: parsed.reminderTime || '08:00',
+        audioNotification: parsed.audioNotification || 'default_notification',
+        customAudioUri: parsed.customAudioUri || null,
+        customAudioName: parsed.customAudioName || '',
+        customAudioDuration: Number(parsed.customAudioDuration) || 5,
+        customAudioStartOffset: Number(parsed.customAudioStartOffset) || 0,
+      });
+      return;
+    }
+
+    // Backward compatibility: check legacy user-storage
+    const lastUserId = await AsyncStorage.getItem('lastActiveUserId');
+    if (lastUserId === userId) {
+      const legacyRaw = await AsyncStorage.getItem('user-storage');
+      if (legacyRaw) {
+        const legacyParsed = JSON.parse(legacyRaw);
+        const legacyState = legacyParsed?.state;
+        if (legacyState) {
+          useUserStore.setState({
+            name: legacyState.name || '',
+            weeklyGoal: Number(legacyState.weeklyGoal) || 3,
+            streak: Number(legacyState.streak) || 0,
+            lastWorkoutDate: legacyState.lastWorkoutDate || null,
+            theme: legacyState.theme || 'system',
+            language: legacyState.language || 'id',
+            defaultRestTimer: Number(legacyState.defaultRestTimer) || 90,
+            autoStartTimer: legacyState.autoStartTimer !== undefined ? Boolean(legacyState.autoStartTimer) : true,
+            hapticsEnabled: legacyState.hapticsEnabled !== undefined ? Boolean(legacyState.hapticsEnabled) : true,
+            keepScreenAwake: legacyState.keepScreenAwake !== undefined ? Boolean(legacyState.keepScreenAwake) : true,
+            hasCompletedOnboarding: legacyState.hasCompletedOnboarding !== undefined ? Boolean(legacyState.hasCompletedOnboarding) : false,
+            remindersEnabled: legacyState.remindersEnabled !== undefined ? Boolean(legacyState.remindersEnabled) : false,
+            reminderTime: legacyState.reminderTime || '08:00',
+            audioNotification: legacyState.audioNotification || 'default_notification',
+            customAudioUri: legacyState.customAudioUri || null,
+            customAudioName: legacyState.customAudioName || '',
+            customAudioDuration: Number(legacyState.customAudioDuration) || 5,
+            customAudioStartOffset: Number(legacyState.customAudioStartOffset) || 0,
+          });
+
+          await AsyncStorage.setItem(`user_partition_${userId}`, JSON.stringify(legacyState)).catch(() => {});
+          await AsyncStorage.removeItem('user-storage').catch(() => {});
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[UserStore] Error loading user partition:', e);
+  }
+
+  // Fresh user: reset profile to clean state
+  useUserStore.setState({
+    name: '',
+    weeklyGoal: 3,
+    streak: 0,
+    lastWorkoutDate: null,
+    theme: 'system',
+    language: 'id',
+    defaultRestTimer: 90,
+    autoStartTimer: true,
+    hapticsEnabled: true,
+    keepScreenAwake: true,
+    hasCompletedOnboarding: false,
+    remindersEnabled: false,
+    reminderTime: '08:00',
+    audioNotification: 'default_notification',
+    customAudioUri: null,
+    customAudioName: '',
+    customAudioDuration: 5,
+    customAudioStartOffset: 0,
+  });
+};
+
+export const unloadUserPartition = async (): Promise<void> => {
+  if (activeProfileUserId) {
+    const state = useUserStore.getState();
+    await AsyncStorage.setItem(
+      `user_partition_${activeProfileUserId}`,
+      JSON.stringify(serializeUserPartition(state))
+    ).catch(() => {});
+  }
+  activeProfileUserId = null;
+
+  useUserStore.setState({
+    name: '',
+    weeklyGoal: 3,
+    streak: 0,
+    lastWorkoutDate: null,
+    theme: 'system',
+    language: 'id',
+    defaultRestTimer: 90,
+    autoStartTimer: true,
+    hapticsEnabled: true,
+    keepScreenAwake: true,
+    hasCompletedOnboarding: false,
+    remindersEnabled: false,
+    reminderTime: '08:00',
+    audioNotification: 'default_notification',
+    customAudioUri: null,
+    customAudioName: '',
+    customAudioDuration: 5,
+    customAudioStartOffset: 0,
+  });
+  await AsyncStorage.removeItem('user-storage').catch(() => {});
+};

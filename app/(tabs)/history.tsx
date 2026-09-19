@@ -1187,7 +1187,7 @@ export default function HistoryScreen() {
                 </View>
                 <View style={styles.allTimeBadgePill}>
                   <Trophy size={11} color="#F59E0B" />
-                  <Text style={styles.allTimeBadgeText}>MILESTONE</Text>
+                  <Text style={styles.allTimeBadgeText}>{t('milestone')}</Text>
                 </View>
               </View>
 
@@ -1565,12 +1565,12 @@ export default function HistoryScreen() {
                   <View style={styles.stepDistCalRow}>
                     <View style={styles.stepDistCalCol}>
                       <Text style={styles.stepDistCalVal}>{stepPeriodStats.totalDistKm} km</Text>
-                      <Text style={styles.statSubtext}>Jarak tempuh</Text>
+                      <Text style={styles.statSubtext}>{t('distance_covered')}</Text>
                     </View>
                     <View style={styles.stepDistCalDivider} />
                     <View style={styles.stepDistCalCol}>
                       <Text style={styles.stepDistCalVal}>{stepPeriodStats.totalCalories.toLocaleString()} kcal</Text>
-                      <Text style={styles.statSubtext}>Kalori terbakar</Text>
+                      <Text style={styles.statSubtext}>{t('calories_burned')}</Text>
                     </View>
                   </View>
                 </View>

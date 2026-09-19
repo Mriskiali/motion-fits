@@ -32,10 +32,25 @@ import { useAlertStore } from '@/store/useAlertStore';
 import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useAuth } from '@clerk/expo';
+import { pushWorkoutTemplate } from '@/services/syncService';
 import { AppFonts } from '@/constants/theme';
+
+export const TARGET_MUSCLE_GROUPS = [
+  { id: 'chest', en: 'Chest', idLabel: 'Dada' },
+  { id: 'back', en: 'Back', idLabel: 'Punggung' },
+  { id: 'legs', en: 'Legs', idLabel: 'Kaki' },
+  { id: 'shoulders', en: 'Shoulders', idLabel: 'Bahu' },
+  { id: 'biceps', en: 'Biceps', idLabel: 'Bicep' },
+  { id: 'triceps', en: 'Triceps', idLabel: 'Tricep' },
+  { id: 'core', en: 'Core / Abs', idLabel: 'Perut' },
+];
+
+export const MUSCLE_TAGS = TARGET_MUSCLE_GROUPS.map((m) => m.en);
 
 export default function CreateWorkoutScreen() {
   const router = useRouter();
+  const { userId } = useAuth();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { t, language } = useTranslation();
   const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
@@ -46,6 +61,26 @@ export default function CreateWorkoutScreen() {
 
   const [name, setName] = useState('');
   const [subtitle, setSubtitle] = useState('');
+  const [selectedMuscleIds, setSelectedMuscleIds] = useState<string[]>([]);
+
+  const isIdLanguage = language === 'id';
+
+  const handleToggleMuscle = (muscleId: string) => {
+    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    let nextIds: string[];
+    if (selectedMuscleIds.includes(muscleId)) {
+      nextIds = selectedMuscleIds.filter((m) => m !== muscleId);
+    } else {
+      nextIds = [...selectedMuscleIds, muscleId];
+    }
+    setSelectedMuscleIds(nextIds);
+
+    const labels = nextIds.map((mid) => {
+      const g = TARGET_MUSCLE_GROUPS.find((m) => m.id === mid);
+      return g ? (isIdLanguage ? g.idLabel : g.en) : mid;
+    });
+    setSubtitle(labels.join(', '));
+  };
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -82,9 +117,31 @@ export default function CreateWorkoutScreen() {
         setName(existing.name);
         setSubtitle(existing.subtitle || '');
         setExercises(existing.exercises);
+        if (existing.subtitle) {
+          const subLower = existing.subtitle.toLowerCase();
+          const matched = TARGET_MUSCLE_GROUPS.filter(
+            (m) =>
+              subLower.includes(m.idLabel.toLowerCase()) ||
+              subLower.includes(m.en.toLowerCase()) ||
+              (m.id === 'biceps' && (subLower.includes('bicep') || subLower.includes('bisep'))) ||
+              (m.id === 'triceps' && (subLower.includes('tricep') || subLower.includes('trisep')))
+          ).map((m) => m.id);
+          setSelectedMuscleIds(matched);
+        }
       }
     }
   }, [id, templates]);
+
+  // Keep subtitle updated when language switches
+  useEffect(() => {
+    if (selectedMuscleIds.length > 0) {
+      const labels = selectedMuscleIds.map((mid) => {
+        const g = TARGET_MUSCLE_GROUPS.find((m) => m.id === mid);
+        return g ? (isIdLanguage ? g.idLabel : g.en) : mid;
+      });
+      setSubtitle(labels.join(', '));
+    }
+  }, [language, isIdLanguage, selectedMuscleIds]);
 
   const handleAddExercise = () => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -342,6 +399,12 @@ export default function CreateWorkoutScreen() {
       addTemplate(template);
     }
 
+    if (userId) {
+      pushWorkoutTemplate(userId, template).catch((err) => {
+        console.warn('[AutoSync] Failed to push template to cloud:', err);
+      });
+    }
+
     router.back();
   };
 
@@ -397,20 +460,64 @@ export default function CreateWorkoutScreen() {
             </View>
           </View>
 
-          <View style={[styles.formFieldGroup, { marginTop: 12 }]}>
+          <View style={[styles.formFieldGroup, { marginTop: 14 }]}>
             <View style={styles.fieldLabelRow}>
               <Flame size={13} color="#F59E0B" />
               <Text style={styles.fieldLabel}>{t('target_muscles') || 'FOKUS OTOT'}</Text>
             </View>
-            <View style={styles.fieldInputContainer}>
-              <TextInput
-                style={styles.fieldTextInput}
-                placeholder={t('subtitle_placeholder') || 'cth. Fokus Dada, Punggung, Bahu'}
-                placeholderTextColor={colors.textMuted}
-                value={subtitle}
-                onChangeText={setSubtitle}
-                selectionColor={colors.primaryAction}
-              />
+
+            <View style={styles.muscleSelectorContainer}>
+              {/* Muscle Chips Grid */}
+              <View style={styles.muscleChipsWrap}>
+                {TARGET_MUSCLE_GROUPS.map((group) => {
+                  const isSelected = selectedMuscleIds.includes(group.id);
+                  const label = isIdLanguage ? group.idLabel : group.en;
+                  return (
+                    <TouchableOpacity
+                      key={group.id}
+                      style={[
+                        styles.muscleTagChip,
+                        isSelected && styles.muscleTagChipActive,
+                      ]}
+                      onPress={() => handleToggleMuscle(group.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.muscleTagText,
+                          isSelected && styles.muscleTagTextActive,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Current Selection Preview Badge */}
+              {subtitle ? (
+                <View style={styles.selectionPreviewRow}>
+                  <Text style={styles.selectionPreviewLabel}>
+                    {isIdLanguage ? 'Terpilih:' : 'Selected:'}
+                  </Text>
+                  <Text style={styles.selectionPreviewValue} numberOfLines={1}>
+                    {subtitle}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedMuscleIds([]);
+                      setSubtitle('');
+                    }}
+                    style={styles.clearSubtitleBtn}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.clearSubtitleText}>
+                      {isIdLanguage ? 'Hapus' : 'Clear'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>
@@ -588,8 +695,9 @@ export default function CreateWorkoutScreen() {
                       style={styles.stepperButton}
                       onPress={() => handleStepSets(index, -1)}
                       activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                     >
-                      <Minus size={14} color={colors.textPrimary} />
+                      <Minus size={13} color={colors.textPrimary} />
                     </TouchableOpacity>
 
                     <TextInput
@@ -606,8 +714,9 @@ export default function CreateWorkoutScreen() {
                       style={styles.stepperButton}
                       onPress={() => handleStepSets(index, 1)}
                       activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                     >
-                      <Plus size={14} color={colors.textPrimary} />
+                      <Plus size={13} color={colors.textPrimary} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -795,7 +904,116 @@ const getStyles = (c: ThemeColors) => {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      marginBottom: 6,
+    },
+    fieldLabelRowBetween: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    customToggleBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingVertical: 3,
+      paddingHorizontal: 8,
+      borderRadius: 6,
+      backgroundColor: c.elevatedSurface,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    customToggleText: {
+      fontFamily: AppFonts.semiBold,
+      fontSize: 10.5,
+      color: c.textMuted,
+    },
+    muscleSelectorContainer: {
+      gap: 8,
+    },
+    presetScrollContent: {
+      gap: 6,
+      paddingVertical: 2,
+    },
+    presetChip: {
+      paddingVertical: 5,
+      paddingHorizontal: 11,
+      borderRadius: 8,
+      backgroundColor: c.elevatedSurface,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    presetChipActive: {
+      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+      borderColor: c.primaryAction,
+    },
+    presetChipText: {
+      fontFamily: AppFonts.semiBold,
+      fontSize: 11,
+      color: c.textSecondary,
+    },
+    presetChipTextActive: {
+      color: c.primaryAction,
+      fontWeight: '800',
+    },
+    muscleChipsWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    muscleTagChip: {
+      paddingVertical: 6,
+      paddingHorizontal: 11,
+      borderRadius: 8,
+      backgroundColor: c.elevatedSurface,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    muscleTagChipActive: {
+      backgroundColor: c.primaryAction,
+      borderColor: c.primaryAction,
+    },
+    muscleTagText: {
+      fontFamily: AppFonts.medium,
+      fontSize: 11.5,
+      color: c.textSecondary,
+    },
+    muscleTagTextActive: {
+      color: '#000000',
+      fontFamily: AppFonts.bold,
+      fontWeight: '800',
+    },
+    selectionPreviewRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: c.elevatedSurface,
+      borderRadius: 8,
+      paddingVertical: 5,
+      paddingHorizontal: 9,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      marginTop: 2,
+    },
+    selectionPreviewLabel: {
+      fontFamily: AppFonts.bold,
+      fontSize: 10.5,
+      color: c.primaryAction,
+      fontWeight: '800',
+    },
+    selectionPreviewValue: {
+      flex: 1,
+      fontFamily: AppFonts.medium,
+      fontSize: 11,
+      color: c.textPrimary,
+    },
+    clearSubtitleBtn: {
+      paddingHorizontal: 5,
+      paddingVertical: 2,
+    },
+    clearSubtitleText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 10,
+      color: '#EF4444',
     },
     fieldLabel: {
       fontFamily: AppFonts.bold,
@@ -954,24 +1172,25 @@ const getStyles = (c: ThemeColors) => {
     },
     inputsRow: {
       flexDirection: 'row',
-      gap: 8,
+      gap: 6,
     },
     controlBox: {
       flex: 1,
       backgroundColor: c.elevatedSurface,
-      borderRadius: 12,
-      padding: 8,
+      borderRadius: 10,
+      paddingHorizontal: 5,
+      paddingVertical: 7,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       alignItems: 'center',
     },
     controlLabel: {
-      fontSize: 11,
+      fontSize: 10,
       fontFamily: AppFonts.bold,
       fontWeight: '800',
       color: c.textMuted,
-      letterSpacing: 0.5,
-      marginBottom: 6,
+      letterSpacing: 0.4,
+      marginBottom: 5,
       textAlign: 'center',
     },
     stepperContainer: {
@@ -980,27 +1199,28 @@ const getStyles = (c: ThemeColors) => {
       justifyContent: 'space-between',
       width: '100%',
       backgroundColor: c.cardSurface,
-      borderRadius: 8,
+      borderRadius: 7,
       borderWidth: 1,
       borderColor: c.borderSubtle,
-      padding: 3,
-      height: 38,
+      padding: 2,
+      height: 35,
     },
     stepperButton: {
-      width: 28,
-      height: 28,
-      borderRadius: 6,
+      width: 24,
+      height: 29,
+      borderRadius: 5,
       backgroundColor: c.surfaceHighlight,
       alignItems: 'center',
       justifyContent: 'center',
     },
     stepperInput: {
-      fontSize: 15,
+      flex: 1,
+      fontSize: 14,
       fontFamily: AppFonts.extraBold,
       fontWeight: '800',
       color: c.textPrimary,
       textAlign: 'center',
-      minWidth: 26,
+      minWidth: 18,
       fontVariant: ['tabular-nums'],
       padding: 0,
     },
@@ -1010,16 +1230,16 @@ const getStyles = (c: ThemeColors) => {
       justifyContent: 'center',
       width: '100%',
       backgroundColor: c.cardSurface,
-      borderRadius: 8,
+      borderRadius: 7,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       paddingHorizontal: 4,
-      height: 38,
-      gap: 4,
+      height: 35,
+      gap: 3,
     },
     metricInput: {
       flex: 1,
-      fontSize: 15,
+      fontSize: 14,
       fontFamily: AppFonts.extraBold,
       fontWeight: '800',
       color: c.textPrimary,
@@ -1028,7 +1248,7 @@ const getStyles = (c: ThemeColors) => {
       padding: 0,
     },
     metricUnitText: {
-      fontSize: 12,
+      fontSize: 11,
       fontFamily: AppFonts.bold,
       fontWeight: '700',
       color: c.textMuted,

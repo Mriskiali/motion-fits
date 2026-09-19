@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
+  ActivityIndicator,
   AppState,
   AppStateStatus,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,6 +14,9 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useAuth, useUser, useClerk } from "@clerk/expo";
+import { performFullSync, clearLocalUserData, triggerBackgroundUserSync } from "@/services/syncService";
+import { isTursoConfigured } from "@/services/turso";
 import { AppFonts } from "@/constants/theme";
 import { useThemeColors, ThemeColors } from "@/hooks/useThemeColors";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -44,10 +49,12 @@ import {
   Bell,
   ChevronRight,
   Clock,
+  Cloud,
   Download,
   ExternalLink,
   Footprints,
   Globe,
+  LogOut,
   Minus,
   Moon,
   Play,
@@ -105,43 +112,146 @@ export default function SettingsScreen() {
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { t } = useTranslation();
 
+  const { isSignedIn, userId } = useAuth();
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [lastCloudSyncTime, setLastCloudSyncTime] = useState<number | null>(null);
+
+  const handleManualCloudSync = async () => {
+    if (!userId) return;
+    triggerHaptic();
+    setIsCloudSyncing(true);
+    try {
+      const result = await performFullSync(userId, {
+        email: user?.primaryEmailAddress?.emailAddress,
+        name: user?.fullName || displayName || undefined,
+      });
+      if (result.success) {
+        setLastCloudSyncTime(result.syncedAt || Date.now());
+        showAlert(
+          language === "id" ? "Sinkronisasi Berhasil" : "Sync Successful",
+          result.message || (language === "id" ? "Data Anda telah tersinkronkan ke Turso." : "Your data is synced to Turso."),
+          [{ text: "OK" }]
+        );
+      } else {
+        showAlert(
+          language === "id" ? "Sinkronisasi Gagal" : "Sync Failed",
+          result.message || "Terjadi kendala saat menyinkronkan data.",
+          [{ text: "OK" }]
+        );
+      }
+    } catch (err: any) {
+      showAlert("Error", err?.message || "Gagal sinkronisasi.", [{ text: "OK" }]);
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
+
+  const handleSignOut = () => {
+    triggerHaptic();
+    const activeSession = useWorkoutStore.getState().activeSession;
+
+    if (activeSession) {
+      showAlert(
+        language === "id" ? "Latihan Sedang Berlangsung!" : "Workout In Progress!",
+        language === "id"
+          ? "Anda masih memiliki sesi latihan aktif yang belum selesai. Anda dapat menyimpan progresnya agar bisa dilanjutkan saat masuk kembali, atau membuangnya sekarang."
+          : "You have an active workout in progress. You can save your progress to resume it later upon signing back in, or discard it now.",
+        [
+          { text: language === "id" ? "Batal" : "Cancel", style: "cancel" },
+          {
+            text: language === "id" ? "Buang & Keluar" : "Discard & Sign Out",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                useWorkoutStore.getState().clearActiveSession();
+                await clearLocalUserData(true);
+                await signOut();
+                router.replace('/(auth)/sign-in');
+              } catch (err) {
+                console.warn('[Auth] Error signing out:', err);
+              }
+            },
+          },
+          {
+            text: language === "id" ? "Simpan & Keluar" : "Save & Sign Out",
+            onPress: async () => {
+              try {
+                await clearLocalUserData(false);
+                await signOut();
+                router.replace('/(auth)/sign-in');
+              } catch (err) {
+                console.warn('[Auth] Error signing out:', err);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    showAlert(
+      language === "id" ? "Keluar dari Akun" : "Sign Out",
+      language === "id"
+        ? "Apakah Anda yakin ingin keluar? Sesi Anda akan ditutup. Data latihan akun Anda tetap tersimpan aman di perangkat ini dan akan langsung dimuat kembali saat Anda masuk."
+        : "Are you sure you want to sign out? Your session will close. Your account workout data remains safely stored on this device and will be restored when you sign back in.",
+      [
+        { text: language === "id" ? "Batal" : "Cancel", style: "cancel" },
+        {
+          text: language === "id" ? "Keluar" : "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await clearLocalUserData(false);
+              await signOut();
+              router.replace('/(auth)/sign-in');
+            } catch (err) {
+              console.warn('[Auth] Error signing out:', err);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [countdownRemaining, setCountdownRemaining] = useState<number | null>(null);
-  const [isSliderDragging, setIsSliderDragging] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
-  // Subscribe to playback state
+  // Subscribe to playback state & countdown timer
   useEffect(() => {
-    return subscribeAudioPlayback((playing) => {
+    let interval: any = null;
+    const unsub = subscribeAudioPlayback((playing, durationSeconds) => {
       setIsPlayingAudio(playing);
-      if (!playing) {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+      if (playing) {
+        const totalDur = durationSeconds && durationSeconds > 0 ? durationSeconds : 5;
+        setCountdownRemaining(totalDur);
+        interval = setInterval(() => {
+          setCountdownRemaining((prev) => {
+            if (prev === null || prev <= 1) {
+              clearInterval(interval);
+              interval = null;
+              return null;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
         setCountdownRemaining(null);
       }
     });
-  }, []);
 
-  // Audio preview countdown timer
-  useEffect(() => {
-    let interval: any = null;
-    if (isPlayingAudio) {
-      const dur = useUserStore.getState().customAudioDuration || 5;
-      setCountdownRemaining(dur);
-      interval = setInterval(() => {
-        setCountdownRemaining((prev) => {
-          if (prev === null || prev <= 1) {
-            clearInterval(interval);
-            return null;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      setCountdownRemaining(null);
-    }
     return () => {
       if (interval) clearInterval(interval);
+      unsub();
     };
-  }, [isPlayingAudio]);
+  }, []);
 
   // CRITICAL FIX: Stop preview sound when app is minimized or navigated away!
   useEffect(() => {
@@ -162,18 +272,21 @@ export default function SettingsScreen() {
   };
 
   const playPreview = (soundOption: string) => {
-    const dur = useUserStore.getState().customAudioDuration || 5;
-    const off = useUserStore.getState().customAudioStartOffset || 0;
+    const isDefault = !soundOption || soundOption === "default_notification" || soundOption === "library_bell";
+    const dur = isDefault ? 5 : (useUserStore.getState().customAudioDuration || 5);
+    const off = isDefault ? 0 : (useUserStore.getState().customAudioStartOffset || 0);
     playPreviewSound(soundOption, dur, off);
   };
 
   const handleIncrementGoal = () => {
     triggerHaptic();
     setWeeklyGoal(Math.min(7, weeklyGoal + 1));
+    triggerBackgroundUserSync(userId);
   };
   const handleDecrementGoal = () => {
     triggerHaptic();
     setWeeklyGoal(Math.max(1, weeklyGoal - 1));
+    triggerBackgroundUserSync(userId);
   };
 
   const dailyStepGoal = useStepStore((s) => s.dailyStepGoal);
@@ -221,9 +334,9 @@ export default function SettingsScreen() {
   const toggleReminders = async (value: boolean) => {
     triggerHaptic();
     if (value) {
+      setRemindersEnabled(true);
       const granted = await requestPermissionsAsync();
       if (granted) {
-        setRemindersEnabled(true);
         await scheduleDailyReminder(reminderTime, language);
       } else {
         setRemindersEnabled(false);
@@ -373,9 +486,10 @@ export default function SettingsScreen() {
           "audio/m4a",
           "audio/x-m4a",
           "audio/flac",
-          "*/*",
         ],
-        copyToCacheDirectory: true,
+        // On Android, copyToCacheDirectory: false provides content:// URI which FileSystem.copyAsync
+        // can read via ContentResolver without sandbox permission rejections.
+        copyToCacheDirectory: Platform.OS === "ios",
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -387,16 +501,27 @@ export default function SettingsScreen() {
             const rawExt = pickedAsset.name?.split(".").pop() || "mp3";
             const cleanExt =
               rawExt.toLowerCase().replace(/[^a-z0-9]/g, "") || "mp3";
-            const destUri = `${FileSystem.documentDirectory}custom_timer_${Date.now()}.${cleanExt}`;
+            const destUri = `${FileSystem.documentDirectory}custom_timer_sound.${cleanExt}`;
+            
+            const existingCheck = await FileSystem.getInfoAsync(destUri);
+            if (existingCheck.exists) {
+              await FileSystem.deleteAsync(destUri, { idempotent: true });
+            }
             await FileSystem.copyAsync({ from: pickedAsset.uri, to: destUri });
-            persistentUri = destUri;
+
+            const destInfo = await FileSystem.getInfoAsync(destUri);
+            if (destInfo.exists) {
+              persistentUri = destUri;
+            }
           }
         } catch (copyErr) {
-          console.warn("Failed to copy audio to documents, using cache URI:", copyErr);
+          console.warn("[settings] Failed to copy audio to documents, using source URI:", copyErr);
         }
 
         setAudioNotification(persistentUri, pickedAsset.name || "Custom Audio");
-        playPreview(persistentUri);
+        const dur = useUserStore.getState().customAudioDuration || 5;
+        const off = useUserStore.getState().customAudioStartOffset || 0;
+        playPreviewSound(persistentUri, dur, off);
         showAlert(
           t("completed"),
           `${pickedAsset.name}\n\n${t("sound_mode_reminder")}`,
@@ -411,8 +536,9 @@ export default function SettingsScreen() {
 
   const handlePlayCustomPreview = useCallback((offset?: number, duration?: number) => {
     triggerHaptic(50);
-    const dur = duration !== undefined ? duration : (useUserStore.getState().customAudioDuration || 5);
-    const off = offset !== undefined ? offset : (useUserStore.getState().customAudioStartOffset || 0);
+    const isDefault = !audioNotification || audioNotification === "default_notification" || audioNotification === "library_bell";
+    const dur = duration !== undefined ? duration : (isDefault ? 5 : (useUserStore.getState().customAudioDuration || 5));
+    const off = isDefault ? 0 : (offset !== undefined ? offset : (useUserStore.getState().customAudioStartOffset || 0));
     playPreviewSound(audioNotification, dur, off);
   }, [audioNotification, hapticsEnabled]);
 
@@ -421,11 +547,11 @@ export default function SettingsScreen() {
   }, []);
 
   const handleSliderDragStart = useCallback(() => {
-    setIsSliderDragging(true);
+    scrollViewRef.current?.setNativeProps({ scrollEnabled: false });
   }, []);
 
   const handleSliderDragEnd = useCallback(() => {
-    setIsSliderDragging(false);
+    scrollViewRef.current?.setNativeProps({ scrollEnabled: true });
   }, []);
 
   const isDarkMode = theme === "dark";
@@ -433,7 +559,7 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
-        scrollEnabled={!isSliderDragging}
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -445,37 +571,130 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        {/* Compact Profile Row */}
-        <View style={styles.profileCard}>
-          <View style={styles.profileAvatar}>
-            {displayName ? (
-              <Text style={styles.avatarText}>
-                {displayName.charAt(0).toUpperCase()}
+        {/* Profile & Cloud Auth Card */}
+        {isSignedIn ? (
+          <View style={styles.profileCard}>
+            <View style={styles.profileAvatar}>
+              {user?.imageUrl ? (
+                <Image source={{ uri: user.imageUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {(user?.fullName || user?.firstName || displayName || "U").charAt(0).toUpperCase()}
+                </Text>
+              )}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={styles.profileNameText} numberOfLines={1}>
+                  {user?.fullName || user?.firstName || displayName || "User"}
+                </Text>
+                <View style={styles.proBadge}>
+                  <Sparkles size={9} color="#F59E0B" />
+                  <Text style={styles.proBadgeText}>MOTIONFIT</Text>
+                </View>
+              </View>
+              <Text style={styles.profileEmailText} numberOfLines={1}>
+                {user?.primaryEmailAddress?.emailAddress || ""}
               </Text>
-            ) : (
-              <User size={18} color={colors.primaryAction} strokeWidth={2.2} />
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <TextInput
-                style={styles.profileNameInput}
-                value={displayName}
-                placeholder={language === "id" ? "Nama Pengguna" : "User Name"}
-                placeholderTextColor={colors.textMuted}
-                onChangeText={(val) => setName(val)}
-                maxLength={20}
-              />
-              <View style={styles.proBadge}>
-                <Sparkles size={9} color="#F59E0B" />
-                <Text style={styles.proBadgeText}>MOTIONFIT</Text>
+              <View style={styles.cloudStatusRow}>
+                <View style={[styles.cloudDot, { backgroundColor: isTursoConfigured() ? "#10B981" : "#F59E0B" }]} />
+                <Text style={styles.cloudStatusText} numberOfLines={1}>
+                  {isTursoConfigured()
+                    ? (lastCloudSyncTime
+                        ? (language === "id" ? `Tersinkron: ${new Date(lastCloudSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : `Synced: ${new Date(lastCloudSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
+                        : (language === "id" ? "Cloud Turso Aktif" : "Turso Cloud Active"))
+                    : (language === "id" ? "Turso Belum Dikonfigurasi" : "Turso Not Configured")}
+                </Text>
               </View>
             </View>
-            <Text style={styles.profileMeta}>
-              {streak} {t("day_streak")} • {weeklyGoal} {t("days_per_week")}
-            </Text>
+
+            {/* Quick Actions: Sync & Sign Out Capsule */}
+            <View style={styles.profileActionCapsule}>
+              <TouchableOpacity
+                style={styles.profileActionCapsuleBtn}
+                onPress={handleManualCloudSync}
+                disabled={isCloudSyncing}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                activeOpacity={0.7}
+              >
+                {isCloudSyncing ? (
+                  <ActivityIndicator size="small" color={colors.primaryAction} />
+                ) : (
+                  <RotateCw size={14} color={colors.primaryAction} />
+                )}
+              </TouchableOpacity>
+              <View style={styles.profileActionCapsuleDivider} />
+              <TouchableOpacity
+                style={styles.profileActionCapsuleBtn}
+                onPress={handleSignOut}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                activeOpacity={0.7}
+              >
+                <LogOut size={14} color={colors.danger} />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        ) : (
+          <>
+            {/* Compact Local Profile Row */}
+            <View style={styles.profileCard}>
+              <View style={styles.profileAvatar}>
+                {displayName ? (
+                  <Text style={styles.avatarText}>
+                    {displayName.charAt(0).toUpperCase()}
+                  </Text>
+                ) : (
+                  <User size={18} color={colors.primaryAction} strokeWidth={2.2} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <TextInput
+                    style={styles.profileNameInput}
+                    value={displayName}
+                    placeholder={language === "id" ? "Nama Pengguna" : "User Name"}
+                    placeholderTextColor={colors.textMuted}
+                    onChangeText={(val) => setName(val)}
+                    onBlur={() => triggerBackgroundUserSync(userId)}
+                    maxLength={20}
+                  />
+                  <View style={styles.proBadge}>
+                    <Sparkles size={9} color="#F59E0B" />
+                    <Text style={styles.proBadgeText}>MOTIONFIT</Text>
+                  </View>
+                </View>
+                <Text style={styles.profileMeta}>
+                  {streak} {t("day_streak")} • {weeklyGoal} {t("days_per_week")}
+                </Text>
+              </View>
+            </View>
+
+            {/* Cloud Auth CTA Banner */}
+            <TouchableOpacity
+              style={[styles.cloudCtaCard, { backgroundColor: colors.cardSurface, borderColor: colors.borderSubtle }]}
+              onPress={() => {
+                triggerHaptic();
+                router.push('/(auth)/sign-in');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.cloudCtaIconBox}>
+                <Cloud size={18} color={colors.primaryAction} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.cloudCtaTitle, { color: colors.textPrimary }]}>
+                  {language === "id" ? "Cadangkan ke Cloud" : "Backup to Cloud"}
+                </Text>
+                <Text style={[styles.cloudCtaSubtitle, { color: colors.textSecondary }]}>
+                  {language === "id"
+                    ? "Masuk atau buat akun Clerk untuk menyimpan riwayat latihan ke Turso."
+                    : "Sign in or create a Clerk account to sync your workouts to Turso."}
+                </Text>
+              </View>
+              <ChevronRight size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </>
+        )}
 
         {/* 1. LANGKAH & KESEHATAN */}
         <View style={styles.groupSection}>
@@ -552,7 +771,7 @@ export default function SettingsScreen() {
                   }}
                 >
                   <ExternalLink color={colors.textSecondary} size={12} />
-                  <Text style={styles.subActionChipText}>Pengaturan</Text>
+                  <Text style={styles.subActionChipText}>{t('settings')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -706,6 +925,7 @@ export default function SettingsScreen() {
                     triggerHaptic(50);
                     setLanguage("id");
                     if (remindersEnabled) scheduleDailyReminder(reminderTime, "id");
+                    triggerBackgroundUserSync(userId);
                   }}
                 >
                   <Text style={[styles.compactSegmentText, language === "id" && styles.compactSegmentTextActive]}>ID</Text>
@@ -716,6 +936,7 @@ export default function SettingsScreen() {
                     triggerHaptic(50);
                     setLanguage("en");
                     if (remindersEnabled) scheduleDailyReminder(reminderTime, "en");
+                    triggerBackgroundUserSync(userId);
                   }}
                 >
                   <Text style={[styles.compactSegmentText, language === "en" && styles.compactSegmentTextActive]}>EN</Text>
@@ -739,18 +960,20 @@ export default function SettingsScreen() {
                   onPress={() => {
                     triggerHaptic(50);
                     setTheme("light");
+                    triggerBackgroundUserSync(userId);
                   }}
                 >
-                  <Text style={[styles.compactSegmentText, !isDarkMode && styles.compactSegmentTextActive]}>Light</Text>
+                  <Text style={[styles.compactSegmentText, !isDarkMode && styles.compactSegmentTextActive]}>{t("theme_light")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.compactSegmentBtn, isDarkMode && styles.compactSegmentBtnActive]}
                   onPress={() => {
                     triggerHaptic(50);
                     setTheme("dark");
+                    triggerBackgroundUserSync(userId);
                   }}
                 >
-                  <Text style={[styles.compactSegmentText, isDarkMode && styles.compactSegmentTextActive]}>Dark</Text>
+                  <Text style={[styles.compactSegmentText, isDarkMode && styles.compactSegmentTextActive]}>{t("theme_dark")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -817,6 +1040,7 @@ export default function SettingsScreen() {
                   style={[styles.compactSegmentBtn, audioNotification === "default_notification" && styles.compactSegmentBtnActive]}
                   onPress={() => {
                     triggerHaptic(60);
+                    stopTimerSound();
                     setAudioNotification("default_notification");
                     playPreview("default_notification");
                   }}
@@ -827,7 +1051,19 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.compactSegmentBtn, audioNotification !== "default_notification" && audioNotification !== "none" && styles.compactSegmentBtnActive]}
-                  onPress={handlePickAudio}
+                  onPress={() => {
+                    triggerHaptic(60);
+                    stopTimerSound();
+                    const existingCustomUri = useUserStore.getState().customAudioUri;
+                    if (existingCustomUri) {
+                      setAudioNotification(existingCustomUri);
+                      const dur = useUserStore.getState().customAudioDuration || 5;
+                      const off = useUserStore.getState().customAudioStartOffset || 0;
+                      playPreviewSound(existingCustomUri, dur, off);
+                    } else {
+                      handlePickAudio();
+                    }
+                  }}
                 >
                   <Text style={[styles.compactSegmentText, audioNotification !== "default_notification" && audioNotification !== "none" && styles.compactSegmentTextActive]}>
                     {t("custom")}
@@ -847,6 +1083,17 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Silent Mode Information */}
+            {audioNotification === "none" && (
+              <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+                <Text style={{ fontSize: 12, fontFamily: AppFonts.medium, color: colors.textSecondary }}>
+                  {language === "id"
+                    ? "Suara dinonaktifkan. Pengingat istirahat hanya akan bergetar."
+                    : "Sound disabled. Rest timer will vibrate only."}
+                </Text>
+              </View>
+            )}
 
             {/* Custom Audio Trimmer Card */}
             {audioNotification !== "default_notification" && audioNotification !== "none" && (
@@ -868,7 +1115,14 @@ export default function SettingsScreen() {
               <View style={styles.subActionContainer}>
                 <TouchableOpacity
                   style={[styles.compactPreviewBtn, isPlayingAudio && styles.compactPreviewBtnStop]}
-                  onPress={() => handlePlayCustomPreview()}
+                  onPress={() => {
+                    if (isPlayingAudio) {
+                      stopTimerSound();
+                    } else {
+                      triggerHaptic(50);
+                      playPreviewSound("default_notification", 5, 0);
+                    }
+                  }}
                   activeOpacity={0.85}
                 >
                   {isPlayingAudio ? (
@@ -942,7 +1196,7 @@ export default function SettingsScreen() {
 
         {/* 5. DATA & CADANGAN */}
         <View style={styles.groupSection}>
-          <Text style={styles.groupHeader}>Data & Cadangan</Text>
+          <Text style={styles.groupHeader}>{t("data_and_backup")}</Text>
           <View style={styles.groupCard}>
             <TouchableOpacity style={styles.compactActionRow} onPress={handleExport} activeOpacity={0.7}>
               <View style={styles.rowIconBox}>
@@ -1069,6 +1323,96 @@ const getStyles = (c: ThemeColors) => {
       fontSize: 12,
       color: c.textSecondary,
       marginTop: 2,
+    },
+    avatarImage: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+    },
+    profileNameText: {
+      fontFamily: AppFonts.bold,
+      fontSize: 14.5,
+      color: c.textPrimary,
+      letterSpacing: -0.2,
+      flexShrink: 1,
+    },
+    profileEmailText: {
+      fontFamily: AppFonts.regular,
+      fontSize: 11,
+      color: c.textSecondary,
+      marginTop: 1,
+    },
+    cloudStatusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      marginTop: 3,
+    },
+    cloudDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    cloudStatusText: {
+      fontFamily: AppFonts.medium,
+      fontSize: 10,
+      color: c.textMuted,
+      flexShrink: 1,
+    },
+    profileActionCapsule: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 9,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      overflow: "hidden",
+      height: 32,
+    },
+    profileActionCapsuleBtn: {
+      width: 32,
+      height: 32,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    profileActionCapsuleDivider: {
+      width: StyleSheet.hairlineWidth,
+      height: 16,
+      backgroundColor: c.borderSubtle,
+    },
+    cloudCtaCard: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    cloudCtaIconBox: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: c.surfaceHighlight,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    cloudCtaTitle: {
+      fontFamily: AppFonts.bold,
+      fontSize: 14,
+      color: c.textPrimary,
+    },
+    cloudCtaSubtitle: {
+      fontFamily: AppFonts.regular,
+      fontSize: 11,
+      color: c.textSecondary,
+      marginTop: 2,
+      lineHeight: 15,
     },
 
     // Group Sections (iOS Grouped List)

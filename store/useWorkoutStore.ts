@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useUserStore } from './useUserStore';
 
 export type WeightMode = 'weighted' | 'bodyweight' | 'none';
 
@@ -57,10 +57,12 @@ interface WorkoutState {
   sessions: WorkoutSession[];
   activeSession: ActiveWorkoutSession | null;
   scheduledWorkouts: Record<string, string>;
+  deletedTemplateIds?: string[];
   scheduleWorkout: (date: string, templateId: string | null) => void;
   addTemplate: (template: WorkoutTemplate) => void;
   updateTemplate: (id: string, template: WorkoutTemplate) => void;
   deleteTemplate: (id: string) => void;
+  clearDeletedTemplateId: (id: string) => void;
   startSession: (templateId: string) => void;
   updateActiveSession: (
     completedSetsMap: Record<string, number[]>,
@@ -77,38 +79,9 @@ interface WorkoutState {
   clearActiveSession: () => void;
 }
 
-const defaultTemplates: WorkoutTemplate[] = [
-  {
-    id: '1',
-    name: 'Push Day',
-    subtitle: 'Chest, Shoulders, Triceps',
-    icon: 'dumbbell',
-    color: '#F59E0B', // amber-500 brand
-    defaultRestTime: 90,
-    exercises: [
-      { id: 'e1', name: 'Bench Press', sets: 4, reps: '8-10' },
-      { id: 'e2', name: 'Overhead Press', sets: 3, reps: '8-12' },
-      { id: 'e3', name: 'Tricep Extensions', sets: 3, reps: '12-15' },
-    ]
-  },
-  {
-    id: '2',
-    name: 'Pull Day',
-    subtitle: 'Back, Biceps',
-    icon: 'activity',
-    color: '#10b981', // emerald-500
-    defaultRestTime: 90,
-    exercises: [
-      { id: 'e4', name: 'Pull Ups', sets: 4, reps: '8-10' },
-      { id: 'e5', name: 'Barbell Rows', sets: 4, reps: '8-12' },
-      { id: 'e6', name: 'Bicep Curls', sets: 3, reps: '10-15' },
-    ]
-  }
-];
+export const defaultTemplates: WorkoutTemplate[] = [];
 
-export const useWorkoutStore = create<WorkoutState>()(
-  persist(
-    (set) => ({
+export const useWorkoutStore = create<WorkoutState>()((set) => ({
       templates: defaultTemplates,
       sessions: [],
       activeSession: null,
@@ -129,9 +102,15 @@ export const useWorkoutStore = create<WorkoutState>()(
         set((state) => ({
           templates: state.templates.map((t) => (t.id === id ? template : t)),
         })),
+      deletedTemplateIds: [],
       deleteTemplate: (id) =>
         set((state) => ({
           templates: state.templates.filter((t) => t.id !== id),
+          deletedTemplateIds: Array.from(new Set([...(state.deletedTemplateIds || []), id])),
+        })),
+      clearDeletedTemplateId: (id) =>
+        set((state) => ({
+          deletedTemplateIds: (state.deletedTemplateIds || []).filter((item) => item !== id),
         })),
       startSession: (templateId) =>
         set(() => ({
@@ -279,12 +258,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
           });
 
-          try {
-            const { useUserStore } = require('./useUserStore');
-            useUserStore.getState().recalculateStreak(remainingSessions.map((s: WorkoutSession) => s.date));
-          } catch {
-            // safely ignore if circular load
-          }
+          useUserStore.getState().recalculateStreak(remainingSessions.map((s: WorkoutSession) => s.date));
 
           return {
             sessions: remainingSessions,
@@ -292,10 +266,137 @@ export const useWorkoutStore = create<WorkoutState>()(
           };
         }),
       clearActiveSession: () => set({ activeSession: null }),
-    }),
-    {
-      name: 'workout-storage',
-      storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+    })
 );
+
+let activeWorkoutUserId: string | null = null;
+
+// Reactive subscriber: automatically saves changes into the active user's partition
+useWorkoutStore.subscribe((state) => {
+  if (activeWorkoutUserId) {
+    const partition = {
+      templates: state.templates,
+      sessions: state.sessions,
+      scheduledWorkouts: state.scheduledWorkouts,
+      deletedTemplateIds: state.deletedTemplateIds || [],
+      activeSession: state.activeSession,
+    };
+    AsyncStorage.setItem(`workout_partition_${activeWorkoutUserId}`, JSON.stringify(partition)).catch(() => {});
+  }
+});
+
+export const loadWorkoutPartition = async (userId: string): Promise<void> => {
+  if (activeWorkoutUserId === userId) return;
+
+  // Persist previous user's partition if switching accounts
+  if (activeWorkoutUserId && activeWorkoutUserId !== userId) {
+    const state = useWorkoutStore.getState();
+    await AsyncStorage.setItem(
+      `workout_partition_${activeWorkoutUserId}`,
+      JSON.stringify({
+        templates: state.templates,
+        sessions: state.sessions,
+        scheduledWorkouts: state.scheduledWorkouts,
+        deletedTemplateIds: state.deletedTemplateIds || [],
+        activeSession: state.activeSession,
+      })
+    ).catch(() => {});
+  }
+
+  activeWorkoutUserId = userId;
+
+  try {
+    const raw = await AsyncStorage.getItem(`workout_partition_${userId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+
+      // Restore active session with sanity check (discard if older than 24 hours)
+      let restoredActiveSession = parsed.activeSession || null;
+      if (restoredActiveSession && restoredActiveSession.startTime) {
+        const sessionAgeMs = Date.now() - restoredActiveSession.startTime;
+        if (sessionAgeMs > 24 * 60 * 60 * 1000) {
+          restoredActiveSession = null;
+        }
+      }
+
+      useWorkoutStore.setState({
+        templates: parsed.templates || defaultTemplates,
+        sessions: parsed.sessions || [],
+        scheduledWorkouts: parsed.scheduledWorkouts || {},
+        deletedTemplateIds: parsed.deletedTemplateIds || [],
+        activeSession: restoredActiveSession,
+      });
+      return;
+    }
+
+    // Backward compatibility: If no partition yet, check if legacy workout-storage belongs to this user
+    const lastUserId = await AsyncStorage.getItem('lastActiveUserId');
+    if (lastUserId === userId) {
+      const legacyRaw = await AsyncStorage.getItem('workout-storage');
+      if (legacyRaw) {
+        const legacyParsed = JSON.parse(legacyRaw);
+        const legacyState = legacyParsed?.state;
+        if (legacyState) {
+          const templates = legacyState.templates || defaultTemplates;
+          const sessions = legacyState.sessions || [];
+          const scheduledWorkouts = legacyState.scheduledWorkouts || {};
+          const deletedTemplateIds = legacyState.deletedTemplateIds || [];
+          const activeSession = legacyState.activeSession || null;
+
+          useWorkoutStore.setState({
+            templates,
+            sessions,
+            scheduledWorkouts,
+            deletedTemplateIds,
+            activeSession,
+          });
+
+          await AsyncStorage.setItem(
+            `workout_partition_${userId}`,
+            JSON.stringify({ templates, sessions, scheduledWorkouts, deletedTemplateIds, activeSession })
+          ).catch(() => {});
+          await AsyncStorage.removeItem('workout-storage').catch(() => {});
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[WorkoutStore] Error loading user partition:', e);
+  }
+
+  // Brand new user: initialize pristine clean state
+  useWorkoutStore.setState({
+    templates: defaultTemplates,
+    sessions: [],
+    scheduledWorkouts: {},
+    deletedTemplateIds: [],
+    activeSession: null,
+  });
+};
+
+export const unloadWorkoutPartition = async (discardActiveSession: boolean = false): Promise<void> => {
+  if (activeWorkoutUserId) {
+    const state = useWorkoutStore.getState();
+    await AsyncStorage.setItem(
+      `workout_partition_${activeWorkoutUserId}`,
+      JSON.stringify({
+        templates: state.templates,
+        sessions: state.sessions,
+        scheduledWorkouts: state.scheduledWorkouts,
+        deletedTemplateIds: state.deletedTemplateIds || [],
+        activeSession: discardActiveSession ? null : state.activeSession,
+      })
+    ).catch(() => {});
+  }
+  activeWorkoutUserId = null;
+
+  // Reset in-memory state to clean empty sandbox
+  useWorkoutStore.setState({
+    templates: defaultTemplates,
+    sessions: [],
+    scheduledWorkouts: {},
+    deletedTemplateIds: [],
+    activeSession: null,
+  });
+  await AsyncStorage.removeItem('workout-storage').catch(() => {});
+};

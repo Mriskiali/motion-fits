@@ -19,9 +19,12 @@ import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
+import { useAuth } from '@clerk/expo';
+import { deleteWorkoutTemplateFromCloud } from '@/services/syncService';
 
 export default function WorkoutScreen() {
   const router = useRouter();
+  const { userId } = useAuth();
   const templates = useWorkoutStore((state) => state.templates);
   const sessions = useWorkoutStore((state) => state.sessions);
   const scheduledWorkouts = useWorkoutStore((state) => state.scheduledWorkouts);
@@ -111,7 +114,17 @@ export default function WorkoutScreen() {
         {
           text: t('delete'),
           style: 'destructive',
-          onPress: () => deleteTemplate(activeTemplate.id),
+          onPress: () => {
+            const templateId = activeTemplate?.id;
+            if (templateId) {
+              deleteTemplate(templateId);
+              if (userId) {
+                deleteWorkoutTemplateFromCloud(userId, templateId).catch((err) => {
+                  console.warn('[AutoSync] Failed to delete template from cloud:', err);
+                });
+              }
+            }
+          },
         },
       ]);
     }, 300);
@@ -385,7 +398,7 @@ export default function WorkoutScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sheetActionText}>{t('edit')}</Text>
-                  <Text style={styles.sheetActionSub}>Ubah nama, gerakan, atau target latihan</Text>
+                  <Text style={styles.sheetActionSub}>{t('edit_routine_sub')}</Text>
                 </View>
                 <ChevronRight size={16} color={colors.textMuted} />
               </TouchableOpacity>
@@ -407,7 +420,7 @@ export default function WorkoutScreen() {
                   <Text style={[styles.sheetActionText, { color: colors.danger }]}>
                     {t('delete')}
                   </Text>
-                  <Text style={styles.sheetActionSub}>Hapus rutinitas ini secara permanen</Text>
+                  <Text style={styles.sheetActionSub}>{t('delete_routine_sub')}</Text>
                 </View>
                 <ChevronRight size={16} color={colors.textMuted} />
               </TouchableOpacity>
