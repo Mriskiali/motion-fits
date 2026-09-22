@@ -11,13 +11,19 @@ export function calculateStreakFromDates(sessionDateStrings: string[]): {
 
   const uniqueDayStrings = Array.from(
     new Set(
-      sessionDateStrings.map((d) => {
-        const dt = new Date(d);
-        const yr = dt.getFullYear();
-        const mo = String(dt.getMonth() + 1).padStart(2, '0');
-        const da = String(dt.getDate()).padStart(2, '0');
-        return `${yr}-${mo}-${da}`;
-      })
+      sessionDateStrings
+        .filter((d) => {
+          if (!d) return false;
+          const t = new Date(d).getTime();
+          return !isNaN(t);
+        })
+        .map((d) => {
+          const dt = new Date(d);
+          const yr = dt.getFullYear();
+          const mo = String(dt.getMonth() + 1).padStart(2, '0');
+          const da = String(dt.getDate()).padStart(2, '0');
+          return `${yr}-${mo}-${da}`;
+        })
     )
   ).sort((a, b) => b.localeCompare(a));
 

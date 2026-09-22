@@ -303,35 +303,57 @@ export default function WorkoutScreen() {
           </TouchableOpacity>
         </View>
 
-        {templates.map((template) => (
-          <TouchableOpacity
-            key={template.id}
-            style={styles.templateCard}
-            onPress={() => router.push(`/workout/preview?id=${template.id}`)}
-          >
-            <View style={styles.templateIconWrapper}>
-              <Dumbbell size={18} color="#F59E0B" />
+        {templates.length === 0 ? (
+          <View style={styles.emptyTemplateCard}>
+            <View style={styles.emptyTemplateIconBox}>
+              <Dumbbell size={26} color={colors.textMuted} strokeWidth={1.8} />
             </View>
+            <Text style={styles.emptyTemplateTitle}>{t('no_templates_yet')}</Text>
+            <Text style={styles.emptyTemplateSub}>
+              {language === 'id'
+                ? 'Buat rutinitas latihan pertama Anda untuk mulai berolahraga dengan mudah.'
+                : 'Create your first workout routine to easily start training.'}
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyTemplateButton}
+              onPress={() => router.push('/workout/create')}
+              activeOpacity={0.8}
+            >
+              <Plus color="#000000" size={16} strokeWidth={2.4} />
+              <Text style={styles.emptyTemplateButtonText}>{t('create_workout') || 'Buat Template'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          templates.map((template) => (
+            <TouchableOpacity
+              key={template.id}
+              style={styles.templateCard}
+              onPress={() => router.push(`/workout/preview?id=${template.id}`)}
+            >
+              <View style={styles.templateIconWrapper}>
+                <Dumbbell size={18} color="#F59E0B" />
+              </View>
 
-            <View style={styles.templateInfo}>
-              <Text style={styles.templateName}>{template.name}</Text>
-              <Text style={styles.templateSubtitle}>
-                {template.subtitle ? `${template.subtitle} • ` : ''}
-                {template.exercises.length} {t('exercises_count')}
-              </Text>
-            </View>
+              <View style={styles.templateInfo}>
+                <Text style={styles.templateName}>{template.name}</Text>
+                <Text style={styles.templateSubtitle}>
+                  {template.subtitle ? `${template.subtitle} • ` : ''}
+                  {template.exercises.length} {t('exercises_count')}
+                </Text>
+              </View>
 
-            <View style={styles.templateActions}>
-              <TouchableOpacity
-                style={styles.menuButton}
-                onPress={() => openBottomSheet(template)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <MoreVertical color={colors.textSecondary} size={18} />
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        ))}
+              <View style={styles.templateActions}>
+                <TouchableOpacity
+                  style={styles.menuButton}
+                  onPress={() => openBottomSheet(template)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MoreVertical color={colors.textSecondary} size={18} />
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
 
         <View style={{ height: 120 }} />
       </View>
@@ -954,6 +976,54 @@ const getStyles = (c: ThemeColors) =>
       fontSize: 14,
       fontFamily: AppFonts.bold,
       fontWeight: '700',
+    },
+    emptyTemplateCard: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 16,
+      padding: 24,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      marginTop: 4,
+    },
+    emptyTemplateIconBox: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: c.surfaceHighlight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    emptyTemplateTitle: {
+      fontSize: 15,
+      fontFamily: AppFonts.bold,
+      color: c.textPrimary,
+      marginBottom: 6,
+      textAlign: 'center',
+    },
+    emptyTemplateSub: {
+      fontSize: 12,
+      fontFamily: AppFonts.medium,
+      color: c.textMuted,
+      textAlign: 'center',
+      lineHeight: 18,
+      marginBottom: 16,
+      maxWidth: 260,
+    },
+    emptyTemplateButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: c.primaryAction,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+    },
+    emptyTemplateButtonText: {
+      fontSize: 13,
+      fontFamily: AppFonts.bold,
+      color: '#000000',
     },
   });
 

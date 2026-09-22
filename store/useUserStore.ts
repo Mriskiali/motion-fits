@@ -185,12 +185,34 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
     ).catch(() => {});
   }
 
-  activeProfileUserId = userId;
+  // Detach active user temporarily so resetting in-memory state does not overwrite on-disk partition
+  activeProfileUserId = null;
+  useUserStore.setState({
+    name: '',
+    weeklyGoal: 3,
+    streak: 0,
+    lastWorkoutDate: null,
+    theme: 'system',
+    language: 'id',
+    defaultRestTimer: 90,
+    autoStartTimer: true,
+    hapticsEnabled: true,
+    keepScreenAwake: true,
+    hasCompletedOnboarding: false,
+    remindersEnabled: false,
+    reminderTime: '08:00',
+    audioNotification: 'default_notification',
+    customAudioUri: null,
+    customAudioName: '',
+    customAudioDuration: 5,
+    customAudioStartOffset: 0,
+  });
 
   try {
     const raw = await AsyncStorage.getItem(`user_partition_${userId}`);
     if (raw) {
       const parsed = JSON.parse(raw);
+      activeProfileUserId = userId;
       useUserStore.setState({
         name: parsed.name || '',
         weeklyGoal: Number(parsed.weeklyGoal) || 3,
@@ -222,6 +244,7 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
         const legacyParsed = JSON.parse(legacyRaw);
         const legacyState = legacyParsed?.state;
         if (legacyState) {
+          activeProfileUserId = userId;
           useUserStore.setState({
             name: legacyState.name || '',
             weeklyGoal: Number(legacyState.weeklyGoal) || 3,
@@ -254,6 +277,7 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
   }
 
   // Fresh user: reset profile to clean state
+  activeProfileUserId = userId;
   useUserStore.setState({
     name: '',
     weeklyGoal: 3,

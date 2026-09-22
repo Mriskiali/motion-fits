@@ -191,7 +191,7 @@ export async function fetchStepsHistoryFromHealthConnect(days: number = 14): Pro
 
     const now = new Date();
 
-    for (let i = 0; i < days; i++) {
+    const dayPromises = Array.from({ length: days }).map(async (_, i) => {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const year = d.getFullYear();
@@ -218,9 +218,16 @@ export async function fetchStepsHistoryFromHealthConnect(days: number = 14): Pro
             endTime: endOfDay.toISOString(),
           },
         });
-        history[dateKey] = Math.round(response.COUNT_TOTAL || 0);
+        return { dateKey, steps: Math.round(response.COUNT_TOTAL || 0) };
       } catch {
-        // Individual day fail, keep going
+        return null;
+      }
+    });
+
+    const results = await Promise.all(dayPromises);
+    for (const r of results) {
+      if (r) {
+        history[r.dateKey] = r.steps;
       }
     }
   } catch (err) {

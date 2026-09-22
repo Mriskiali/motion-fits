@@ -36,14 +36,15 @@ CREATE INDEX IF NOT EXISTS idx_workouts_date ON workouts(date);
 
 -- 3. Workout Templates Table
 CREATE TABLE IF NOT EXISTS workout_templates (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   category TEXT,
   exercises TEXT NOT NULL, -- JSON formatted array of exercises & sets
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  deleted_at DATETIME
+  deleted_at DATETIME,
+  PRIMARY KEY (user_id, id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_templates_user_id ON workout_templates(user_id);

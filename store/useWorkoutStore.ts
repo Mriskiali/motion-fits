@@ -303,7 +303,15 @@ export const loadWorkoutPartition = async (userId: string): Promise<void> => {
     ).catch(() => {});
   }
 
-  activeWorkoutUserId = userId;
+  // Detach active user temporarily so resetting in-memory state does not overwrite on-disk partition
+  activeWorkoutUserId = null;
+  useWorkoutStore.setState({
+    templates: defaultTemplates,
+    sessions: [],
+    scheduledWorkouts: {},
+    deletedTemplateIds: [],
+    activeSession: null,
+  });
 
   try {
     const raw = await AsyncStorage.getItem(`workout_partition_${userId}`);
@@ -319,6 +327,7 @@ export const loadWorkoutPartition = async (userId: string): Promise<void> => {
         }
       }
 
+      activeWorkoutUserId = userId;
       useWorkoutStore.setState({
         templates: parsed.templates || defaultTemplates,
         sessions: parsed.sessions || [],
@@ -343,6 +352,7 @@ export const loadWorkoutPartition = async (userId: string): Promise<void> => {
           const deletedTemplateIds = legacyState.deletedTemplateIds || [];
           const activeSession = legacyState.activeSession || null;
 
+          activeWorkoutUserId = userId;
           useWorkoutStore.setState({
             templates,
             sessions,
@@ -365,6 +375,7 @@ export const loadWorkoutPartition = async (userId: string): Promise<void> => {
   }
 
   // Brand new user: initialize pristine clean state
+  activeWorkoutUserId = userId;
   useWorkoutStore.setState({
     templates: defaultTemplates,
     sessions: [],

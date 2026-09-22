@@ -264,12 +264,23 @@ export const loadStepPartition = async (userId: string): Promise<void> => {
     ).catch(() => {});
   }
 
-  activeStepUserId = userId;
+  // Detach active user temporarily so resetting in-memory state does not overwrite on-disk partition
+  activeStepUserId = null;
+  useStepStore.setState({
+    todaySteps: 0,
+    dailyStepGoal: 10000,
+    lastSyncTime: null,
+    stepHistory: {},
+    activeMilestone: null,
+    lastCelebratedDate: null,
+    lastCelebratedLevel: 0,
+  });
 
   try {
     const raw = await AsyncStorage.getItem(`step_partition_${userId}`);
     if (raw) {
       const parsed = JSON.parse(raw);
+      activeStepUserId = userId;
       useStepStore.setState({
         isConnected: Boolean(parsed.isConnected),
         todaySteps: Number(parsed.todaySteps) || 0,
@@ -291,6 +302,7 @@ export const loadStepPartition = async (userId: string): Promise<void> => {
         const legacyParsed = JSON.parse(legacyRaw);
         const legacyState = legacyParsed?.state;
         if (legacyState) {
+          activeStepUserId = userId;
           useStepStore.setState({
             isConnected: Boolean(legacyState.isConnected),
             todaySteps: Number(legacyState.todaySteps) || 0,
@@ -313,6 +325,7 @@ export const loadStepPartition = async (userId: string): Promise<void> => {
   }
 
   // Fresh user: reset steps
+  activeStepUserId = userId;
   useStepStore.setState({
     todaySteps: 0,
     dailyStepGoal: 10000,

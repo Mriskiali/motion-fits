@@ -1626,7 +1626,7 @@ export default function HistoryScreen() {
     <View style={styles.container}>
       <FlatList<any>
         data={displayedData}
-        keyExtractor={(item: any, index) => `${item?.id || 'sess'}-${index}`}
+        keyExtractor={(item: any, index) => item?.id || String(index)}
         renderItem={renderSessionItem}
         ListHeaderComponent={listHeaderComponent}
         ListFooterComponent={listFooterComponent}
