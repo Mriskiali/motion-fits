@@ -852,39 +852,76 @@ export default function HistoryScreen() {
           ))}
         </View>
 
-        {/* Simple Line Chart */}
-        <View style={styles.lineChartContainer}>
-          <View style={styles.lineChartHeader}>
-            <Text style={styles.lineChartTitle}>
-              {language === 'id' ? 'Tren Langkah' : 'Steps Trend'}
-            </Text>
-            <Text style={styles.lineChartSubtitle}>
-              {barChartWeeks.reduce((a, w) => a + w.totalSteps, 0).toLocaleString()}
-              {' '}{language === 'id' ? 'total langkah' : 'total steps'}
-            </Text>
+        {/* Activity Chart - Area Style */}
+        <View style={styles.activityChartCard}>
+          <View style={styles.activityChartHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activityChartTitle}>
+                {language === 'id' ? 'Aktivitas Mingguan' : 'Weekly Activity'}
+              </Text>
+              <Text style={styles.activityChartSubtitle}>
+                {barChartWeeks.reduce((a, w) => a + w.totalSteps, 0).toLocaleString()}
+                {' '}{language === 'id' ? 'total langkah' : 'total steps'}
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.lineChartPlot}>
-            {barChartWeeks.map((week, idx) => {
-              const height = Math.min(100, (week.totalSteps / (dailyStepGoal * 7)) * 100);
-              return (
-                <View key={idx} style={styles.lineChartBar}>
-                  <View style={styles.lineChartBarBg}>
-                    <View 
-                      style={[
-                        styles.lineChartBarFill, 
-                        { 
-                          height: `${height}%`,
-                          backgroundColor: week.totalSteps >= (dailyStepGoal * 7) ? colors.successBadge : colors.accentSecondary
-                        }
-                      ]} 
-                    />
-                  </View>
-                  <Text style={styles.lineChartLabel}>{week.weekLabel}</Text>
-                </View>
-              );
-            })}
+          <View style={styles.activityChartPlot}>
+            {barChartWeeks.length > 0 ? (
+              barChartWeeks.map((week, idx) => {
+                const maxSteps = Math.max(...barChartWeeks.map(w => w.totalSteps), 1);
+                const heightPercent = Math.min(100, (week.totalSteps / maxSteps) * 100);
+                const isGoalMet = week.totalSteps >= (dailyStepGoal * 7);
+                
+                return (
+                  <TouchableOpacity 
+                    key={idx} 
+                    style={styles.activityBar}
+                    onPress={() => {
+                      triggerButtonVibration(hapticsEnabled);
+                      if (week.days[0]) {
+                        setSelectedStepDayKey(week.days[0].dateKey);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.activityBarBg}>
+                      <View 
+                        style={[
+                          styles.activityBarFill, 
+                          { 
+                            height: `${Math.max(heightPercent, 8)}%`,
+                            backgroundColor: isGoalMet ? colors.successBadge : colors.accentSecondary
+                          }
+                        ]} 
+                      />
+                    </View>
+                    <Text style={styles.activityBarLabel}>{week.weekLabel}</Text>
+                  </TouchableOpacity>
+                );
+              })
+            ) : (
+              <View style={styles.emptyChartState}>
+                <Footprints size={32} color={colors.textMuted} strokeWidth={1.5} />
+                <Text style={styles.emptyChartText}>
+                  {language === 'id' ? 'Belum ada data langkah' : 'No step data yet'}
+                </Text>
+              </View>
+            )}
           </View>
+
+          {barChartWeeks.length > 0 && (
+            <View style={styles.activityChartLegend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: colors.accentSecondary }]} />
+                <Text style={styles.legendText}>{language === 'id' ? 'Aktif' : 'Active'}</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: colors.successBadge }]} />
+                <Text style={styles.legendText}>{language === 'id' ? 'Target Tercapai' : 'Goal Met'}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Selected Day Inspection Card */}
@@ -2506,55 +2543,101 @@ const getStyles = (c: ThemeColors) =>
       color: c.dateTextSelected,
     },
 
-    // Step Activity Line Chart (Simplified)
-    lineChartContainer: {
+    // Activity Chart (Steps Tab)
+    activityChartCard: {
+      backgroundColor: c.cardSurface,
+      borderRadius: 16,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
       marginTop: 12,
       marginBottom: 16,
     },
-    lineChartHeader: {
-      marginBottom: 12,
+    activityChartHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
     },
-    lineChartTitle: {
+    activityChartTitle: {
       fontFamily: AppFonts.bold,
-      fontSize: 15,
+      fontSize: 16,
       fontWeight: '700',
       color: c.textPrimary,
     },
-    lineChartSubtitle: {
+    activityChartSubtitle: {
       fontFamily: AppFonts.medium,
-      fontSize: 12,
+      fontSize: 13,
       color: c.textSecondary,
       marginTop: 2,
     },
-    lineChartPlot: {
+    activityChartPlot: {
       flexDirection: 'row',
       alignItems: 'flex-end',
-      gap: 6,
-      height: 100,
+      gap: 8,
+      height: 120,
       paddingHorizontal: 4,
     },
-    lineChartBar: {
+    activityBar: {
       flex: 1,
+      alignItems: 'center',
+      gap: 8,
+    },
+    activityBarBg: {
+      width: '100%',
+      height: 100,
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 8,
+      overflow: 'hidden',
+      justifyContent: 'flex-end',
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+    },
+    activityBarFill: {
+      width: '100%',
+      borderTopLeftRadius: 7,
+      borderTopRightRadius: 7,
+    },
+    activityBarLabel: {
+      fontFamily: AppFonts.semiBold,
+      fontSize: 11,
+      color: c.textSecondary,
+    },
+    activityChartLegend: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 16,
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: c.borderSubtle,
+    },
+    legendItem: {
+      flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
     },
-    lineChartBarBg: {
-      width: '100%',
-      height: 80,
-      backgroundColor: c.surfaceHighlight,
-      borderRadius: 6,
-      overflow: 'hidden',
-      justifyContent: 'flex-end',
+    legendDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
     },
-    lineChartBarFill: {
-      width: '100%',
-      borderTopLeftRadius: 6,
-      borderTopRightRadius: 6,
-    },
-    lineChartLabel: {
-      fontFamily: AppFonts.semiBold,
-      fontSize: 10,
+    legendText: {
+      fontFamily: AppFonts.medium,
+      fontSize: 12,
       color: c.textSecondary,
+    },
+    emptyChartState: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    emptyChartText: {
+      fontFamily: AppFonts.medium,
+      fontSize: 13,
+      color: c.textMuted,
     },
 
     // Step Inspection Card
