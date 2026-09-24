@@ -304,62 +304,48 @@ export default function HistoryScreen() {
   }, [allReversedSessions]);
 
   // Step History Data (up to 365 days / 1 year)
-  const stepYearlyData = useMemo(() => {
+  const stepYearlyBase = useMemo(() => {
     const list: Array<{
       date: Date;
       dateKey: string;
-      steps: number;
-      goal: number;
-      percent: number;
-      distanceKm: string;
-      caloriesKcal: number;
-      isGoalMet: boolean;
       dayOfWeek: number;
       isToday: boolean;
-      category: 'empty' | 'low' | 'medium' | 'goal';
     }> = [];
-
     const now = new Date();
-    const goal = Math.max(1000, dailyStepGoal);
-
     for (let i = 0; i < 365; i++) {
       const d = subDays(now, i);
-      const dateKey = format(d, 'yyyy-MM-dd');
-      const isTodayDay = i === 0;
-      const steps = isTodayDay ? Math.max(stepHistory[dateKey] || 0, todaySteps) : (stepHistory[dateKey] || 0);
-      const percent = Math.min(100, Math.round((steps / goal) * 100));
-      const distanceKm = (steps * 0.00075).toFixed(2);
-      const caloriesKcal = Math.round(steps * 0.04);
-      const isGoalMet = steps >= goal;
-
-      let category: 'empty' | 'low' | 'medium' | 'goal' = 'empty';
-      if (steps > 0) {
-        if (isGoalMet) {
-          category = 'goal';
-        } else if (steps >= 5000) {
-          category = 'medium';
-        } else {
-          category = 'low';
-        }
-      }
-
       list.push({
         date: d,
-        dateKey,
+        dateKey: format(d, 'yyyy-MM-dd'),
+        dayOfWeek: d.getDay(),
+        isToday: i === 0,
+      });
+    }
+    return list;
+  }, []);
+
+  const stepYearlyData = useMemo(() => {
+    const goal = Math.max(1000, dailyStepGoal);
+    return stepYearlyBase.map((base) => {
+      const steps = base.isToday ? Math.max(stepHistory[base.dateKey] || 0, todaySteps) : (stepHistory[base.dateKey] || 0);
+      const percent = Math.min(100, Math.round((steps / goal) * 100));
+      const isGoalMet = steps >= goal;
+      let category: 'empty' | 'low' | 'medium' | 'goal' = 'empty';
+      if (steps > 0) {
+        category = isGoalMet ? 'goal' : steps >= 5000 ? 'medium' : 'low';
+      }
+      return {
+        ...base,
         steps,
         goal,
         percent,
-        distanceKm,
-        caloriesKcal,
+        distanceKm: (steps * 0.00075).toFixed(2),
+        caloriesKcal: Math.round(steps * 0.04),
         isGoalMet,
-        dayOfWeek: d.getDay(),
-        isToday: isTodayDay,
         category,
-      });
-    }
-
-    return list;
-  }, [stepHistory, todaySteps, dailyStepGoal]);
+      };
+    });
+  }, [stepYearlyBase, stepHistory, todaySteps, dailyStepGoal]);
 
   // Bar chart data: group steps by weeks based on selected period
   const { barChartWeeks, barChartMonths } = useMemo(() => {

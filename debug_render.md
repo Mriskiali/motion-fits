@@ -91,7 +91,9 @@ Ketika re-render, React harus evaluasi ulang **semua** `React.createElement` (ra
 - [x] **1.5 `index.tsx` & `workout.tsx`**: audit sisa `format(new Date(...))` di body render; pastikan semua di dalam `useMemo` dengan deps minimal.
 - [x] **1.6 Buat util bersama** `utils/dateKey.ts` → `toDateKey(date)` dan `buildSessionDateMap(sessions)` agar konsisten di semua screen.
 
-**Hasil:** `chartData` menggunakan `sessionDateSet`, `stepYearlyData` menyimpan `category` enum, `selectedDaySessions` format 1x per session. `todayDateStr`, `formattedSelectedDate`, `greeting` di-memoize.
+**Hasil:** `chartData` menggunakan `sessionDateSet`, `stepYearlyData` split jadi `stepYearlyBase` (365 dates, once) + overlay (map steps data), `selectedDaySessions` format 1x per session. `todayDateStr`, `formattedSelectedDate`, `greeting` di-memoize.
+
+**Update 2026-09-24 16:38:** Split `stepYearlyData` → `stepYearlyBase` (365 iter once, deps `[]`) + `stepYearlyData` (map overlay, deps `[stepYearlyBase, stepHistory, todaySteps, dailyStepGoal]`). Target: step update tidak rebuild 365 Date objects.
 
 ### FASE 2 — Pisahkan memo dari dependency `colors` yang tidak perlu (LOW–MEDIUM RISK) ✅ SELESAI
 
