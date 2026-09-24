@@ -349,6 +349,8 @@ export default function HistoryScreen() {
 
   // Bar chart data: group steps by weeks based on selected period
   const { barChartWeeks, barChartMonths } = useMemo(() => {
+    if (activeTab !== 'steps') return { barChartWeeks: [], barChartMonths: [] };
+    
     const daysCount =
       selectedStepPeriod === '1m'
         ? 28
@@ -423,7 +425,7 @@ export default function HistoryScreen() {
     });
 
     return { barChartWeeks: weeks, barChartMonths: months };
-  }, [stepYearlyData, selectedStepPeriod, language]);
+  }, [stepYearlyData, selectedStepPeriod, language, activeTab]);
 
   const selectedStepDay = useMemo(() => {
     if (!selectedStepDayKey) {
@@ -441,6 +443,8 @@ export default function HistoryScreen() {
         : selectedStepPeriod === '6m'
         ? 182
         : 365;
+    
+    if (activeTab !== 'steps') return { totalSteps: 0, avgSteps: 0, goalsMetCount: 0, totalDistKm: '0.0', totalCalories: 0, daysCount };
 
     const slice = stepYearlyData.slice(0, daysCount);
     const totalSteps = slice.reduce((acc, curr) => acc + curr.steps, 0);
@@ -450,14 +454,14 @@ export default function HistoryScreen() {
     const totalCalories = Math.round(totalSteps * 0.04);
 
     return {
-      daysCount,
       totalSteps,
       avgSteps,
       goalsMetCount,
       totalDistKm,
       totalCalories,
+      daysCount,
     };
-  }, [stepYearlyData, selectedStepPeriod]);
+  }, [stepYearlyData, selectedStepPeriod, activeTab]);
 
   // Data to display in FlatList
   const displayedData = useMemo(() => {
