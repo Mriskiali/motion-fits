@@ -481,7 +481,10 @@ export default function HistoryScreen() {
     });
   }, [sessions, selectedCalendarDate]);
 
-  const calendarComponent = useMemo(() => (
+  const calendarComponent = useMemo(() => {
+    if (activeTab !== 'overview') return null;
+    
+    return (
     <View style={styles.cardWrapper}>
       <View style={styles.cardHeader}>
         <View style={styles.cardIconBox}>
@@ -640,9 +643,12 @@ export default function HistoryScreen() {
         </View>
       )}
     </View>
-  ), [days, paddingDays, sessions, selectedCalendarDate, selectedDaySessions, templates, language, colors, styles, t, handleShareSession, handleOpenSessionDetail]);
+    );
+  }, [days, paddingDays, sessions, selectedCalendarDate, selectedDaySessions, templates, language, colors, styles, t, handleShareSession, handleOpenSessionDetail, activeTab, sessionDateSet]);
 
   const barChartComponent = useMemo(() => {
+    if (activeTab !== 'overview') return null;
+    
     const maxCount = Math.max(...chartData.map((d) => d.count), 3);
     const chartHeight = 70;
     const barWidth = 20;
@@ -711,7 +717,7 @@ export default function HistoryScreen() {
         </View>
       </View>
     );
-  }, [chartData, colors, styles, t]);
+  }, [chartData, colors, styles, t, activeTab]);
 
   const handleSelectStepDay = useCallback((dateKey: string) => {
     triggerButtonVibration(hapticsEnabled);
