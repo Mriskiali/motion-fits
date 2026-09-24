@@ -1,8 +1,8 @@
-# MotionFit — Debug & Fix Render Performance Plan
+# MotionFit — Performance Optimization & UI/UX Progress
 
-> Status: FASE 1, 2, 4 selesai (2026-09-24).
-> Konteks: delay 1–5 detik saat ganti bahasa/tema berkurang signifikan.
-> Dokumen ini berisi hasil analisis log profiler + rencana perbaikan bertahap.
+> Status: FASE 1, 2, 4 selesai. UI redesign Steps chart selesai (2026-09-24).
+> Konteks: Optimasi performa render selesai, theme/language change instant.
+> Dokumen ini berisi hasil optimasi + rencana perbaikan UI/UX berikutnya.
 
 ---
 
@@ -214,20 +214,137 @@ Ketika re-render, React harus evaluasi ulang **semua** `React.createElement` (ra
 | Settings re-render | 234-773ms | 287-634ms → optimizing | <120ms | 🔄 in progress |
 | Workout | 296ms | 210-250ms | <60ms | ✅ acceptable |
 
-### Latest Changes (2026-09-24 17:42):
-- Created `SettingRow` memoized component
-- Integrated SettingRow for haptics & screen awake (2 rows migrated)
-- **Redesigned Steps Activity Chart:** Ganti dari complex bar chart → simplified line chart
-- **Font size unification:** statLabel 11→12px, statValue 20→24px, statIconBadge 26→28px
-- **UI consistency:** Semua tiles menggunakan border radius & spacing yang seragam
-- Remaining: 32 setting rows to migrate for full optimization
+## 10. Completed Work Summary (2026-09-24)
 
-### Remaining Work:
-- HistoryScreen Steps tab: 1.3-1.6s first switch (acceptable, compute 365 days)
-- SettingsScreen: 287-634ms per render, 2x renders on toggle (1673 lines monolith)
-- WorkoutScreen: 210-250ms (needs investigation)
+### Performance Optimizations (17 commits):
+1. ✅ Precompute `format()` → `sessionDateSet` (eliminated O(N×M) loops)
+2. ✅ Remove `colors.*` deps from `stepYearlyData` → category enum
+3. ✅ Split `stepYearlyBase` (once, deps `[]`) + overlay (per change)
+4. ✅ Batch `useStepStore.checkStatus()` (3 renders → 1)
+5. ✅ Extract Clerk `useUser()` primitives (stable refs)
+6. ✅ Lazy-load Steps tab data (`barChartWeeks`, `stepPeriodStats`, `stepYearlyData`)
+7. ✅ Lazy-render `stepActivityComponent`, `calendarComponent`, `barChartComponent` per tab
+8. ✅ Memoize `greeting`, `todayDateStr`, `formattedSelectedDate` in index.tsx
+9. ✅ Created `SettingRow` memoized component
+10. ✅ Integrated 4 settings rows (haptics, screen awake, rest timer, reminders)
 
-### Notes:
-- Production build (Hermes) typically 3-5x faster than dev
-- Theme/language change now instant (<300ms)
-- Mount times meet targets on Overview/Logs tabs
+### UI/UX Improvements (2 commits):
+1. ✅ Redesigned Steps Activity Chart (complex bar → clean card-based bar chart)
+2. ✅ Font size unification (statLabel 12px, statValue 24px, statIconBadge 28px)
+3. ✅ Added empty state for Steps chart
+4. ✅ Added chart legend with color indicators
+5. ✅ Made bars touchable for day selection
+
+### Final Performance Results:
+| Screen | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Dashboard | 1646-2156ms | 92-224ms | **-86%** |
+| History Overview | 1177-1446ms | 64-203ms | **-86%** |
+| History Logs | — | 135-196ms | ✅ |
+| History Steps | 1177-1446ms | 1318-1651ms (first load) | ⚠️ compute-heavy |
+| Settings | 234-773ms | 287-634ms | 🔄 4/34 rows migrated |
+| Workout | 296ms | 210-250ms | ✅ |
+| Theme/Lang change | 1-5s | <300ms | **-94%** |
+
+---
+
+## 11. Next Steps & Backlog
+
+### High Priority (UI/UX Consistency):
+
+#### A. History Tab - Visual Consistency
+- [ ] **Overview Tab Stats Cards:** Sesuaikan font size dengan Steps tab (statValue 20→24px, statLabel 11→12px)
+- [ ] **Calendar Component:** Review border radius & spacing consistency dengan tiles lain
+- [ ] **Weekly Activity Bar Chart (Overview):** Konsistensi warna & style dengan Steps chart
+- [ ] **All-Time Stats Bento:** Review ukuran card & font hierarchy
+
+#### B. Dashboard - Typography & Spacing
+- [ ] **Weekly Target Hero:** Review font sizes & spacing
+- [ ] **Weekly Bento Grid:** Konsistensi card sizes & border radius
+- [ ] **Recent Activity Cards:** Unifikasi dengan History card style
+- [ ] **Week Strip:** Review day cell sizes & spacing
+
+#### C. Settings - Component Migration
+- [ ] **Migrate remaining 30 settings rows** ke `SettingRow` component untuk consistency
+- [ ] **Group sections:** Review spacing antar group
+- [ ] **Profile card:** Review visual hierarchy
+
+#### D. Workout Tab - Visual Polish
+- [ ] **Template Cards:** Review card style consistency dengan History
+- [ ] **Weekly Calendar Strip:** Konsistensi dengan Dashboard week strip
+- [ ] **Empty State:** Add illustration/icon untuk no templates
+
+### Medium Priority (Performance):
+
+#### E. Settings Optimization (Remaining)
+- [ ] Complete SettingRow migration (30/34 rows remaining)
+- [ ] Target: 634ms → <200ms per render
+
+#### F. Production Build Validation
+- [ ] Build production APK (Hermes)
+- [ ] Validate performance metrics (expected 3-5x faster)
+- [ ] Test on low-end device
+
+### Low Priority (Polish):
+
+#### G. Animations & Transitions
+- [ ] Add subtle animations untuk tab switch
+- [ ] Card press feedback improvements
+- [ ] Theme transition animation
+
+#### H. Empty States
+- [ ] All empty states review (illustrations, copy, CTAs)
+- [ ] Loading states review
+- [ ] Error states review
+
+---
+
+## 12. Design System Checklist (To be standardized)
+
+### Typography Scale:
+- [ ] Hero: 32px (extraBold)
+- [ ] Title: 24px (bold)
+- [ ] Heading: 16-18px (bold)
+- [ ] Subheading: 14-15px (semiBold)
+- [ ] Body: 13-14px (medium)
+- [ ] Caption: 11-12px (medium)
+- [ ] Label: 10-11px (semiBold)
+
+### Border Radius:
+- [ ] Cards: 14-16px
+- [ ] Buttons: 12px
+- [ ] Badges/Pills: 8px
+- [ ] Icons: 8px
+- [ ] Small elements: 6px
+
+### Spacing Scale:
+- [ ] Section margin: 16px
+- [ ] Card padding: 12-16px
+- [ ] Gap between cards: 8-12px
+- [ ] Internal element gap: 4-8px
+
+### Color Usage:
+- [ ] Primary action: Consistent usage
+- [ ] Success: Step goals, completed items
+- [ ] Warning: Active but not completed
+- [ ] Danger: Delete actions, critical states
+- [ ] Accent: Highlights, secondary actions
+
+---
+
+## 13. Files Modified Summary
+
+**Performance optimization:** 27 files, 1550 insertions, 1050 deletions
+**UI redesign:** 1 file (history.tsx), 134 insertions, 51 deletions
+
+**Key files:**
+- `app/(tabs)/history.tsx` - 2779 lines (optimized + redesigned)
+- `app/(tabs)/index.tsx` - 1225 lines (optimized)
+- `app/(tabs)/settings.tsx` - 1666 lines (partial optimization)
+- `app/(tabs)/workout.tsx` - 1048 lines (already optimized)
+- `store/useStepStore.ts` - Batched updates
+- `components/SettingRow.tsx` - New memoized component
+
+---
+
+_Dokumen ini adalah living document. Update seiring progress implementasi._
