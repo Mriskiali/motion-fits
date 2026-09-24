@@ -214,9 +214,12 @@ Ketika re-render, React harus evaluasi ulang **semua** `React.createElement` (ra
 | Settings re-render | 234-773ms | 287-634ms → optimizing | <120ms | 🔄 in progress |
 | Workout | 296ms | 210-250ms | <60ms | ✅ acceptable |
 
-### Latest Changes (2026-09-24 17:25):
+### Latest Changes (2026-09-24 17:42):
 - Created `SettingRow` memoized component
 - Integrated SettingRow for haptics & screen awake (2 rows migrated)
+- **Redesigned Steps Activity Chart:** Ganti dari complex bar chart → simplified line chart
+- **Font size unification:** statLabel 11→12px, statValue 20→24px, statIconBadge 26→28px
+- **UI consistency:** Semua tiles menggunakan border radius & spacing yang seragam
 - Remaining: 32 setting rows to migrate for full optimization
 
 ### Remaining Work:

@@ -852,101 +852,38 @@ export default function HistoryScreen() {
           ))}
         </View>
 
-        {/* Step Activity Bar Chart */}
-        <View style={styles.barChartContainer}>
-          <View style={styles.barChartHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.barChartTitle}>
-                {language === 'id' ? 'Grafik Aktivitas' : 'Activity Chart'}
-              </Text>
-              <Text style={styles.barChartSubtitle}>
-                {barChartWeeks.reduce((a, w) => a + w.totalSteps, 0).toLocaleString()}
-                {' '}{language === 'id' ? 'total langkah' : 'total steps'}
-              </Text>
-            </View>
+        {/* Simple Line Chart */}
+        <View style={styles.lineChartContainer}>
+          <View style={styles.lineChartHeader}>
+            <Text style={styles.lineChartTitle}>
+              {language === 'id' ? 'Tren Langkah' : 'Steps Trend'}
+            </Text>
+            <Text style={styles.lineChartSubtitle}>
+              {barChartWeeks.reduce((a, w) => a + w.totalSteps, 0).toLocaleString()}
+              {' '}{language === 'id' ? 'total langkah' : 'total steps'}
+            </Text>
           </View>
 
-          {/* Horizontal Bar Chart */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.barChartScrollWrap}
-          >
-            <View style={styles.barChartPlot}>
-              {barChartWeeks.map((week, idx) => {
-                const maxStepsInWeek = Math.max(...week.days.map((d) => d.steps || 1));
-                const chartHeight = 120;
-                const barHeight = Math.min(chartHeight - 8, (maxStepsInWeek / (dailyStepGoal || 10000)) * chartHeight * 1.2);
-
-                return (
-                  <View key={idx} style={styles.barWeekCol}>
-                    <View style={styles.barAxisY}>
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <Text
-                          key={`y-${i}`}
-                          style={styles.barYTick}
-                        >
-                          {Math.round(((4 - i) * dailyStepGoal * 12) / 1000)}k
-                        </Text>
-                      ))}
-                    </View>
-
-                    <View style={styles.barContainer}>
-                      <View
-                        style={[
-                          styles.barBackground,
-                          { height: chartHeight },
-                        ]}
-                      >
-                        {week.days.map((day, dayIdx) => (
-                          <View
-                            key={day.dateKey}
-                            style={[
-                              styles.barSegment,
-                              {
-                                height: barHeight / 7,
-                                backgroundColor: day.isGoalMet
-                                  ? colors.successBadge
-                                  : day.steps > 500
-                                  ? colors.accentLime
-                                  : colors.warning,
-                                opacity: 0.9 - (dayIdx * 0.05),
-                              },
-                            ]}
-                          />
-                        ))}
-                      </View>
-
-                      <View style={styles.barLabelRow}>
-                        <Text style={styles.barWeekLabel}>{week.weekLabel}</Text>
-                      </View>
-                    </View>
+          <View style={styles.lineChartPlot}>
+            {barChartWeeks.map((week, idx) => {
+              const height = Math.min(100, (week.totalSteps / (dailyStepGoal * 7)) * 100);
+              return (
+                <View key={idx} style={styles.lineChartBar}>
+                  <View style={styles.lineChartBarBg}>
+                    <View 
+                      style={[
+                        styles.lineChartBarFill, 
+                        { 
+                          height: `${height}%`,
+                          backgroundColor: week.totalSteps >= (dailyStepGoal * 7) ? colors.successBadge : colors.accentSecondary
+                        }
+                      ]} 
+                    />
                   </View>
-                );
-              })}
-            </View>
-          </ScrollView>
-
-          {/* Bar Legend */}
-          <View style={styles.barLegendRow}>
-            <View style={styles.barLegendItem}>
-              <View style={[styles.barLegendBox, { backgroundColor: colors.surfaceHighlight }]} />
-              <Text style={styles.barLegendText}>
-                {language === 'id' ? '0 Langkah' : '0 Steps'}
-              </Text>
-            </View>
-            <View style={styles.barLegendItem}>
-              <View style={[styles.barLegendBox, { backgroundColor: colors.warning }]} />
-              <Text style={styles.barLegendText}>
-                {language === 'id' ? 'Aktif' : 'Active'}
-              </Text>
-            </View>
-            <View style={styles.barLegendItem}>
-              <View style={[styles.barLegendBox, { backgroundColor: colors.accentSecondary }]} />
-              <Text style={styles.barLegendText}>
-                {language === 'id' ? 'Tercapai' : 'Goal'}
-              </Text>
-            </View>
+                  <Text style={styles.lineChartLabel}>{week.weekLabel}</Text>
+                </View>
+              );
+            })}
           </View>
         </View>
 
@@ -2060,26 +1997,26 @@ const getStyles = (c: ThemeColors) =>
     },
     statLabel: {
       fontFamily: AppFonts.bold,
-      fontSize: 11,
+      fontSize: 12,
       color: c.textSecondary,
       fontWeight: '700',
       letterSpacing: 0.2,
       flex: 1,
     },
     statIconBadge: {
-      width: 26,
-      height: 26,
-      borderRadius: 7,
+      width: 28,
+      height: 28,
+      borderRadius: 8,
       alignItems: 'center',
       justifyContent: 'center',
     },
     statValue: {
       fontFamily: AppFonts.extraBold,
-      fontSize: 20,
+      fontSize: 24,
       fontWeight: '800',
       color: c.textPrimary,
       marginBottom: 2,
-      letterSpacing: -0.4,
+      letterSpacing: -0.5,
       fontVariant: ['tabular-nums'],
     },
     statUnit: {
@@ -2569,100 +2506,55 @@ const getStyles = (c: ThemeColors) =>
       color: c.dateTextSelected,
     },
 
-    // Step Activity Bar Chart
-    barChartContainer: {
-      marginTop: 8,
-      marginBottom: 8,
+    // Step Activity Line Chart (Simplified)
+    lineChartContainer: {
+      marginTop: 12,
+      marginBottom: 16,
     },
-    barChartHeader: {
-      marginBottom: 8,
+    lineChartHeader: {
+      marginBottom: 12,
     },
-    barChartTitle: {
-      fontFamily: AppFonts.extraBold,
-      fontSize: 16,
-      fontWeight: '800',
+    lineChartTitle: {
+      fontFamily: AppFonts.bold,
+      fontSize: 15,
+      fontWeight: '700',
       color: c.textPrimary,
-      letterSpacing: -0.3,
     },
-    barChartSubtitle: {
+    lineChartSubtitle: {
       fontFamily: AppFonts.medium,
       fontSize: 12,
       color: c.textSecondary,
       marginTop: 2,
     },
-    barChartScrollWrap: {
-      paddingVertical: 4,
+    lineChartPlot: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 6,
+      height: 100,
       paddingHorizontal: 4,
     },
-    barChartPlot: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      gap: 12,
-    },
-    barWeekCol: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      gap: 2,
-    },
-    barAxisY: {
-      height: 120,
-      justifyContent: 'space-between',
-      paddingRight: 6,
-    },
-    barYTick: {
-      fontFamily: AppFonts.medium,
-      fontSize: 9,
-      color: c.textMuted,
-      textAlign: 'right',
-    },
-    barContainer: {
+    lineChartBar: {
+      flex: 1,
       alignItems: 'center',
+      gap: 6,
     },
-    barBackground: {
-      width: 44,
+    lineChartBarBg: {
+      width: '100%',
+      height: 80,
+      backgroundColor: c.surfaceHighlight,
+      borderRadius: 6,
+      overflow: 'hidden',
       justifyContent: 'flex-end',
-      paddingLeft: 2,
-      borderLeftWidth: 1,
-      borderLeftColor: c.borderSubtle,
-      paddingBottom: 4,
     },
-    barSegment: {
-      width: 8,
-      borderRadius: 1,
-      marginBottom: 1,
-      alignSelf: 'center',
+    lineChartBarFill: {
+      width: '100%',
+      borderTopLeftRadius: 6,
+      borderTopRightRadius: 6,
     },
-    barLabelRow: {
-      marginTop: 4,
-      alignItems: 'center',
-    },
-    barWeekLabel: {
+    lineChartLabel: {
       fontFamily: AppFonts.semiBold,
       fontSize: 10,
       color: c.textSecondary,
-    },
-    barLegendRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      gap: 10,
-      marginTop: 8,
-      marginBottom: 4,
-    },
-    barLegendItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-    },
-    barLegendBox: {
-      width: 10,
-      height: 10,
-      borderRadius: 2,
-    },
-    barLegendText: {
-      fontFamily: AppFonts.medium,
-      fontSize: 11,
-      color: c.textMuted,
     },
 
     // Step Inspection Card
