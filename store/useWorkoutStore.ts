@@ -271,22 +271,50 @@ export const useWorkoutStore = create<WorkoutState>()((set) => ({
 
 let activeWorkoutUserId: string | null = null;
 
-// Reactive subscriber: automatically saves changes into the active user's partition
-useWorkoutStore.subscribe((state) => {
-  if (activeWorkoutUserId) {
-    const partition = {
-      templates: state.templates,
-      sessions: state.sessions,
-      scheduledWorkouts: state.scheduledWorkouts,
-      deletedTemplateIds: state.deletedTemplateIds || [],
-      activeSession: state.activeSession,
-    };
-    AsyncStorage.setItem(`workout_partition_${activeWorkoutUserId}`, JSON.stringify(partition)).catch(() => {});
-  }
+// Reactive subscriber: automatically saves changes into the active user's partition.
+// Debounced so bursty updates (active workout ticking, reorders) don't serialize and
+// write the whole partition to AsyncStorage on every single mutation.
+let persistWorkoutTimeout: ReturnType<typeof setTimeout> | null = null;
+let isExplicitWorkoutPersist = false;
+
+const persistActiveWorkoutPartition = () => {
+  if (!activeWorkoutUserId) return;
+  const state = useWorkoutStore.getState();
+  const partition = {
+    templates: state.templates,
+    sessions: state.sessions,
+    scheduledWorkouts: state.scheduledWorkouts,
+    deletedTemplateIds: state.deletedTemplateIds || [],
+    activeSession: state.activeSession,
+  };
+  AsyncStorage.setItem(`workout_partition_${activeWorkoutUserId}`, JSON.stringify(partition)).catch(() => {});
+};
+
+useWorkoutStore.subscribe(() => {
+  if (!activeWorkoutUserId || isExplicitWorkoutPersist) return;
+  if (persistWorkoutTimeout) clearTimeout(persistWorkoutTimeout);
+  persistWorkoutTimeout = setTimeout(() => {
+    persistWorkoutTimeout = null;
+    persistActiveWorkoutPartition();
+  }, 400);
 });
+
+export const flushWorkoutPartition = (): void => {
+  if (persistWorkoutTimeout) {
+    clearTimeout(persistWorkoutTimeout);
+    persistWorkoutTimeout = null;
+  }
+  persistActiveWorkoutPartition();
+};
 
 export const loadWorkoutPartition = async (userId: string): Promise<void> => {
   if (activeWorkoutUserId === userId) return;
+
+  if (persistWorkoutTimeout) {
+    clearTimeout(persistWorkoutTimeout);
+    persistWorkoutTimeout = null;
+  }
+  isExplicitWorkoutPersist = true;
 
   // Persist previous user's partition if switching accounts
   if (activeWorkoutUserId && activeWorkoutUserId !== userId) {
@@ -335,6 +363,7 @@ export const loadWorkoutPartition = async (userId: string): Promise<void> => {
         deletedTemplateIds: parsed.deletedTemplateIds || [],
         activeSession: restoredActiveSession,
       });
+      isExplicitWorkoutPersist = false;
       return;
     }
 
@@ -366,6 +395,7 @@ export const loadWorkoutPartition = async (userId: string): Promise<void> => {
             JSON.stringify({ templates, sessions, scheduledWorkouts, deletedTemplateIds, activeSession })
           ).catch(() => {});
           await AsyncStorage.removeItem('workout-storage').catch(() => {});
+          isExplicitWorkoutPersist = false;
           return;
         }
       }
@@ -383,9 +413,14 @@ export const loadWorkoutPartition = async (userId: string): Promise<void> => {
     deletedTemplateIds: [],
     activeSession: null,
   });
+  isExplicitWorkoutPersist = false;
 };
 
 export const unloadWorkoutPartition = async (discardActiveSession: boolean = false): Promise<void> => {
+  if (persistWorkoutTimeout) {
+    clearTimeout(persistWorkoutTimeout);
+    persistWorkoutTimeout = null;
+  }
   if (activeWorkoutUserId) {
     const state = useWorkoutStore.getState();
     await AsyncStorage.setItem(

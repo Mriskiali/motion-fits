@@ -12,9 +12,9 @@ import Animated, {
 import { useRouter, usePathname } from 'expo-router';
 import { Dumbbell, Clock, ChevronRight, Timer, Plus, FastForward } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
-import * as Haptics from 'expo-haptics';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useUserStore } from '@/store/useUserStore';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
@@ -200,9 +200,7 @@ function FloatingWorkoutBarContent({
   };
 
   const handleResume = () => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
+    triggerButtonVibration(hapticsEnabled);
     router.push('/workout/active');
   };
 
@@ -240,7 +238,7 @@ function FloatingWorkoutBarContent({
             ]}
           />
           {hasActiveRest ? (
-            <Timer size={20} color="#F59E0B" strokeWidth={2.4} />
+            <Timer size={20} color={colors.primaryAction} strokeWidth={2.4} />
           ) : (
             <Dumbbell size={20} color={colors.primaryAction} strokeWidth={2.2} />
           )}
@@ -302,7 +300,7 @@ function FloatingWorkoutBarContent({
               style={styles.quickPlusBtn}
               onPress={(e) => {
                 e.stopPropagation();
-                if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                triggerButtonVibration(hapticsEnabled);
                 adjustRestTimer(15);
               }}
             >
@@ -315,18 +313,18 @@ function FloatingWorkoutBarContent({
               style={styles.quickSkipBtn}
               onPress={(e) => {
                 e.stopPropagation();
-                if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                triggerButtonVibration(hapticsEnabled);
                 completeRestTimer();
               }}
             >
               <Text style={styles.quickSkipText}>{t('skip')}</Text>
-              <FastForward size={12} color="#FFFFFF" strokeWidth={2.4} />
+              <FastForward size={12} color={colors.textPrimaryOnVolt} strokeWidth={2.4} />
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.resumeButton}>
             <Text style={styles.resumeButtonText}>{t('resume')}</Text>
-            <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.5} />
+            <ChevronRight size={14} color={colors.textPrimaryOnVolt} strokeWidth={2.5} />
           </View>
         )}
       </Pressable>
@@ -380,7 +378,7 @@ const getStyles = (colors: any) =>
       marginRight: 12,
     },
     iconBoxResting: {
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: colors.actionIconBg,
     },
     pulseDot: {
       position: 'absolute',
@@ -470,7 +468,7 @@ const getStyles = (colors: any) =>
     },
     resumeButtonText: {
       fontFamily: AppFonts.bold,
-      color: '#000000',
+      color: colors.textPrimaryOnVolt,
       fontSize: 13,
       fontWeight: '800',
     },
@@ -501,7 +499,7 @@ const getStyles = (colors: any) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 3,
-      backgroundColor: '#F59E0B',
+      backgroundColor: colors.primaryAction,
       paddingVertical: 6,
       paddingHorizontal: 10,
       borderRadius: 10,
@@ -510,6 +508,6 @@ const getStyles = (colors: any) =>
       fontFamily: AppFonts.bold,
       fontSize: 11,
       fontWeight: '800',
-      color: '#000000',
+      color: colors.textPrimaryOnVolt,
     },
   });

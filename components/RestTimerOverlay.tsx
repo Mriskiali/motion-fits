@@ -13,7 +13,6 @@ import {
   AppState,
   AppStateStatus,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import {
@@ -33,6 +32,7 @@ import {
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { AppFonts } from '@/constants/theme';
 import { useUserStore } from '@/store/useUserStore';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import {
   scheduleRestTimerNotification,
@@ -284,7 +284,7 @@ export default function RestTimerOverlay({
   const startCustomTimer = (seconds: number) => {
     if (seconds <= 0) return;
     if (hapticsEnabledRef.current) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      triggerButtonVibration(hapticsEnabledRef.current);
       Vibration.vibrate(70);
     }
     const store = useWorkoutStore.getState();
@@ -306,7 +306,7 @@ export default function RestTimerOverlay({
 
   const adjustTime = (amount: number) => {
     if (hapticsEnabledRef.current) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      triggerButtonVibration(hapticsEnabledRef.current);
       Vibration.vibrate(70);
     }
     const currentRemaining = targetEndTimeRef.current
@@ -329,7 +329,7 @@ export default function RestTimerOverlay({
 
   const handleApplyPresetInModal = (seconds: number) => {
     if (hapticsEnabledRef.current) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      triggerButtonVibration(hapticsEnabledRef.current);
       Vibration.vibrate(50);
     }
     const store = useWorkoutStore.getState();
@@ -350,7 +350,7 @@ export default function RestTimerOverlay({
   const handleManualApplyInModal = () => {
     const parsed = parseInt(manualInput, 10);
     if (!isNaN(parsed) && parsed > 0) {
-      if (hapticsEnabledRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      triggerButtonVibration(hapticsEnabledRef.current);
       const store = useWorkoutStore.getState();
       const currentEx = exerciseId || store.activeSession?.activeRestTimer?.exerciseId || 'custom';
       const currentSet = setIndex ?? store.activeSession?.activeRestTimer?.setIndex ?? 0;
@@ -372,7 +372,7 @@ export default function RestTimerOverlay({
 
   const handleSkip = async () => {
     completedRef.current = true;
-    if (hapticsEnabledRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerButtonVibration(hapticsEnabledRef.current);
     if (notificationIdRef.current) await cancelNotification(notificationIdRef.current);
     setIsRunning(false);
     setIsMinimized(false);
@@ -385,7 +385,7 @@ export default function RestTimerOverlay({
 
   const handleCancelSet = async () => {
     completedRef.current = true;
-    if (hapticsEnabledRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerButtonVibration(hapticsEnabledRef.current);
     if (notificationIdRef.current) await cancelNotification(notificationIdRef.current);
     setIsRunning(false);
     setIsMinimized(false);
@@ -481,7 +481,7 @@ export default function RestTimerOverlay({
                           isSelected && styles.setupPresetPillActive,
                         ]}
                         onPress={() => {
-                          if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          triggerButtonVibration(hapticsEnabled);
                           setSelectedDuration(preset);
                           setManualInput('');
                         }}
@@ -536,7 +536,7 @@ export default function RestTimerOverlay({
                       startCustomTimer(activeChosenSeconds);
                     }}
                   >
-                    <Play size={15} color="#000000" fill="#000000" />
+                    <Play size={15} color={colors.textPrimaryOnVolt} fill={colors.textPrimaryOnVolt} />
                     <Text style={styles.setupStartBtnText}>{t('start_rest') || 'Mulai Istirahat'}</Text>
                   </TouchableOpacity>
                 </View>
@@ -550,7 +550,7 @@ export default function RestTimerOverlay({
                   activeOpacity={0.75}
                   style={styles.minimizeButton}
                   onPress={() => {
-                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    triggerButtonVibration(hapticsEnabled);
                     setIsMinimized(true);
                   }}
                 >
@@ -606,7 +606,7 @@ export default function RestTimerOverlay({
                     <TouchableOpacity
                       activeOpacity={0.7}
                       onPress={() => {
-                        if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        triggerButtonVibration(hapticsEnabled);
                         setIsEditing(true);
                       }}
                       style={styles.timerTouchTarget}
@@ -659,7 +659,7 @@ export default function RestTimerOverlay({
                   activeOpacity={0.75}
                   style={[styles.chipButton, styles.customChipButton]}
                   onPress={() => {
-                    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    triggerButtonVibration(hapticsEnabled);
                     setIsEditing(true);
                   }}
                 >
@@ -675,7 +675,7 @@ export default function RestTimerOverlay({
                   style={styles.skipButton}
                   onPress={handleSkip}
                 >
-                  <FastForward size={16} color="#000000" strokeWidth={2.6} />
+                  <FastForward size={16} color={colors.textPrimaryOnVolt} strokeWidth={2.6} />
                   <Text style={styles.skipButtonText}>{t('skip')}</Text>
                 </TouchableOpacity>
 
@@ -751,7 +751,7 @@ export default function RestTimerOverlay({
                             isCurrent && styles.setupPresetPillActive,
                           ]}
                           onPress={() => {
-                            if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            triggerButtonVibration(hapticsEnabled);
                             setManualInput(String(preset));
                           }}
                         >
@@ -783,7 +783,7 @@ export default function RestTimerOverlay({
                       onPress={handleManualApplyInModal}
                       activeOpacity={0.85}
                     >
-                      <Check size={16} color="#000000" strokeWidth={2.5} />
+                      <Check size={16} color={colors.textPrimaryOnVolt} strokeWidth={2.5} />
                       <Text style={styles.setupStartBtnText}>{t('save') || 'Terapkan'}</Text>
                     </TouchableOpacity>
                   </View>
@@ -801,7 +801,7 @@ export default function RestTimerOverlay({
           activeOpacity={0.92}
           style={styles.floatingMiniBar}
           onPress={() => {
-            if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            triggerButtonVibration(hapticsEnabled);
             setIsMinimized(false);
           }}
         >
@@ -832,7 +832,7 @@ export default function RestTimerOverlay({
               </Svg>
               <Timer
                 size={15}
-                color={isWarning ? '#EF4444' : colors.primaryAction}
+                color={isWarning ? colors.danger : colors.primaryAction}
                 style={styles.miniRingIcon}
                 strokeWidth={2}
               />
@@ -868,7 +868,7 @@ export default function RestTimerOverlay({
               }}
             >
               <Text style={styles.miniBarSkipText}>{t('skip')}</Text>
-              <FastForward size={13} color="#000000" strokeWidth={2.4} />
+              <FastForward size={13} color={colors.textPrimaryOnVolt} strokeWidth={2.4} />
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -991,7 +991,7 @@ const getStyles = (c: any) =>
       borderColor: c.borderSubtle,
     },
     customChipButton: {
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
       borderColor: 'rgba(245, 158, 11, 0.3)',
     },
     chipText: {
@@ -1008,7 +1008,7 @@ const getStyles = (c: any) =>
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
-      backgroundColor: '#F59E0B',
+      backgroundColor: c.primaryAction,
       paddingVertical: 14,
       borderRadius: 14,
       width: '100%',
@@ -1027,7 +1027,7 @@ const getStyles = (c: any) =>
     skipButtonText: {
       fontSize: 15,
       fontWeight: '800',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
       letterSpacing: 0.3,
     },
     undoTextButton: {
@@ -1175,7 +1175,7 @@ const getStyles = (c: any) =>
       width: 38,
       height: 38,
       borderRadius: 12,
-      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+      backgroundColor: c.actionIconBg,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1261,8 +1261,8 @@ const getStyles = (c: any) =>
       borderColor: c.borderSubtle,
     },
     setupPresetPillActive: {
-      backgroundColor: '#F59E0B',
-      borderColor: '#F59E0B',
+      backgroundColor: c.primaryAction,
+      borderColor: c.primaryAction,
     },
     setupPresetText: {
       fontSize: 13,
@@ -1272,7 +1272,7 @@ const getStyles = (c: any) =>
       fontVariant: ['tabular-nums'],
     },
     setupPresetTextActive: {
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
       fontWeight: '800',
     },
     manualInputWrapper: {
@@ -1315,7 +1315,7 @@ const getStyles = (c: any) =>
     setupStartBtn: {
       flex: 1.6,
       flexDirection: 'row',
-      backgroundColor: '#F59E0B',
+      backgroundColor: c.primaryAction,
       paddingVertical: 13,
       borderRadius: 14,
       alignItems: 'center',
@@ -1326,7 +1326,7 @@ const getStyles = (c: any) =>
       fontSize: 14,
       fontFamily: AppFonts.bold,
       fontWeight: '800',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
     },
     topControlRow: {
       flexDirection: 'row',
@@ -1450,7 +1450,7 @@ const getStyles = (c: any) =>
     miniBarSkipText: {
       fontSize: 12,
       fontWeight: '800',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
     },
     tourGuideCard: {
       backgroundColor: c.cardSurface,
@@ -1505,14 +1505,14 @@ const getStyles = (c: any) =>
       marginBottom: 10,
     },
     tourFinishBtn: {
-      backgroundColor: '#F59E0B',
+      backgroundColor: c.primaryAction,
       borderRadius: 12,
       paddingVertical: 10,
       alignItems: 'center',
       justifyContent: 'center',
     },
     tourFinishBtnText: {
-      color: '#FFFFFF',
+      color: c.textPrimaryOnVolt,
       fontSize: 13,
       fontWeight: '800',
     },

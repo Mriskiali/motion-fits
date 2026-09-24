@@ -50,8 +50,8 @@ export const useUserStore = create<UserState>()((set, get) => ({
       weeklyGoal: 3,
       theme: 'system',
       language: 'en',
-      defaultRestTimer: 90, // 1m30s
-      autoStartTimer: true,
+      defaultRestTimer: 0, // Default: no auto-rest (manual input only when auto-start disabled)
+      autoStartTimer: false,
       hapticsEnabled: true,
       keepScreenAwake: true,
       hasCompletedOnboarding: false,
@@ -166,16 +166,46 @@ const serializeUserPartition = (state: UserState) => ({
   customAudioStartOffset: state.customAudioStartOffset,
 });
 
-// Reactive subscriber: automatically saves profile into the active user's partition
-useUserStore.subscribe((state) => {
-  if (activeProfileUserId) {
-    const partition = serializeUserPartition(state);
-    AsyncStorage.setItem(`user_partition_${activeProfileUserId}`, JSON.stringify(partition)).catch(() => {});
+// Reactive subscriber: automatically saves profile into the active user's partition.
+// Coalesced with a short debounce so rapid changes (e.g. dragging the audio trim
+// sliders or tapping +/-) don't trigger a full-partition AsyncStorage write per tick.
+let persistUserTimeout: ReturnType<typeof setTimeout> | null = null;
+let isExplicitPersist = false;
+
+const persistActiveUserPartition = () => {
+  if (!activeProfileUserId) return;
+  const partition = serializeUserPartition(useUserStore.getState());
+  AsyncStorage.setItem(`user_partition_${activeProfileUserId}`, JSON.stringify(partition)).catch(() => {});
+};
+
+export const flushUserPartition = (): void => {
+  if (persistUserTimeout) {
+    clearTimeout(persistUserTimeout);
+    persistUserTimeout = null;
   }
+  persistActiveUserPartition();
+};
+
+useUserStore.subscribe((state) => {
+  if (!activeProfileUserId) return;
+  // Skip auto-persist while an explicit write (load/unload) is flushing the store.
+  if (isExplicitPersist) return;
+  if (persistUserTimeout) clearTimeout(persistUserTimeout);
+  persistUserTimeout = setTimeout(() => {
+    persistUserTimeout = null;
+    persistActiveUserPartition();
+  }, 400);
 });
 
 export const loadUserPartition = async (userId: string): Promise<void> => {
   if (activeProfileUserId === userId) return;
+
+  // Cancel any pending debounced write so it can't clobber the switch.
+  if (persistUserTimeout) {
+    clearTimeout(persistUserTimeout);
+    persistUserTimeout = null;
+  }
+  isExplicitPersist = true;
 
   if (activeProfileUserId && activeProfileUserId !== userId) {
     const state = useUserStore.getState();
@@ -194,8 +224,8 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
     lastWorkoutDate: null,
     theme: 'system',
     language: 'id',
-    defaultRestTimer: 90,
-    autoStartTimer: true,
+    defaultRestTimer: 0,
+    autoStartTimer: false,
     hapticsEnabled: true,
     keepScreenAwake: true,
     hasCompletedOnboarding: false,
@@ -220,8 +250,8 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
         lastWorkoutDate: parsed.lastWorkoutDate || null,
         theme: parsed.theme || 'system',
         language: parsed.language || 'id',
-        defaultRestTimer: Number(parsed.defaultRestTimer) || 90,
-        autoStartTimer: parsed.autoStartTimer !== undefined ? Boolean(parsed.autoStartTimer) : true,
+        defaultRestTimer: Number(parsed.defaultRestTimer) || 0,
+        autoStartTimer: parsed.autoStartTimer !== undefined ? Boolean(parsed.autoStartTimer) : false,
         hapticsEnabled: parsed.hapticsEnabled !== undefined ? Boolean(parsed.hapticsEnabled) : true,
         keepScreenAwake: parsed.keepScreenAwake !== undefined ? Boolean(parsed.keepScreenAwake) : true,
         hasCompletedOnboarding: parsed.hasCompletedOnboarding !== undefined ? Boolean(parsed.hasCompletedOnboarding) : false,
@@ -233,6 +263,7 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
         customAudioDuration: Number(parsed.customAudioDuration) || 5,
         customAudioStartOffset: Number(parsed.customAudioStartOffset) || 0,
       });
+      isExplicitPersist = false;
       return;
     }
 
@@ -252,8 +283,8 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
             lastWorkoutDate: legacyState.lastWorkoutDate || null,
             theme: legacyState.theme || 'system',
             language: legacyState.language || 'id',
-            defaultRestTimer: Number(legacyState.defaultRestTimer) || 90,
-            autoStartTimer: legacyState.autoStartTimer !== undefined ? Boolean(legacyState.autoStartTimer) : true,
+            defaultRestTimer: Number(legacyState.defaultRestTimer) || 0,
+            autoStartTimer: legacyState.autoStartTimer !== undefined ? Boolean(legacyState.autoStartTimer) : false,
             hapticsEnabled: legacyState.hapticsEnabled !== undefined ? Boolean(legacyState.hapticsEnabled) : true,
             keepScreenAwake: legacyState.keepScreenAwake !== undefined ? Boolean(legacyState.keepScreenAwake) : true,
             hasCompletedOnboarding: legacyState.hasCompletedOnboarding !== undefined ? Boolean(legacyState.hasCompletedOnboarding) : false,
@@ -268,6 +299,7 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
 
           await AsyncStorage.setItem(`user_partition_${userId}`, JSON.stringify(legacyState)).catch(() => {});
           await AsyncStorage.removeItem('user-storage').catch(() => {});
+          isExplicitPersist = false;
           return;
         }
       }
@@ -285,8 +317,8 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
     lastWorkoutDate: null,
     theme: 'system',
     language: 'id',
-    defaultRestTimer: 90,
-    autoStartTimer: true,
+    defaultRestTimer: 0,
+    autoStartTimer: false,
     hapticsEnabled: true,
     keepScreenAwake: true,
     hasCompletedOnboarding: false,
@@ -298,9 +330,15 @@ export const loadUserPartition = async (userId: string): Promise<void> => {
     customAudioDuration: 5,
     customAudioStartOffset: 0,
   });
+  isExplicitPersist = false;
 };
 
 export const unloadUserPartition = async (): Promise<void> => {
+  // Cancel any pending debounced write first so it doesn't run after state reset.
+  if (persistUserTimeout) {
+    clearTimeout(persistUserTimeout);
+    persistUserTimeout = null;
+  }
   if (activeProfileUserId) {
     const state = useUserStore.getState();
     await AsyncStorage.setItem(
@@ -317,8 +355,8 @@ export const unloadUserPartition = async (): Promise<void> => {
     lastWorkoutDate: null,
     theme: 'system',
     language: 'id',
-    defaultRestTimer: 90,
-    autoStartTimer: true,
+    defaultRestTimer: 0,
+    autoStartTimer: false,
     hapticsEnabled: true,
     keepScreenAwake: true,
     hasCompletedOnboarding: false,

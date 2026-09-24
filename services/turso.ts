@@ -55,6 +55,8 @@ export const isTursoConfigured = (): boolean => {
 
   // If token is expired, treat as not configured so it gracefully falls back to local storage
   if (isTokenExpired(authToken)) {
+    // Drop any cached client so a refreshed token gets a fresh instance next time
+    clientInstance = null;
     return false;
   }
 
@@ -66,6 +68,10 @@ export const isTursoConfigured = (): boolean => {
  */
 export const getTursoClient = (): Client | null => {
   if (!isTursoConfigured()) {
+    // Token/url invalid/expired: reset singleton so it can be re-created later
+    if (clientInstance) {
+      clientInstance = null;
+    }
     return null;
   }
   if (!clientInstance) {
@@ -75,6 +81,64 @@ export const getTursoClient = (): Client | null => {
     });
   }
   return clientInstance;
+};
+
+export const resetTursoClient = (): void => {
+  clientInstance = null;
+};
+
+/**
+ * In-place schema migrations. Key = target version.
+ * Each migration runs once (idempotent where possible).
+ */
+const MIGRATIONS: Record<number, string[]> = {
+  1: [
+    `CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY,
+      applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );`,
+  ],
+};
+
+const CURRENT_SCHEMA_VERSION = 1;
+
+const applyMigrations = async (client: Client): Promise<void> => {
+  // Ensure migration table exists
+  try {
+    await client.batch(MIGRATIONS[1] || [], 'write');
+  } catch {
+    // table may already exist or client may not be writable yet; ignore
+  }
+
+  // Read current applied version
+  let currentDbVersion = 0;
+  try {
+    const res = await client.execute({
+      sql: `SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations;`,
+      args: [],
+    });
+    if (res.rows?.length) {
+      currentDbVersion = Number(res.rows[0].v) || 0;
+    }
+  } catch {
+    currentDbVersion = 0;
+  }
+
+  // Apply pending migrations in order
+  for (let v = currentDbVersion + 1; v <= CURRENT_SCHEMA_VERSION; v++) {
+    const stmts = MIGRATIONS[v];
+    if (!stmts || stmts.length === 0) continue;
+    try {
+      await client.batch(stmts, 'write');
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO schema_migrations (version) VALUES (?);`,
+        args: [v],
+      });
+      console.log(`[Turso] Applied schema migration v${v}.`);
+    } catch (err: any) {
+      console.error(`[Turso] Migration v${v} failed:`, err?.message || err);
+    }
+  }
 };
 
 /**
@@ -138,7 +202,11 @@ export const initTursoTables = async (): Promise<boolean> => {
       ],
       'write'
     );
-    console.log('[Turso] Database tables initialized successfully.');
+
+    // Run versioned migrations after base schema is in place
+    await applyMigrations(client);
+
+    console.log('[Turso] Database tables initialized & migrations checked.');
     return true;
   } catch (error: any) {
     if (error?.message?.includes('401')) {

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import * as Haptics from 'expo-haptics';
 import {
   Share2,
   X,
@@ -26,8 +25,9 @@ import {
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale/id';
 import { useTranslation } from '@/hooks/useTranslation';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useUserStore } from '@/store/useUserStore';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
 import { AppFonts } from '@/constants/theme';
 
 export interface ExerciseSummarySetItem {
@@ -76,6 +76,8 @@ export default function WorkoutSummaryModal({
   const cardRef = useRef<View>(null);
   const [isSharing, setIsSharing] = useState(false);
 
+  const styles = useMemo(() => getStyles(colors), [colors]);
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -104,7 +106,7 @@ export default function WorkoutSummaryModal({
 
   const handleShare = async () => {
     if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      triggerButtonVibration(hapticsEnabled);
       Vibration.vibrate(40);
     }
     if (!cardRef.current) return;
@@ -131,7 +133,7 @@ export default function WorkoutSummaryModal({
 
   const handleClose = () => {
     if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      triggerButtonVibration(hapticsEnabled);
       Vibration.vibrate(30);
     }
     onClose();
@@ -149,7 +151,7 @@ export default function WorkoutSummaryModal({
           {/* Header */}
           <View style={styles.topHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Trophy size={20} color="#F59E0B" />
+              <Trophy size={20} color={colors.primaryAction} />
               <Text style={styles.modalHeaderTitle}>{t('workout_summary') || 'Ringkasan Latihan'}</Text>
             </View>
             <TouchableOpacity
@@ -157,7 +159,7 @@ export default function WorkoutSummaryModal({
               onPress={handleClose}
               activeOpacity={0.7}
             >
-              <X size={18} color="#94A3B8" />
+              <X size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -174,13 +176,13 @@ export default function WorkoutSummaryModal({
               {/* Top Branding Row */}
               <View style={styles.brandRow}>
                 <View style={styles.brandBadge}>
-                  <Flame size={14} color="#F59E0B" />
+                  <Flame size={14} color={colors.primaryAction} />
                   <Text style={styles.brandText}>MOTIONFIT</Text>
                 </View>
                 <View style={styles.streakBadge}>
                   {streak > 0 ? (
                     <>
-                      <Trophy size={11} color="#F59E0B" />
+                      <Trophy size={11} color={colors.primaryAction} />
                       <Text style={styles.streakBadgeText}>{streak} {t('day_streak_upper')}</Text>
                     </>
                   ) : (
@@ -206,8 +208,8 @@ export default function WorkoutSummaryModal({
               <View style={styles.statsGrid}>
                 {/* Duration */}
                 <View style={styles.statBox}>
-                  <View style={[styles.statIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                    <Clock size={16} color="#F59E0B" />
+                  <View style={[styles.statIconBox, { backgroundColor: colors.actionIconBg }]}>
+                    <Clock size={16} color={colors.primaryAction} />
                   </View>
                   <Text style={styles.statValue}>{formatDuration(duration)}</Text>
                   <Text style={styles.statLabel}>{t('duration') || 'Durasi'}</Text>
@@ -215,8 +217,8 @@ export default function WorkoutSummaryModal({
 
                 {/* Total Sets */}
                 <View style={styles.statBox}>
-                  <View style={[styles.statIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-                    <CheckCircle2 size={16} color="#10B981" />
+                  <View style={[styles.statIconBox, { backgroundColor: colors.actionIconBg }]}>
+                    <CheckCircle2 size={16} color={colors.successBadge} />
                   </View>
                   <Text style={styles.statValue}>{totalSets} Set</Text>
                   <Text style={styles.statLabel}>{t('total_sets') || 'Total Set'}</Text>
@@ -224,8 +226,8 @@ export default function WorkoutSummaryModal({
 
                 {/* Total Reps */}
                 <View style={styles.statBox}>
-                  <View style={[styles.statIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                    <Flame size={16} color="#F59E0B" />
+                  <View style={[styles.statIconBox, { backgroundColor: colors.actionIconBg }]}>
+                    <Flame size={16} color={colors.primaryAction} />
                   </View>
                   <Text style={styles.statValue}>
                     {typeof totalReps === 'number' && totalReps > 0
@@ -237,8 +239,8 @@ export default function WorkoutSummaryModal({
 
                 {/* Peak Weight */}
                 <View style={styles.statBox}>
-                  <View style={[styles.statIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                    <Trophy size={16} color="#F59E0B" />
+                  <View style={[styles.statIconBox, { backgroundColor: colors.actionIconBg }]}>
+                    <Trophy size={16} color={colors.primaryAction} />
                   </View>
                   <Text style={styles.statValue}>
                     {peakWeight > 0 ? `${peakWeight} kg` : 'Bodyweight'}
@@ -253,7 +255,7 @@ export default function WorkoutSummaryModal({
               <View style={styles.exerciseSection}>
                 <View style={styles.exerciseHeaderRow}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <TrendingUp size={14} color="#10B981" />
+                    <TrendingUp size={14} color={colors.accentLime} />
                     <Text style={styles.exerciseHeaderLabel}>
                       {t('exercises_completed')}
                     </Text>
@@ -292,9 +294,9 @@ export default function WorkoutSummaryModal({
               {/* Card Footer Watermark */}
               <View style={styles.cardFooter}>
                 <View style={styles.watermarkRow}>
-                  <Dumbbell size={13} color="#F59E0B" />
+                  <Dumbbell size={13} color={colors.primaryAction} />
                   <Text style={styles.footerTagline}>
-                    Tracked with <Text style={{ color: '#F59E0B', fontWeight: '800' }}>MotionFit</Text> • Progressive Overload
+                    Tracked with <Text style={{ color: colors.primaryAction, fontWeight: '800' }}>MotionFit</Text> • Progressive Overload
                   </Text>
                 </View>
               </View>
@@ -310,10 +312,10 @@ export default function WorkoutSummaryModal({
               activeOpacity={0.8}
             >
               {isSharing ? (
-                <ActivityIndicator color="#000000" size="small" />
+                <ActivityIndicator color={colors.textPrimaryOnVolt} size="small" />
               ) : (
                 <>
-                  <Share2 size={18} color="#000000" />
+                  <Share2 size={18} color={colors.textPrimaryOnVolt} />
                   <Text style={styles.shareBtnText}>{t('share_story') || 'Bagikan ke Story'}</Text>
                 </>
               )}
@@ -333,68 +335,69 @@ export default function WorkoutSummaryModal({
   );
 }
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#12131A',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 18,
-    paddingHorizontal: 18,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 22,
-    maxHeight: '92%',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  topHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  modalHeaderTitle: {
-    fontFamily: AppFonts.extraBold,
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#F8FAFC',
-    letterSpacing: -0.3,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#1A1B24',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  scrollArea: {
-    paddingBottom: 16,
-    alignItems: 'center',
+function getStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: colors.cardSurface,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingTop: 18,
+      paddingHorizontal: 18,
+      paddingBottom: Platform.OS === 'ios' ? 36 : 22,
+      maxHeight: '92%',
+      borderTopWidth: 1,
+      borderTopColor: colors.borderSubtle,
+    },
+    topHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 14,
+    },
+    modalHeaderTitle: {
+      fontFamily: AppFonts.extraBold,
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      letterSpacing: -0.3,
+    },
+    closeBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.surfaceHighlight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+    },
+    scrollArea: {
+      paddingBottom: 16,
+      alignItems: 'center',
   },
 
-  // 9:16 Story Card Container (Deep Obsidian with Sleek Glass Border)
+  // 9:16 Story Card Container
   storyCard: {
     width: '100%',
-    backgroundColor: '#0D0E15',
+    backgroundColor: colors.cardSurface,
     borderRadius: 28,
     padding: 22,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.borderSubtle,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.shadowColor,
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.5,
+        shadowOpacity: colors.shadowOpacity,
         shadowRadius: 18,
       },
       android: {
-        elevation: 10,
+        elevation: colors.elevation,
       },
     }),
   },
@@ -408,16 +411,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    backgroundColor: colors.actionIconBg,
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.25)',
+    borderColor: colors.accent,
   },
   brandText: {
     fontFamily: AppFonts.extraBold,
-    color: '#F59E0B',
+    color: colors.primaryAction,
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1,
@@ -426,23 +429,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#161722',
+    backgroundColor: colors.elevatedSurface,
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.borderSubtle,
   },
   streakBadgeText: {
     fontFamily: AppFonts.bold,
-    color: '#F59E0B',
+    color: colors.primaryAction,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   dateBadgeText: {
     fontFamily: AppFonts.medium,
-    color: '#94A3B8',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -459,13 +462,13 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: '#10B981',
+    backgroundColor: colors.successBadge,
   },
   celebrationSubtitle: {
     fontFamily: AppFonts.bold,
     fontSize: 11,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: colors.textSecondary,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
@@ -473,7 +476,7 @@ const styles = StyleSheet.create({
     fontFamily: AppFonts.extraBold,
     fontSize: 24,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: colors.textPrimary,
     letterSpacing: -0.6,
   },
 
@@ -487,11 +490,11 @@ const styles = StyleSheet.create({
   statBox: {
     flex: 1,
     minWidth: '47%',
-    backgroundColor: '#161722',
+    backgroundColor: colors.surfaceHighlight,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.borderSubtle,
   },
   statIconBox: {
     width: 30,
@@ -505,14 +508,14 @@ const styles = StyleSheet.create({
     fontFamily: AppFonts.extraBold,
     fontSize: 18,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: colors.textPrimary,
     marginBottom: 2,
     letterSpacing: -0.4,
   },
   statLabel: {
     fontFamily: AppFonts.bold,
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.textSecondary,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -520,11 +523,11 @@ const styles = StyleSheet.create({
 
   // Exercise Breakdown Section
   exerciseSection: {
-    backgroundColor: '#161722',
+    backgroundColor: colors.elevatedSurface,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.borderSubtle,
     marginBottom: 16,
   },
   exerciseHeaderRow: {
@@ -533,20 +536,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    borderBottomColor: colors.borderSubtle,
     marginBottom: 10,
   },
   exerciseHeaderLabel: {
     fontFamily: AppFonts.bold,
     fontSize: 12,
     fontWeight: '800',
-    color: '#94A3B8',
+    color: colors.textSecondary,
     letterSpacing: 0.5,
   },
   exerciseCountSub: {
     fontFamily: AppFonts.medium,
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textMuted,
   },
   exerciseCardItem: {
     flexDirection: 'row',
@@ -554,7 +557,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    borderBottomColor: colors.borderSubtle,
   },
   exerciseItemLeft: {
     flexDirection: 'row',
@@ -567,41 +570,41 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 7,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    backgroundColor: colors.actionIconBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  exOrderText: {
+exOrderText: {
     fontFamily: AppFonts.bold,
     fontSize: 11,
-    color: '#F59E0B',
+    color: colors.primaryAction,
     fontWeight: '800',
   },
   exerciseItemName: {
     fontFamily: AppFonts.bold,
     fontSize: 14,
     fontWeight: '700',
-    color: '#F1F5F9',
+    color: colors.textPrimary,
     flex: 1,
   },
   exercisePillWrap: {
-    backgroundColor: '#1A1B24',
+    backgroundColor: colors.inputSurface,
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.borderSubtle,
   },
   exercisePillText: {
     fontFamily: AppFonts.bold,
-    color: '#F59E0B',
+    color: colors.primaryAction,
     fontSize: 11,
     fontWeight: '700',
   },
   moreExercisesText: {
     fontFamily: AppFonts.medium,
     fontSize: 11,
-    color: '#64748B',
+    color: colors.textMuted,
     fontStyle: 'italic',
     marginTop: 10,
     textAlign: 'center',
@@ -619,7 +622,7 @@ const styles = StyleSheet.create({
   },
   footerTagline: {
     fontFamily: AppFonts.medium,
-    color: '#64748B',
+    color: colors.textMuted,
     fontSize: 11,
   },
 
@@ -635,30 +638,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.primaryAction,
     paddingVertical: 14,
     borderRadius: 14,
   },
   shareBtnText: {
     fontFamily: AppFonts.bold,
-    color: '#000000',
+    color: colors.textPrimaryOnVolt,
     fontSize: 14,
     fontWeight: '800',
   },
   doneBtn: {
     flex: 1,
-    backgroundColor: '#1A1B24',
+    backgroundColor: colors.elevatedSurface,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.borderSubtle,
   },
   doneBtnText: {
     fontFamily: AppFonts.bold,
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
-});
+  });
+}

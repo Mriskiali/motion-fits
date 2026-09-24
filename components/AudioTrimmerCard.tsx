@@ -7,8 +7,11 @@ import {
   Platform,
   LayoutChangeEvent,
   PanResponder,
-  Animated,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+} from 'react-native-reanimated';
 import { Music, Play, Square, Minus, Plus } from 'lucide-react-native';
 import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
@@ -73,22 +76,29 @@ const SmoothSlider = React.memo(function SmoothSlider({
   const throttleTimerRef = useRef<any>(null);
 
   const usableWidth = Math.max(1, trackWidth - THUMB_SIZE);
-  const initialPos = Math.max(0, Math.min(1, (value - min) / (max - min))) * usableWidth;
-  const animPos = useRef(new Animated.Value(initialPos)).current;
+
+  // Position is a reanimated shared value => drag updates run on the UI thread
+  // and never block the JS thread (fixes the "freezing" slider).
+  const animPos = useSharedValue(
+    Math.max(0, Math.min(1, (value - min) / (max - min))) * usableWidth
+  );
 
   // Sync animPos when external value changes and not actively dragging
   useEffect(() => {
     if (!isDraggingRef.current) {
-      const pos = Math.max(0, Math.min(1, (value - min) / (max - min))) * usableWidth;
-      animPos.setValue(pos);
+      animPos.value = Math.max(0, Math.min(1, (value - min) / (max - min))) * usableWidth;
       lastValRef.current = value;
     }
   }, [value, min, max, usableWidth, animPos]);
 
   const propsRef = useRef({ min, max, step, onStartDrag, onEndDrag, onChange, onComplete });
-  useEffect(() => {
-    propsRef.current = { min, max, step, onStartDrag, onEndDrag, onChange, onComplete };
-  });
+  // Keep latest props without re-registering PanResponder or running an effect each render.
+  propsRef.current = { min, max, step, onStartDrag, onEndDrag, onChange, onComplete };
+
+  const fillStyle = useAnimatedStyle(() => ({ width: animPos.value }));
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: animPos.value }],
+  }));
 
   const panResponder = useMemo(
     () =>
@@ -101,7 +111,7 @@ const SmoothSlider = React.memo(function SmoothSlider({
         onMoveShouldSetPanResponderCapture: (_evt, gs) => {
           return Math.abs(gs.dx) > 2 || Math.abs(gs.vx) > 0.05;
         },
-        onPanResponderTerminationRequest: () => false,
+        onPanResponderTerminationRequest: () => true,
 
         onPanResponderGrant: (evt) => {
           isDraggingRef.current = true;
@@ -115,7 +125,7 @@ const SmoothSlider = React.memo(function SmoothSlider({
           const effWidth = Math.max(1, width - THUMB_SIZE);
           const relX = pageX - trackLeftRef.current - THUMB_RADIUS;
           const clampedX = Math.max(0, Math.min(effWidth, relX));
-          animPos.setValue(clampedX);
+          animPos.value = clampedX;
 
           const ratio = clampedX / effWidth;
           const { min: mMin, max: mMax, step: mStep } = propsRef.current;
@@ -135,8 +145,8 @@ const SmoothSlider = React.memo(function SmoothSlider({
           const relX = pageX - trackLeftRef.current - THUMB_RADIUS;
           const clampedX = Math.max(0, Math.min(effWidth, relX));
 
-          // 0 React re-renders, instantaneous GPU composite!
-          animPos.setValue(clampedX);
+          // UI-thread update — zero JS re-renders during the drag.
+          animPos.value = clampedX;
 
           const ratio = clampedX / effWidth;
           const { min: mMin, max: mMax, step: mStep } = propsRef.current;
@@ -146,7 +156,7 @@ const SmoothSlider = React.memo(function SmoothSlider({
 
           if (finalVal !== lastValRef.current) {
             lastValRef.current = finalVal;
-            // Throttle parent text update so JS bridge thread stays completely free
+            // Throttle parent text update so the JS thread stays free during drag.
             if (!throttleTimerRef.current) {
               throttleTimerRef.current = setTimeout(() => {
                 throttleTimerRef.current = null;
@@ -177,7 +187,7 @@ const SmoothSlider = React.memo(function SmoothSlider({
 
           // Snap to exact stepped position smoothly
           const snappedX = ((finalVal - mMin) / (mMax - mMin)) * effWidth;
-          animPos.setValue(snappedX);
+          animPos.value = snappedX;
 
           lastValRef.current = finalVal;
           propsRef.current.onChange(finalVal);
@@ -202,7 +212,7 @@ const SmoothSlider = React.memo(function SmoothSlider({
       setTrackWidth(w);
       trackWidthRef.current = w;
       const pos = Math.max(0, Math.min(1, (value - min) / (max - min))) * Math.max(1, w - THUMB_SIZE);
-      animPos.setValue(pos);
+      animPos.value = pos;
     }
   };
 
@@ -225,10 +235,8 @@ const SmoothSlider = React.memo(function SmoothSlider({
           <Animated.View
             style={[
               styles.smoothSliderTrackFill,
-              {
-                width: animPos,
-                backgroundColor: activeColor,
-              },
+              { backgroundColor: activeColor },
+              fillStyle,
             ]}
           />
         </View>
@@ -237,10 +245,10 @@ const SmoothSlider = React.memo(function SmoothSlider({
           style={[
             styles.smoothSliderThumb,
             {
-              transform: [{ translateX: animPos }],
               borderColor: thumbBorderColor,
               backgroundColor: thumbBgColor,
             },
+            thumbStyle,
           ]}
         />
       </View>
@@ -364,7 +372,7 @@ function AudioTrimmerCard({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Called whenever user starts dragging a slider or taps +/-:
+  // Called when a slider drag starts (disables parent scroll while dragging).
   const handleAdjustmentStart = useCallback(() => {
     onSliderDragStart?.();
     if (storeCommitTimeoutRef.current) {
@@ -379,6 +387,18 @@ function AudioTrimmerCard({
   const handleAdjustmentEnd = useCallback(() => {
     onSliderDragEnd?.();
   }, [onSliderDragEnd]);
+
+  // Lightweight variant for +/- button taps: stops playback but does NOT toggle
+  // the parent ScrollView's native scroll props on every tap (avoids per-tap jank).
+  const stopPreviewIfPlaying = useCallback(() => {
+    if (storeCommitTimeoutRef.current) {
+      clearTimeout(storeCommitTimeoutRef.current);
+      storeCommitTimeoutRef.current = null;
+    }
+    if (isPlayingAudioRef.current && onStopPreview) {
+      onStopPreview();
+    }
+  }, [onStopPreview]);
 
   // Stable handlers for SmoothSlider
   const handleOffsetChange = useCallback((val: number) => {
@@ -468,7 +488,7 @@ function AudioTrimmerCard({
             style={[styles.adjustBtn, { backgroundColor: colors.surfaceHighlight }]}
             onPress={() => {
               triggerHaptic();
-              handleAdjustmentStart();
+              stopPreviewIfPlaying();
               const next = Math.max(0, localStartOffset - 1);
               setLocalStartOffset(next);
               commitToStore(next, durRef.current);
@@ -497,7 +517,7 @@ function AudioTrimmerCard({
             style={[styles.adjustBtn, { backgroundColor: colors.surfaceHighlight }]}
             onPress={() => {
               triggerHaptic();
-              handleAdjustmentStart();
+              stopPreviewIfPlaying();
               const next = Math.min(60, localStartOffset + 1);
               setLocalStartOffset(next);
               commitToStore(next, durRef.current);
@@ -524,7 +544,7 @@ function AudioTrimmerCard({
             style={[styles.adjustBtn, { backgroundColor: colors.surfaceHighlight }]}
             onPress={() => {
               triggerHaptic();
-              handleAdjustmentStart();
+              stopPreviewIfPlaying();
               const next = Math.max(3, localDuration - 1);
               setLocalDuration(next);
               commitToStore(offsetRef.current, next);
@@ -553,7 +573,7 @@ function AudioTrimmerCard({
             style={[styles.adjustBtn, { backgroundColor: colors.surfaceHighlight }]}
             onPress={() => {
               triggerHaptic();
-              handleAdjustmentStart();
+              stopPreviewIfPlaying();
               const next = Math.min(30, localDuration + 1);
               setLocalDuration(next);
               commitToStore(offsetRef.current, next);
@@ -578,15 +598,15 @@ function AudioTrimmerCard({
       >
         {isPlayingAudio ? (
           <>
-            <Square size={13} color="#fff" fill="#fff" />
-            <Text style={styles.previewAudioBtnText}>
+            <Square size={13} color="#FFFFFF" fill="#FFFFFF" />
+            <Text style={[styles.previewAudioBtnText, { color: '#FFFFFF' }]}>
               {t('stop_preview') || 'Hentikan'} ({countdownRemaining ?? localDuration}s)
             </Text>
           </>
         ) : (
           <>
-            <Play size={13} color="#000000" fill="#000000" />
-            <Text style={[styles.previewAudioBtnText, { color: '#000000' }]}>
+            <Play size={13} color={colors.textPrimaryOnVolt} fill={colors.textPrimaryOnVolt} />
+            <Text style={[styles.previewAudioBtnText, { color: colors.textPrimaryOnVolt }]}>
               {t('preview_audio') || 'Uji Coba Suara'} ({localDuration}s)
             </Text>
           </>
@@ -750,6 +770,6 @@ const styles = StyleSheet.create({
     fontFamily: AppFonts.bold,
     fontSize: 12,
     fontWeight: '700',
-    color: '#fff',
+    color: '#000000',
   },
 });

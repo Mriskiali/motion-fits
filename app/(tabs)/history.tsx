@@ -1,68 +1,28 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Platform, TextInput, Pressable, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Platform, TextInput, ScrollView } from 'react-native';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useStepStore } from '@/store/useStepStore';
+import { useAuth } from '@clerk/expo';
+import { deleteWorkoutSessionFromCloud } from '@/services/syncService';
+import { markPendingSync } from '@/services/syncState';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, subDays, subMonths, isSameMonth, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, subDays, subMonths, isSameMonth, isSameDay, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale/id';
 import { Trash2, Calendar as CalendarIcon, BarChart3, Clock, CheckCircle2, Dumbbell, Share2, Search, ChevronRight, Sparkles, BookOpen, Footprints, TrendingUp, Target, Flame, Check, Trophy, X } from 'lucide-react-native';
 import Svg, { Rect, Text as SvgText, Line } from 'react-native-svg';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
-import * as Haptics from 'expo-haptics';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
+import { useUserStore } from '@/store/useUserStore';
 import WorkoutSummaryModal from '@/components/WorkoutSummaryModal';
 import WorkoutDetailModal from '@/components/WorkoutDetailModal';
-
-interface HeatmapCellProps {
-  dateKey: string;
-  bgColor: string;
-  isSelected: boolean;
-  isToday: boolean;
-  onSelect: (dateKey: string) => void;
-  primaryActionColor: string;
-  cellStyle: any;
-  todayStyle: any;
-}
-
-const HeatmapCell = React.memo(
-  ({
-    dateKey,
-    bgColor,
-    isSelected,
-    isToday,
-    onSelect,
-    primaryActionColor,
-    cellStyle,
-    todayStyle,
-  }: HeatmapCellProps) => {
-    return (
-      <Pressable
-        style={[
-          cellStyle,
-          { backgroundColor: bgColor },
-          isSelected && {
-            borderColor: primaryActionColor,
-            borderWidth: 2,
-          },
-          isToday && !isSelected && todayStyle,
-        ]}
-        onPress={() => onSelect(dateKey)}
-        hitSlop={3}
-      />
-    );
-  },
-  (prev, next) =>
-    prev.isSelected === next.isSelected &&
-    prev.bgColor === next.bgColor &&
-    prev.isToday === next.isToday &&
-    prev.dateKey === next.dateKey &&
-    prev.primaryActionColor === next.primaryActionColor &&
-    prev.cellStyle === next.cellStyle &&
-    prev.todayStyle === next.todayStyle
-);
+import { useRenderProfiler } from '@/hooks/useRenderProfiler';
 
 export default function HistoryScreen() {
+  useRenderProfiler('HistoryScreen', 8);
+  const { userId } = useAuth();
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
   const sessions = useWorkoutStore((state) => state.sessions);
   const templates = useWorkoutStore((state) => state.templates);
   const deleteSession = useWorkoutStore((state) => state.deleteSession);
@@ -106,12 +66,12 @@ export default function HistoryScreen() {
   const [selectedDetailSession, setSelectedDetailSession] = useState<any>(null);
 
   const handleOpenSessionDetail = useCallback((session: any) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerButtonVibration(hapticsEnabled);
     setSelectedDetailSession(session);
   }, []);
 
   const handleShareSession = useCallback((session: any) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerButtonVibration(hapticsEnabled);
     const template = templates.find((tpl) => tpl.id === session.templateId);
 
     let sessionTotalReps = 0;
@@ -187,21 +147,31 @@ export default function HistoryScreen() {
     });
   }, [templates]);
 
-  const handleDelete = useCallback((id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    showAlert(
-      t('delete_workout'),
-      t('delete_workout_confirm'),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('delete'),
-          style: 'destructive',
-          onPress: () => deleteSession(id),
-        },
-      ]
-    );
-  }, [showAlert, deleteSession, t]);
+  const handleDelete = useCallback(
+    (id: string) => {
+      triggerButtonVibration(hapticsEnabled);
+      showAlert(
+        t('delete_workout'),
+        t('delete_workout_confirm'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('delete'),
+            style: 'destructive',
+            onPress: () => {
+              deleteSession(id);
+              if (userId) {
+                deleteWorkoutSessionFromCloud(userId, id).catch(() => {
+                  markPendingSync();
+                });
+              }
+            },
+          },
+        ]
+      );
+    },
+    [showAlert, deleteSession, t, userId]
+  );
 
   // Memoized month dates & grid padding
   const { days, paddingDays } = useMemo(() => {
@@ -212,6 +182,17 @@ export default function HistoryScreen() {
     const pad = Array.from({ length: startDayOfWeek }).map((_, i) => i);
     return { days: monthDays, paddingDays: pad };
   }, []);
+
+  // Precompute the set of dates that have a session ONCE per sessions change.
+  // Avoids an O(days x sessions) date-fns `format` sweep on every calendar render
+  // (and on every theme change that rebuilds the memoized calendar).
+  const sessionDateSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of sessions) {
+      set.add(format(new Date(s.date), 'yyyy-MM-dd'));
+    }
+    return set;
+  }, [sessions]);
 
   // Memoized stats calculation
   const { totalWorkouts, totalDurationSeconds, avgDurationMins, totalCompletedSets, totalCompletedReps } = useMemo(() => {
@@ -248,22 +229,17 @@ export default function HistoryScreen() {
     return `${kg.toLocaleString()} kg`;
   };
 
-  // Memoized 7-day bar chart data
   const chartData = useMemo(() => {
     const last7Days = Array.from({ length: 7 }).map((_, i) => subDays(new Date(), 6 - i));
     return last7Days.map((date) => {
       const dateStr = format(date, 'yyyy-MM-dd');
-      const count = sessions.filter(
-        (s) => format(new Date(s.date), 'yyyy-MM-dd') === dateStr
-      ).length;
+      const count = sessions.filter((s) => sessionDateSet.has(format(new Date(s.date), 'yyyy-MM-dd')) && format(new Date(s.date), 'yyyy-MM-dd') === dateStr).length;
       return {
-        day: format(date, 'EE', {
-          locale: language === 'id' ? idLocale : undefined,
-        }).charAt(0),
+        day: format(date, 'EE', { locale: language === 'id' ? idLocale : undefined }).charAt(0),
         count,
       };
     });
-  }, [sessions, language]);
+  }, [sessions, sessionDateSet, language]);
 
   const weeklyWorkoutCount = useMemo(() => {
     return chartData.reduce((acc, curr) => acc + curr.count, 0);
@@ -340,7 +316,7 @@ export default function HistoryScreen() {
       isGoalMet: boolean;
       dayOfWeek: number;
       isToday: boolean;
-      bgColor: string;
+      category: 'empty' | 'low' | 'medium' | 'goal';
     }> = [];
 
     const now = new Date();
@@ -356,14 +332,14 @@ export default function HistoryScreen() {
       const caloriesKcal = Math.round(steps * 0.04);
       const isGoalMet = steps >= goal;
 
-      let bgColor = colors.surfaceHighlight;
+      let category: 'empty' | 'low' | 'medium' | 'goal' = 'empty';
       if (steps > 0) {
         if (isGoalMet) {
-          bgColor = '#22C55E';
+          category = 'goal';
         } else if (steps >= 5000) {
-          bgColor = 'rgba(249, 115, 22, 0.8)';
+          category = 'medium';
         } else {
-          bgColor = 'rgba(249, 115, 22, 0.35)';
+          category = 'low';
         }
       }
 
@@ -378,12 +354,90 @@ export default function HistoryScreen() {
         isGoalMet,
         dayOfWeek: d.getDay(),
         isToday: isTodayDay,
-        bgColor,
+        category,
       });
     }
 
     return list;
-  }, [stepHistory, todaySteps, dailyStepGoal, colors.surfaceHighlight]);
+  }, [stepHistory, todaySteps, dailyStepGoal]);
+
+  // Bar chart data: group steps by weeks based on selected period
+  const { barChartWeeks, barChartMonths } = useMemo(() => {
+    const daysCount =
+      selectedStepPeriod === '1m'
+        ? 28
+        : selectedStepPeriod === '6m'
+        ? 182
+        : selectedStepPeriod === '3m'
+        ? 91
+        : 365;
+
+    const slice = [...stepYearlyData.slice(0, daysCount)].reverse();
+    const weeks: Array<{
+      weekLabel: string;
+      weekStart: Date;
+      weekEnd: Date;
+      totalSteps: number;
+      avgSteps: number;
+      goal: number;
+      days: Array<{ dateKey: string; steps: number; goal: number; isGoalMet: boolean }>;
+    }> = [];
+
+    const months: Array<{ monthKey: string; label: string; weeksCount: number }> = [];
+
+    let currentWeek: typeof slice = [];
+    let lastMonth = -1;
+
+    slice.forEach((item, idx) => {
+      const month = item.date.getMonth();
+      if (currentWeek.length === 0) {
+        lastMonth = month;
+      }
+
+      currentWeek.push(item);
+      if (currentWeek.length === 7 || idx === slice.length - 1) {
+        const weekStart = currentWeek[0].date;
+        const weekEnd = currentWeek[currentWeek.length - 1].date;
+        const totalSteps = currentWeek.reduce((acc, c) => acc + c.steps, 0);
+        const avgSteps = Math.round(totalSteps / currentWeek.length);
+        const goal = currentWeek[0].goal;
+        const monthKey = format(weekEnd, 'yyyy-MM');
+        const monthLabel = format(weekEnd, 'MMM', {
+          locale: language === 'id' ? idLocale : undefined,
+        });
+
+        weeks.push({
+          weekLabel: `${format(weekStart, 'd')}-${format(weekEnd, 'd')}`,
+          weekStart,
+          weekEnd,
+          totalSteps,
+          avgSteps,
+          goal: goal * currentWeek.length,
+          days: currentWeek.map((d) => ({
+            dateKey: d.dateKey,
+            steps: d.steps,
+            goal: d.goal,
+            isGoalMet: d.isGoalMet,
+          })),
+        });
+
+        const lastMonthEntry = months[months.length - 1];
+        if (!lastMonthEntry || lastMonthEntry.monthKey !== monthKey) {
+          months.push({
+            monthKey,
+            label: monthLabel,
+            weeksCount: 1,
+          });
+        } else {
+          lastMonthEntry.weeksCount += 1;
+        }
+
+        currentWeek = [];
+      }
+    });
+
+    return { barChartWeeks: weeks, barChartMonths: months };
+  }, [stepYearlyData, selectedStepPeriod, language]);
 
   const selectedStepDay = useMemo(() => {
     if (!selectedStepDayKey) {
@@ -419,74 +473,6 @@ export default function HistoryScreen() {
     };
   }, [stepYearlyData, selectedStepPeriod]);
 
-  const { heatmapWeeks, heatmapMonths } = useMemo(() => {
-    const daysCount =
-      selectedStepPeriod === '1m'
-        ? 28
-        : selectedStepPeriod === '3m'
-        ? 91
-        : selectedStepPeriod === '6m'
-        ? 182
-        : 365;
-
-    const sliceChronological = [...stepYearlyData.slice(0, daysCount)].reverse();
-    const weeks: Array<{
-      weekIndex: number;
-      isNewMonth: boolean;
-      days: typeof stepYearlyData;
-    }> = [];
-
-    const months: Array<{
-      monthKey: string;
-      label: string;
-      weeksCount: number;
-      width: number;
-    }> = [];
-
-    let currentWeek: typeof stepYearlyData = [];
-    let lastMonth = -1;
-
-    sliceChronological.forEach((item, idx) => {
-      const month = item.date.getMonth();
-      const isNew = month !== lastMonth;
-      if (isNew) {
-        lastMonth = month;
-      }
-
-      currentWeek.push(item);
-      if (currentWeek.length === 7 || idx === sliceChronological.length - 1) {
-        const weekLastDay = currentWeek[currentWeek.length - 1].date;
-        const monthKey = format(weekLastDay, 'yyyy-MM');
-        const monthLabel = format(weekLastDay, 'MMM', {
-          locale: language === 'id' ? idLocale : undefined,
-        });
-
-        weeks.push({
-          weekIndex: weeks.length,
-          isNewMonth: isNew,
-          days: currentWeek,
-        });
-
-        const lastMonthEntry = months[months.length - 1];
-        if (!lastMonthEntry || lastMonthEntry.monthKey !== monthKey) {
-          months.push({
-            monthKey,
-            label: monthLabel,
-            weeksCount: 1,
-            width: 15,
-          });
-        } else {
-          lastMonthEntry.weeksCount += 1;
-          lastMonthEntry.width += 15;
-        }
-
-        currentWeek = [];
-      }
-    });
-
-    return { heatmapWeeks: weeks, heatmapMonths: months };
-  }, [stepYearlyData, selectedStepPeriod, language]);
-
   // Data to display in FlatList
   const displayedData = useMemo(() => {
     if (activeTab === 'logs') {
@@ -497,7 +483,10 @@ export default function HistoryScreen() {
 
   const selectedDaySessions = useMemo(() => {
     const targetKey = format(selectedCalendarDate, 'yyyy-MM-dd');
-    return sessions.filter((s) => format(new Date(s.date), 'yyyy-MM-dd') === targetKey);
+    return sessions.filter((s) => {
+      const sKey = format(new Date(s.date), 'yyyy-MM-dd');
+      return sKey === targetKey;
+    });
   }, [sessions, selectedCalendarDate]);
 
   const calendarComponent = useMemo(() => (
@@ -530,9 +519,7 @@ export default function HistoryScreen() {
         ))}
         {days.map((date, i) => {
           const dateStr = format(date, 'yyyy-MM-dd');
-          const hasWorkout = sessions.some(
-            (s) => format(new Date(s.date), 'yyyy-MM-dd') === dateStr
-          );
+          const hasWorkout = sessionDateSet.has(dateStr);
           const today = isToday(date);
           const isSelected = selectedCalendarDate && isSameDay(date, selectedCalendarDate);
 
@@ -541,7 +528,7 @@ export default function HistoryScreen() {
               key={`day-${i}`}
               style={styles.dayCell}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                triggerButtonVibration(hapticsEnabled);
                 setSelectedCalendarDate(date);
               }}
               activeOpacity={0.7}
@@ -587,10 +574,10 @@ export default function HistoryScreen() {
               style={[
                 styles.calendarDetailBadge,
                 {
-                  backgroundColor:
-                    selectedDaySessions.length > 0
-                      ? 'rgba(34, 197, 94, 0.15)'
-                      : colors.surfaceHighlight,
+                    backgroundColor:
+                      selectedDaySessions.length > 0
+                        ? colors.actionIconBg
+                        : colors.surfaceHighlight,
                 },
               ]}
             >
@@ -600,7 +587,7 @@ export default function HistoryScreen() {
                   {
                     color:
                       selectedDaySessions.length > 0
-                        ? '#22C55E'
+                        ? colors.successBadge
                         : colors.textSecondary,
                   },
                 ]}
@@ -628,7 +615,7 @@ export default function HistoryScreen() {
                     activeOpacity={0.7}
                   >
                     <View style={styles.calendarSessionIconBox}>
-                      <CheckCircle2 size={16} color="#22C55E" />
+                      <CheckCircle2 size={16} color={colors.successBadge} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.calendarSessionName}>
@@ -735,7 +722,7 @@ export default function HistoryScreen() {
   }, [chartData, colors, styles, t]);
 
   const handleSelectStepDay = useCallback((dateKey: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    triggerButtonVibration(hapticsEnabled);
     setSelectedStepDayKey(dateKey);
   }, []);
 
@@ -762,7 +749,7 @@ export default function HistoryScreen() {
           >
             {selectedStepDay.isGoalMet ? (
               <View style={styles.stepGoalPillContent}>
-                <Check size={11} color="#22C55E" strokeWidth={3} />
+                <Check size={11} color={colors.successBadge} strokeWidth={3} />
                 <Text style={styles.stepGoalPillTextMet}>
                   {t('goal_reached') || 'Tercapai'}
                 </Text>
@@ -790,7 +777,7 @@ export default function HistoryScreen() {
               styles.stepProgressFill,
               {
                 width: `${Math.min(100, selectedStepDay.percent)}%`,
-                backgroundColor: selectedStepDay.isGoalMet ? '#22C55E' : '#F97316',
+                backgroundColor: selectedStepDay.isGoalMet ? colors.successBadge : colors.accentSecondary,
               },
             ]}
           />
@@ -810,16 +797,16 @@ export default function HistoryScreen() {
     );
   }, [selectedStepDay, colors, styles, language, t]);
 
-  const stepHeatmapComponent = useMemo(() => {
+  const stepActivityComponent = useMemo(() => {
     return (
       <View style={styles.cardWrapper}>
         <View style={styles.cardHeader}>
-          <View style={[styles.cardIconBox, { backgroundColor: 'rgba(249, 115, 22, 0.12)' }]}>
-            <Footprints size={14} color="#F97316" />
+          <View style={[styles.cardIconBox, { backgroundColor: colors.actionIconBg }]}>
+            <Footprints size={14} color={colors.accentSecondary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.cardHeaderTitle}>
-              {language === 'id' ? 'Aktivitas Langkah' : 'Step Activity Heatmap'}
+              {language === 'id' ? 'Aktivitas Langkah' : 'Step Activity'}
             </Text>
             <Text style={styles.stepGoalHint}>
               {selectedStepPeriod === '1y'
@@ -848,7 +835,7 @@ export default function HistoryScreen() {
                 selectedStepPeriod === item.id && styles.stepPeriodChipActive,
               ]}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                triggerButtonVibration(hapticsEnabled);
                 setSelectedStepPeriod(item.id as any);
               }}
               activeOpacity={0.7}
@@ -865,79 +852,102 @@ export default function HistoryScreen() {
           ))}
         </View>
 
-        {/* Scrollable Heatmap Grid with Month Ribbon */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.heatmapScrollWrap}
-        >
-          <View>
-            {/* Dedicated Month Ribbon Row: Aligned directly above the week columns */}
-            <View style={styles.heatmapMonthRibbonRow}>
-              <View style={styles.heatmapMonthRibbonSpacer} />
-              {heatmapMonths.map((m) => (
-                <View key={m.monthKey} style={[styles.heatmapMonthRibbonItem, { width: m.width }]}>
-                  <Text style={styles.heatmapMonthRibbonText} numberOfLines={1}>
-                    {m.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Matrix Row */}
-            <View style={styles.heatmapMatrix}>
-              {/* Day Labels column */}
-              <View style={styles.heatmapDayLabelsCol}>
-                {(language === 'id'
-                  ? ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
-                  : ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-                ).map((d, idx) => (
-                  <Text key={idx} style={styles.heatmapDayLabelText}>
-                    {idx % 2 === 1 ? d : ''}
-                  </Text>
-                ))}
-              </View>
-
-              {/* Week Columns */}
-              {heatmapWeeks.map((week) => (
-                <View
-                  key={week.weekIndex}
-                  style={[
-                    styles.heatmapWeekCol,
-                    week.isNewMonth && week.weekIndex > 0 && styles.heatmapWeekColNewMonth,
-                  ]}
-                >
-                  {week.days.map((item) => (
-                    <HeatmapCell
-                      key={item.dateKey}
-                      dateKey={item.dateKey}
-                      bgColor={item.bgColor}
-                      isSelected={selectedStepDayKey === item.dateKey}
-                      isToday={item.isToday}
-                      onSelect={handleSelectStepDay}
-                      primaryActionColor={colors.primaryAction}
-                      cellStyle={styles.heatmapCell}
-                      todayStyle={styles.heatmapCellToday}
-                    />
-                  ))}
-                </View>
-              ))}
+        {/* Step Activity Bar Chart */}
+        <View style={styles.barChartContainer}>
+          <View style={styles.barChartHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.barChartTitle}>
+                {language === 'id' ? 'Grafik Aktivitas' : 'Activity Chart'}
+              </Text>
+              <Text style={styles.barChartSubtitle}>
+                {barChartWeeks.reduce((a, w) => a + w.totalSteps, 0).toLocaleString()}
+                {' '}{language === 'id' ? 'total langkah' : 'total steps'}
+              </Text>
             </View>
           </View>
-        </ScrollView>
 
-        {/* Heatmap Legend */}
-        <View style={styles.heatmapLegendRow}>
-          <Text style={styles.heatmapLegendText}>
-            {language === 'id' ? '0 Langkah' : '0 Steps'}
-          </Text>
-          <View style={[styles.heatmapLegendBox, { backgroundColor: colors.surfaceHighlight }]} />
-          <View style={[styles.heatmapLegendBox, { backgroundColor: 'rgba(249, 115, 22, 0.35)' }]} />
-          <View style={[styles.heatmapLegendBox, { backgroundColor: 'rgba(249, 115, 22, 0.8)' }]} />
-          <View style={[styles.heatmapLegendBox, { backgroundColor: '#22C55E' }]} />
-          <Text style={styles.heatmapLegendText}>
-            {language === 'id' ? 'Target Tercapai' : 'Goal Met'}
-          </Text>
+          {/* Horizontal Bar Chart */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.barChartScrollWrap}
+          >
+            <View style={styles.barChartPlot}>
+              {barChartWeeks.map((week, idx) => {
+                const maxStepsInWeek = Math.max(...week.days.map((d) => d.steps || 1));
+                const chartHeight = 120;
+                const barHeight = Math.min(chartHeight - 8, (maxStepsInWeek / (dailyStepGoal || 10000)) * chartHeight * 1.2);
+
+                return (
+                  <View key={idx} style={styles.barWeekCol}>
+                    <View style={styles.barAxisY}>
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <Text
+                          key={`y-${i}`}
+                          style={styles.barYTick}
+                        >
+                          {Math.round(((4 - i) * dailyStepGoal * 12) / 1000)}k
+                        </Text>
+                      ))}
+                    </View>
+
+                    <View style={styles.barContainer}>
+                      <View
+                        style={[
+                          styles.barBackground,
+                          { height: chartHeight },
+                        ]}
+                      >
+                        {week.days.map((day, dayIdx) => (
+                          <View
+                            key={day.dateKey}
+                            style={[
+                              styles.barSegment,
+                              {
+                                height: barHeight / 7,
+                                backgroundColor: day.isGoalMet
+                                  ? colors.successBadge
+                                  : day.steps > 500
+                                  ? colors.accentLime
+                                  : colors.warning,
+                                opacity: 0.9 - (dayIdx * 0.05),
+                              },
+                            ]}
+                          />
+                        ))}
+                      </View>
+
+                      <View style={styles.barLabelRow}>
+                        <Text style={styles.barWeekLabel}>{week.weekLabel}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+
+          {/* Bar Legend */}
+          <View style={styles.barLegendRow}>
+            <View style={styles.barLegendItem}>
+              <View style={[styles.barLegendBox, { backgroundColor: colors.surfaceHighlight }]} />
+              <Text style={styles.barLegendText}>
+                {language === 'id' ? '0 Langkah' : '0 Steps'}
+              </Text>
+            </View>
+            <View style={styles.barLegendItem}>
+              <View style={[styles.barLegendBox, { backgroundColor: colors.warning }]} />
+              <Text style={styles.barLegendText}>
+                {language === 'id' ? 'Aktif' : 'Active'}
+              </Text>
+            </View>
+            <View style={styles.barLegendItem}>
+              <View style={[styles.barLegendBox, { backgroundColor: colors.accentSecondary }]} />
+              <Text style={styles.barLegendText}>
+                {language === 'id' ? 'Tercapai' : 'Goal'}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Selected Day Inspection Card */}
@@ -945,8 +955,8 @@ export default function HistoryScreen() {
       </View>
     );
   }, [
-    heatmapWeeks,
-    heatmapMonths,
+    barChartWeeks,
+    barChartMonths,
     selectedStepDayKey,
     handleSelectStepDay,
     stepInspectionCardComponent,
@@ -955,6 +965,7 @@ export default function HistoryScreen() {
     styles,
     language,
     t,
+    dailyStepGoal,
   ]);
 
   const renderSessionCard = useCallback((session: any) => {
@@ -1014,7 +1025,7 @@ export default function HistoryScreen() {
               </View>
               {maxWeightSession > 0 && (
                 <View style={styles.historyMaxBadge}>
-                  <Trophy size={11} color="#F59E0B" />
+                  <Trophy size={11} color={colors.primaryAction} />
                   <Text style={styles.historyMaxText}>
                     Max {maxWeightSession} kg
                   </Text>
@@ -1072,14 +1083,14 @@ export default function HistoryScreen() {
               activeTab === 'overview' && styles.segmentedButtonActive,
             ]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              triggerButtonVibration(hapticsEnabled);
               setActiveTab('overview');
             }}
             activeOpacity={0.8}
           >
             <BarChart3
               size={14}
-              color={activeTab === 'overview' ? '#000000' : colors.textSecondary}
+              color={activeTab === 'overview' ? colors.textPrimaryOnVolt : colors.textSecondary}
             />
             <Text
               style={[
@@ -1099,14 +1110,14 @@ export default function HistoryScreen() {
               activeTab === 'logs' && styles.segmentedButtonActive,
             ]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              triggerButtonVibration(hapticsEnabled);
               setActiveTab('logs');
             }}
             activeOpacity={0.8}
           >
             <BookOpen
               size={14}
-              color={activeTab === 'logs' ? '#000000' : colors.textSecondary}
+              color={activeTab === 'logs' ? colors.textPrimaryOnVolt : colors.textSecondary}
             />
             <Text
               style={[
@@ -1124,7 +1135,7 @@ export default function HistoryScreen() {
                   {
                     backgroundColor:
                       activeTab === 'logs'
-                        ? 'rgba(0, 0, 0, 0.15)'
+                        ? colors.overlay
                         : colors.surfaceHighlight,
                   },
                 ]}
@@ -1132,7 +1143,7 @@ export default function HistoryScreen() {
                 <Text
                   style={[
                     styles.tabBadgeText,
-                    activeTab === 'logs' && { color: '#000000' },
+                    activeTab === 'logs' && { color: '#FFFFFF' },
                   ]}
                 >
                   {allReversedSessions.length}
@@ -1148,14 +1159,14 @@ export default function HistoryScreen() {
               activeTab === 'steps' && styles.segmentedButtonActive,
             ]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              triggerButtonVibration(hapticsEnabled);
               setActiveTab('steps');
             }}
             activeOpacity={0.8}
           >
             <Footprints
               size={14}
-              color={activeTab === 'steps' ? '#000000' : colors.textSecondary}
+              color={activeTab === 'steps' ? colors.textPrimaryOnVolt : colors.textSecondary}
             />
             <Text
               style={[
@@ -1186,7 +1197,7 @@ export default function HistoryScreen() {
                   <Text style={styles.sectionTitle}>{t('all_time_stats')}</Text>
                 </View>
                 <View style={styles.allTimeBadgePill}>
-                  <Trophy size={11} color="#F59E0B" />
+                  <Trophy size={11} color={colors.primaryAction} />
                   <Text style={styles.allTimeBadgeText}>{t('milestone')}</Text>
                 </View>
               </View>
@@ -1291,10 +1302,11 @@ export default function HistoryScreen() {
                   <TouchableOpacity
                     style={styles.viewAllButton}
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      triggerButtonVibration(hapticsEnabled);
                       setActiveTab('logs');
                     }}
-                  >
+
+                    activeOpacity={0.7}>
                     <Text style={styles.viewAllButtonText}>{t('view_all') || (language === 'id' ? 'Lihat Semua' : 'View All')}</Text>
                     <ChevronRight size={13} color={colors.primaryAction} />
                   </TouchableOpacity>
@@ -1306,7 +1318,7 @@ export default function HistoryScreen() {
                   <TouchableOpacity
                     style={styles.moreLogsCardBtn}
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      triggerButtonVibration(hapticsEnabled);
                       setActiveTab('logs');
                     }}
                     activeOpacity={0.7}
@@ -1350,7 +1362,8 @@ export default function HistoryScreen() {
                   <TouchableOpacity
                     onPress={() => setSearchQuery('')}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
+
+                    activeOpacity={0.7}>
                     <X size={14} color={colors.textMuted} />
                   </TouchableOpacity>
                 )}
@@ -1364,10 +1377,11 @@ export default function HistoryScreen() {
                     selectedFilter === 'all' && styles.filterChipActive,
                   ]}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    triggerButtonVibration(hapticsEnabled);
                     setSelectedFilter('all');
                   }}
-                >
+
+                  activeOpacity={0.7}>
                   <Text
                     style={[
                       styles.filterChipText,
@@ -1384,10 +1398,11 @@ export default function HistoryScreen() {
                     selectedFilter === 'this_month' && styles.filterChipActive,
                   ]}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    triggerButtonVibration(hapticsEnabled);
                     setSelectedFilter('this_month');
                   }}
-                >
+
+                  activeOpacity={0.7}>
                   <Text
                     style={[
                       styles.filterChipText,
@@ -1404,10 +1419,11 @@ export default function HistoryScreen() {
                     selectedFilter === 'last_month' && styles.filterChipActive,
                   ]}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    triggerButtonVibration(hapticsEnabled);
                     setSelectedFilter('last_month');
                   }}
-                >
+
+                  activeOpacity={0.7}>
                   <Text
                     style={[
                       styles.filterChipText,
@@ -1432,15 +1448,16 @@ export default function HistoryScreen() {
                       selectedTemplateFilter === 'all' && styles.templateFilterChipActive,
                     ]}
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      triggerButtonVibration(hapticsEnabled);
                       setSelectedTemplateFilter('all');
                     }}
-                  >
+
+                    activeOpacity={0.7}>
                     <Dumbbell
                       size={11}
                       color={
                         selectedTemplateFilter === 'all'
-                          ? '#000000'
+                          ? colors.textPrimaryOnVolt
                           : colors.textSecondary
                       }
                     />
@@ -1465,10 +1482,11 @@ export default function HistoryScreen() {
                           isSelected && styles.templateFilterChipActive,
                         ]}
                         onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                          triggerButtonVibration(hapticsEnabled);
                           setSelectedTemplateFilter(isSelected ? 'all' : tmpl.id);
                         }}
-                      >
+
+                        activeOpacity={0.7}>
                         <Text
                           style={[
                             styles.templateFilterChipText,
@@ -1495,7 +1513,7 @@ export default function HistoryScreen() {
         {/* TAB 3: STEPS TAB CONTENT */}
         {activeTab === 'steps' && (
           <View>
-            {stepHeatmapComponent}
+            {stepActivityComponent}
 
             {/* 4-Tile Step Bento Grid */}
             <View style={styles.sectionContainer}>
@@ -1516,8 +1534,8 @@ export default function HistoryScreen() {
                         : language === 'id' ? '1 Bulan' : '1 Month'}
                       )
                     </Text>
-                    <View style={[styles.statIconBadge, { backgroundColor: 'rgba(249, 115, 22, 0.15)' }]}>
-                      <Footprints size={14} color="#F97316" strokeWidth={2.2} />
+                    <View style={[styles.statIconBadge, { backgroundColor: colors.actionIconBg }]}>
+                      <Footprints size={14} color={colors.accentSecondary} strokeWidth={2.2} />
                     </View>
                   </View>
                   <View style={styles.statHeroRow}>
@@ -1532,7 +1550,7 @@ export default function HistoryScreen() {
                 <View style={styles.statCard}>
                   <View style={styles.statTopRow}>
                     <Text style={styles.statLabel} numberOfLines={1}>{t('steps_avg_daily') || 'Rata-rata / Hari'}</Text>
-                    <View style={[styles.statIconBadge, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+                    <View style={[styles.statIconBadge, { backgroundColor: colors.actionIconBg }]}>
                       <TrendingUp size={13} color="#38BDF8" />
                     </View>
                   </View>
@@ -1544,8 +1562,8 @@ export default function HistoryScreen() {
                 <View style={styles.statCard}>
                   <View style={styles.statTopRow}>
                     <Text style={styles.statLabel} numberOfLines={1}>{t('steps_goal_hit') || 'Target Tercapai'}</Text>
-                    <View style={[styles.statIconBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                      <Target size={13} color="#22C55E" />
+                    <View style={[styles.statIconBadge, { backgroundColor: colors.actionIconBg }]}>
+                      <Target size={13} color={colors.successBadge} />
                     </View>
                   </View>
                   <Text style={styles.statValue}>
@@ -1558,8 +1576,8 @@ export default function HistoryScreen() {
                 <View style={[styles.statCard, styles.statCardWide]}>
                   <View style={styles.statTopRow}>
                     <Text style={styles.statLabel}>{t('distance_and_calories') || 'Jarak & Kalori'}</Text>
-                    <View style={[styles.statIconBadge, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
-                      <Flame size={13} color="#EF4444" />
+                    <View style={[styles.statIconBadge, { backgroundColor: colors.actionIconBg }]}>
+                      <Flame size={13} color={colors.danger} />
                     </View>
                   </View>
                   <View style={styles.stepDistCalRow}>
@@ -1595,7 +1613,6 @@ export default function HistoryScreen() {
     totalDurationSeconds,
     totalCompletedSets,
     avgDurationMins,
-    stepHeatmapComponent,
     stepPeriodStats,
     selectedStepPeriod,
     renderSessionCard,
@@ -1799,7 +1816,7 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 2,
     },
     todayCircle: {
-      backgroundColor: 'rgba(245, 158, 11, 0.18)',
+      backgroundColor: c.actionIconBg,
       borderWidth: 1.5,
       borderColor: c.primaryAction,
     },
@@ -1826,7 +1843,7 @@ const getStyles = (c: ThemeColors) =>
     },
     todayTextSelected: {
       fontFamily: AppFonts.extraBold,
-      color: '#131417',
+      color: c.cardSurface,
       fontWeight: '900',
     },
     dayTextSelected: {
@@ -1875,17 +1892,17 @@ const getStyles = (c: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
       paddingVertical: 3,
       paddingHorizontal: 8,
       borderRadius: 6,
       borderWidth: 1,
-      borderColor: 'rgba(245, 158, 11, 0.25)',
+      borderColor: c.borderSubtle,
     },
     allTimeBadgeText: {
       fontFamily: AppFonts.bold,
       fontSize: 9,
-      color: '#F59E0B',
+      color: c.primaryAction,
       letterSpacing: 0.8,
     },
     allTimeHeroCard: {
@@ -1916,9 +1933,9 @@ const getStyles = (c: ThemeColors) =>
       width: 42,
       height: 42,
       borderRadius: 12,
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
       borderWidth: 1,
-      borderColor: 'rgba(245, 158, 11, 0.25)',
+      borderColor: c.borderSubtle,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -2151,7 +2168,7 @@ const getStyles = (c: ThemeColors) =>
     historyMaxBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
       paddingHorizontal: 7,
       paddingVertical: 3,
       borderRadius: 6,
@@ -2160,7 +2177,7 @@ const getStyles = (c: ThemeColors) =>
     historyMaxText: {
       fontFamily: AppFonts.bold,
       fontSize: 11,
-      color: '#F59E0B',
+      color: c.primaryAction,
       fontWeight: '700',
       fontVariant: ['tabular-nums'],
     },
@@ -2241,7 +2258,7 @@ const getStyles = (c: ThemeColors) =>
     segmentedTextActive: {
       fontFamily: AppFonts.bold,
       fontWeight: '700',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
     },
     tabBadge: {
       paddingHorizontal: 6,
@@ -2354,7 +2371,7 @@ const getStyles = (c: ThemeColors) =>
     filterChipTextActive: {
       fontFamily: AppFonts.bold,
       fontWeight: '700',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
     },
     logsCountRow: {
       flexDirection: 'row',
@@ -2399,7 +2416,7 @@ const getStyles = (c: ThemeColors) =>
     templateFilterChipTextActive: {
       fontFamily: AppFonts.bold,
       fontWeight: '700',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
     },
 
     // Step History Styles
@@ -2486,7 +2503,7 @@ const getStyles = (c: ThemeColors) =>
       width: 28,
       height: 28,
       borderRadius: 8,
-      backgroundColor: 'rgba(34, 197, 94, 0.12)',
+      backgroundColor: c.actionIconBg,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -2551,91 +2568,100 @@ const getStyles = (c: ThemeColors) =>
       color: c.dateTextSelected,
     },
 
-    // Step Activity Heatmap Matrix
-    heatmapScrollWrap: {
-      paddingVertical: 6,
-      paddingHorizontal: 2,
-    },
-    heatmapMatrix: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-    },
-    heatmapMonthRibbonRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 4,
-    },
-    heatmapMonthRibbonSpacer: {
-      width: 22,
-    },
-    heatmapMonthRibbonItem: {
-      justifyContent: 'center',
-      paddingLeft: 2,
-    },
-    heatmapMonthRibbonText: {
-      fontFamily: AppFonts.bold,
-      fontSize: 11,
-      fontWeight: '700',
-      color: c.textSecondary,
-    },
-    heatmapWeekColNewMonth: {
-      marginLeft: 2,
-    },
-    heatmapDayLabelsCol: {
-      marginRight: 6,
-      paddingTop: 2,
-      gap: 3,
-    },
-    heatmapDayLabelText: {
-      fontFamily: AppFonts.semiBold,
-      fontSize: 10,
-      color: c.textMuted,
-      height: 12,
-      lineHeight: 12,
-    },
-    heatmapWeekCol: {
-      alignItems: 'center',
-      marginRight: 3,
-    },
-    heatmapMonthLabel: {
-      fontFamily: AppFonts.bold,
-      fontSize: 10,
-      color: c.textMuted,
-      height: 14,
-      marginBottom: 2,
-    },
-    heatmapMonthSpacer: {
-      height: 14,
-      marginBottom: 2,
-    },
-    heatmapCell: {
-      width: 12,
-      height: 12,
-      borderRadius: 3,
-      marginBottom: 3,
-    },
-    heatmapCellToday: {
-      borderColor: '#fff',
-      borderWidth: 1,
-    },
-    heatmapLegendRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      gap: 4,
+    // Step Activity Bar Chart
+    barChartContainer: {
       marginTop: 8,
       marginBottom: 8,
     },
-    heatmapLegendText: {
-      fontFamily: AppFonts.medium,
-      fontSize: 11,
-      color: c.textMuted,
-      marginHorizontal: 3,
+    barChartHeader: {
+      marginBottom: 8,
     },
-    heatmapLegendBox: {
+    barChartTitle: {
+      fontFamily: AppFonts.extraBold,
+      fontSize: 16,
+      fontWeight: '800',
+      color: c.textPrimary,
+      letterSpacing: -0.3,
+    },
+    barChartSubtitle: {
+      fontFamily: AppFonts.medium,
+      fontSize: 12,
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+    barChartScrollWrap: {
+      paddingVertical: 4,
+      paddingHorizontal: 4,
+    },
+    barChartPlot: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 12,
+    },
+    barWeekCol: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 2,
+    },
+    barAxisY: {
+      height: 120,
+      justifyContent: 'space-between',
+      paddingRight: 6,
+    },
+    barYTick: {
+      fontFamily: AppFonts.medium,
+      fontSize: 9,
+      color: c.textMuted,
+      textAlign: 'right',
+    },
+    barContainer: {
+      alignItems: 'center',
+    },
+    barBackground: {
+      width: 44,
+      justifyContent: 'flex-end',
+      paddingLeft: 2,
+      borderLeftWidth: 1,
+      borderLeftColor: c.borderSubtle,
+      paddingBottom: 4,
+    },
+    barSegment: {
+      width: 8,
+      borderRadius: 1,
+      marginBottom: 1,
+      alignSelf: 'center',
+    },
+    barLabelRow: {
+      marginTop: 4,
+      alignItems: 'center',
+    },
+    barWeekLabel: {
+      fontFamily: AppFonts.semiBold,
+      fontSize: 10,
+      color: c.textSecondary,
+    },
+    barLegendRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: 10,
+      marginTop: 8,
+      marginBottom: 4,
+    },
+    barLegendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    barLegendBox: {
       width: 10,
       height: 10,
       borderRadius: 2,
+    },
+    barLegendText: {
+      fontFamily: AppFonts.medium,
+      fontSize: 11,
+      color: c.textMuted,
     },
 
     // Step Inspection Card
@@ -2673,14 +2699,14 @@ const getStyles = (c: ThemeColors) =>
       alignItems: 'center',
     },
     stepGoalPillMet: {
-      backgroundColor: 'rgba(34, 197, 94, 0.15)',
+      backgroundColor: c.actionIconBg,
       borderWidth: 1,
-      borderColor: 'rgba(34, 197, 94, 0.3)',
+      borderColor: c.successBadge,
     },
     stepGoalPillUnmet: {
-      backgroundColor: 'rgba(249, 115, 22, 0.15)',
+      backgroundColor: c.actionIconBg,
       borderWidth: 1,
-      borderColor: 'rgba(249, 115, 22, 0.3)',
+      borderColor: c.accentSecondary,
     },
     stepGoalPillContent: {
       flexDirection: 'row',
@@ -2691,13 +2717,13 @@ const getStyles = (c: ThemeColors) =>
       fontFamily: AppFonts.bold,
       fontSize: 11,
       fontWeight: '700',
-      color: '#22C55E',
+      color: c.successBadge,
     },
     stepGoalPillTextUnmet: {
       fontFamily: AppFonts.bold,
       fontSize: 11,
       fontWeight: '700',
-      color: '#F97316',
+      color: c.accentSecondary,
     },
     stepCountRow: {
       flexDirection: 'row',

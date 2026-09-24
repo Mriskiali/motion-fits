@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { markPendingSync } from '../services/syncState';
 import {
   checkHealthConnectAvailability,
   checkStepPermissionGranted,
@@ -74,8 +75,23 @@ export const useStepStore = create<StepState>()((set, get) => ({
         });
 
         if (isConnected) {
-          get().syncSteps();
-          get().fetchHistory(14);
+          const steps = await fetchTodayStepsFromHealthConnect().catch(() => get().todaySteps);
+          const hist = await fetchStepsHistoryFromHealthConnect(14).catch(() => ({}));
+          
+          const now = new Date();
+          const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+          set((state) => ({
+            todaySteps: steps,
+            lastSyncTime: Date.now(),
+            isSyncing: false,
+            stepHistory: {
+              ...state.stepHistory,
+              [todayKey]: steps,
+              ...hist,
+            },
+          }));
+          get().checkMilestones(steps, get().dailyStepGoal);
         }
       },
 
@@ -170,6 +186,7 @@ export const useStepStore = create<StepState>()((set, get) => ({
           },
         }));
         get().checkMilestones(steps, get().dailyStepGoal);
+        markPendingSync();
       },
 
       recordDailyStep: (dateStr: string, steps: number) => {
@@ -179,6 +196,7 @@ export const useStepStore = create<StepState>()((set, get) => ({
             [dateStr]: steps,
           },
         }));
+        markPendingSync();
       },
 
       checkMilestones: (steps: number, goal: number) => {
@@ -229,24 +247,52 @@ export const useStepStore = create<StepState>()((set, get) => ({
 
 let activeStepUserId: string | null = null;
 
-// Reactive subscriber: automatically saves steps into the active user's partition
-useStepStore.subscribe((state) => {
-  if (activeStepUserId) {
-    const partition = {
-      isConnected: state.isConnected,
-      todaySteps: state.todaySteps,
-      dailyStepGoal: state.dailyStepGoal,
-      lastSyncTime: state.lastSyncTime,
-      stepHistory: state.stepHistory,
-      lastCelebratedDate: state.lastCelebratedDate,
-      lastCelebratedLevel: state.lastCelebratedLevel,
-    };
-    AsyncStorage.setItem(`step_partition_${activeStepUserId}`, JSON.stringify(partition)).catch(() => {});
-  }
+// Reactive subscriber: automatically saves steps into the active user's partition.
+// Debounced because pedometer/step sync updates can fire many times per minute;
+// coalescing avoids a full-partition AsyncStorage write on every tick.
+let persistStepTimeout: ReturnType<typeof setTimeout> | null = null;
+let isExplicitStepPersist = false;
+
+const persistActiveStepPartition = () => {
+  if (!activeStepUserId) return;
+  const state = useStepStore.getState();
+  const partition = {
+    isConnected: state.isConnected,
+    todaySteps: state.todaySteps,
+    dailyStepGoal: state.dailyStepGoal,
+    lastSyncTime: state.lastSyncTime,
+    stepHistory: state.stepHistory,
+    lastCelebratedDate: state.lastCelebratedDate,
+    lastCelebratedLevel: state.lastCelebratedLevel,
+  };
+  AsyncStorage.setItem(`step_partition_${activeStepUserId}`, JSON.stringify(partition)).catch(() => {});
+};
+
+useStepStore.subscribe(() => {
+  if (!activeStepUserId || isExplicitStepPersist) return;
+  if (persistStepTimeout) clearTimeout(persistStepTimeout);
+  persistStepTimeout = setTimeout(() => {
+    persistStepTimeout = null;
+    persistActiveStepPartition();
+  }, 500);
 });
+
+export const flushStepPartition = (): void => {
+  if (persistStepTimeout) {
+    clearTimeout(persistStepTimeout);
+    persistStepTimeout = null;
+  }
+  persistActiveStepPartition();
+};
 
 export const loadStepPartition = async (userId: string): Promise<void> => {
   if (activeStepUserId === userId) return;
+
+  if (persistStepTimeout) {
+    clearTimeout(persistStepTimeout);
+    persistStepTimeout = null;
+  }
+  isExplicitStepPersist = true;
 
   if (activeStepUserId && activeStepUserId !== userId) {
     const state = useStepStore.getState();
@@ -291,6 +337,7 @@ export const loadStepPartition = async (userId: string): Promise<void> => {
         lastCelebratedLevel: Number(parsed.lastCelebratedLevel) || 0,
         activeMilestone: null,
       });
+      isExplicitStepPersist = false;
       return;
     }
 
@@ -316,6 +363,7 @@ export const loadStepPartition = async (userId: string): Promise<void> => {
 
           await AsyncStorage.setItem(`step_partition_${userId}`, JSON.stringify(legacyState)).catch(() => {});
           await AsyncStorage.removeItem('step-storage').catch(() => {});
+          isExplicitStepPersist = false;
           return;
         }
       }
@@ -335,9 +383,14 @@ export const loadStepPartition = async (userId: string): Promise<void> => {
     lastCelebratedDate: null,
     lastCelebratedLevel: 0,
   });
+  isExplicitStepPersist = false;
 };
 
 export const unloadStepPartition = async (): Promise<void> => {
+  if (persistStepTimeout) {
+    clearTimeout(persistStepTimeout);
+    persistStepTimeout = null;
+  }
   if (activeStepUserId) {
     const state = useStepStore.getState();
     await AsyncStorage.setItem(

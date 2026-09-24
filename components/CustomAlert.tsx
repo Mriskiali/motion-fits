@@ -10,9 +10,10 @@ import {
 } from 'react-native';
 import { AlertCircle, AlertTriangle, Info, Trash2 } from 'lucide-react-native';
 import { useAlertStore } from '@/store/useAlertStore';
+import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { ThemeColors, AppFonts } from '@/constants/theme';
-import * as Haptics from 'expo-haptics';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
 
 export default function CustomAlert() {
   const visible = useAlertStore((s) => s.visible);
@@ -25,6 +26,7 @@ function CustomAlertModal() {
   const message = useAlertStore((s) => s.message);
   const buttons = useAlertStore((s) => s.buttons);
   const hideAlert = useAlertStore((s) => s.hideAlert);
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
   const colors = useThemeColors();
   const styles = useMemo(() => getStyles(colors), [colors]);
 
@@ -98,14 +100,11 @@ function CustomAlertModal() {
                         !isDestructive && !isCancel && styles.buttonPrimary,
                       ]}
                       onPress={() => {
-                        Haptics.impactAsync(
-                          isDestructive
-                            ? Haptics.ImpactFeedbackStyle.Medium
-                            : Haptics.ImpactFeedbackStyle.Light
-                        );
+                        triggerButtonVibration(hapticsEnabled);
                         hideAlert();
                         if (btn.onPress) btn.onPress();
                       }}
+                      activeOpacity={0.7}
                     >
                       <Text
                         style={[
@@ -230,7 +229,7 @@ const getStyles = (c: ThemeColors) =>
       fontWeight: '700',
     },
     buttonTextPrimary: {
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
       fontWeight: '800',
     },
     buttonTextDestructive: {

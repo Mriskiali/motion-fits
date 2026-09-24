@@ -113,10 +113,10 @@ export default function SplashScreenOverlay({
 
         {/* Brand Name */}
         <View style={styles.textWrap}>
-          <Text style={[styles.title, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>
+          <Text style={[styles.title, { color: isDark ? colors.textPrimary : "#0F172A" }]}>
             Motion<Text style={styles.titleAccent}>Fit</Text>
           </Text>
-          <Text style={[styles.subtitle, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+          <Text style={[styles.subtitle, { color: isDark ? colors.textSecondary : colors.textMuted }]}>
             Smart Bionic Training
           </Text>
         </View>
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       ios: {
-        shadowColor: '#F59E0B',
+        shadowColor: 'colors.primaryAction',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.35,
         shadowRadius: 24,
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   titleAccent: {
-    color: '#F59E0B',
+    color: 'colors.primaryAction',
   },
   subtitle: {
     fontSize: 13,

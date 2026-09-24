@@ -22,7 +22,8 @@ import {
 } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale/id';
-import * as Haptics from 'expo-haptics';
+import { useUserStore } from '@/store/useUserStore';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { AppFonts } from '@/constants/theme';
@@ -68,15 +69,16 @@ export default function WorkoutDetailModal({
   const colors = useThemeColors();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { t, language } = useTranslation();
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
 
   const handleClose = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerButtonVibration(hapticsEnabled);
     onClose();
   };
 
   const handleShare = () => {
     if (!session) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerButtonVibration(hapticsEnabled);
     if (onShare) {
       onShare(session);
     }
@@ -84,7 +86,7 @@ export default function WorkoutDetailModal({
 
   const handleDelete = () => {
     if (!session || !onDelete) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerButtonVibration(hapticsEnabled);
     onDelete(session.id);
   };
 
@@ -265,7 +267,7 @@ export default function WorkoutDetailModal({
             {/* Total Sets */}
             <View style={styles.metricCard}>
               <View style={[styles.metricIconBox, { backgroundColor: 'rgba(34, 197, 94, 0.12)' }]}>
-                <CheckCircle2 size={14} color="#22C55E" />
+                <CheckCircle2 size={14} color={colors.accentLime} />
               </View>
               <Text style={styles.metricValue}>{totalSets} Set</Text>
               <Text style={styles.metricLabel}>{t('total_sets') || 'Total Set'}</Text>
@@ -274,7 +276,7 @@ export default function WorkoutDetailModal({
             {/* Total Reps */}
             <View style={styles.metricCard}>
               <View style={[styles.metricIconBox, { backgroundColor: 'rgba(234, 179, 8, 0.12)' }]}>
-                <Flame size={14} color="#F59E0B" />
+                <Flame size={14} color={colors.primaryAction} />
               </View>
               <Text style={styles.metricValue}>{totalReps} Reps</Text>
               <Text style={styles.metricLabel}>{t('total_reps') || 'Total Reps'}</Text>
@@ -297,7 +299,7 @@ export default function WorkoutDetailModal({
           {/* Progressive Overload Section Header */}
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionTitleWrap}>
-              <TrendingUp size={16} color="#22C55E" />
+              <TrendingUp size={16} color={colors.accentLime} />
               <Text style={styles.sectionTitle}>
                 {language === 'id' ? 'Histori Beban & Set (Progressive Overload)' : 'Weight & Set History'}
               </Text>
@@ -379,7 +381,7 @@ export default function WorkoutDetailModal({
                     <View style={styles.trendCol}>
                       {setItem.weightDelta && setItem.weightDelta > 0 ? (
                         <View style={styles.trendPillUp}>
-                          <ArrowUpRight size={10} color="#22C55E" />
+                          <ArrowUpRight size={10} color={colors.accentLime} />
                           <Text style={styles.trendPillUpText}>+{setItem.weightDelta}kg</Text>
                         </View>
                       ) : setItem.weightDelta && setItem.weightDelta < 0 ? (
@@ -422,7 +424,7 @@ export default function WorkoutDetailModal({
                 onPress={handleShare}
                 activeOpacity={0.8}
               >
-                <Share2 size={16} color="#000000" />
+                <Share2 size={16} color={colors.textPrimaryOnVolt} />
                 <Text style={styles.shareActionText}>
                   {language === 'id' ? 'Bagikan Story' : 'Share Story'}
                 </Text>

@@ -16,6 +16,7 @@ import {
 import { useRouter } from "expo-router";
 import { useAuth, useUser, useClerk } from "@clerk/expo";
 import { performFullSync, clearLocalUserData, triggerBackgroundUserSync } from "@/services/syncService";
+import { setPendingSignedOut, clearPendingSignedOut } from "@/services/authIntent";
 import { isTursoConfigured } from "@/services/turso";
 import { AppFonts } from "@/constants/theme";
 import { useThemeColors, ThemeColors } from "@/hooks/useThemeColors";
@@ -41,9 +42,9 @@ import {
 } from "@/utils/soundPlayer";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as FileSystem from "expo-file-system/legacy";
-import * as Haptics from "expo-haptics";
 import * as Sharing from "expo-sharing";
 import AudioTrimmerCard from "@/components/AudioTrimmerCard";
+import { useRenderProfiler } from "@/hooks/useRenderProfiler";
 import {
   Activity,
   Bell,
@@ -79,6 +80,7 @@ try {
 }
 
 export default function SettingsScreen() {
+  useRenderProfiler('SettingsScreen', 8);
   const name = useUserStore((s) => s.name);
   const weeklyGoal = useUserStore((s) => s.weeklyGoal);
   const theme = useUserStore((s) => s.theme);
@@ -114,6 +116,10 @@ export default function SettingsScreen() {
 
   const { isSignedIn, userId } = useAuth();
   const { user } = useUser();
+  const userFullName = user?.fullName;
+  const userFirstName = user?.firstName;
+  const userImageUrl = user?.imageUrl;
+  const userEmail = user?.primaryEmailAddress?.emailAddress;
   const { signOut } = useClerk();
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   const [lastCloudSyncTime, setLastCloudSyncTime] = useState<number | null>(null);
@@ -124,8 +130,8 @@ export default function SettingsScreen() {
     setIsCloudSyncing(true);
     try {
       const result = await performFullSync(userId, {
-        email: user?.primaryEmailAddress?.emailAddress,
-        name: user?.fullName || displayName || undefined,
+        email: userEmail,
+        name: userFullName || displayName || undefined,
       });
       if (result.success) {
         setLastCloudSyncTime(result.syncedAt || Date.now());
@@ -163,27 +169,33 @@ export default function SettingsScreen() {
           {
             text: language === "id" ? "Buang & Keluar" : "Discard & Sign Out",
             style: "destructive",
-            onPress: async () => {
-              try {
-                useWorkoutStore.getState().clearActiveSession();
-                await clearLocalUserData(true);
-                await signOut();
-                router.replace('/(auth)/sign-in');
-              } catch (err) {
+            onPress: () => {
+              triggerHaptic();
+              useWorkoutStore.getState().clearActiveSession();
+              // Optimistic, flap-free sign-out: mark intent + navigate now; teardown
+              // and Clerk signOut run in the background.
+              setPendingSignedOut(true);
+              router.replace('/(auth)/sign-in');
+              clearLocalUserData(true).catch(() => {});
+              signOut().catch((err) => {
                 console.warn('[Auth] Error signing out:', err);
-              }
+                clearPendingSignedOut();
+                router.replace('/(tabs)');
+              });
             },
           },
           {
             text: language === "id" ? "Simpan & Keluar" : "Save & Sign Out",
-            onPress: async () => {
-              try {
-                await clearLocalUserData(false);
-                await signOut();
-                router.replace('/(auth)/sign-in');
-              } catch (err) {
+            onPress: () => {
+              triggerHaptic();
+              setPendingSignedOut(true);
+              router.replace('/(auth)/sign-in');
+              clearLocalUserData(false).catch(() => {});
+              signOut().catch((err) => {
                 console.warn('[Auth] Error signing out:', err);
-              }
+                clearPendingSignedOut();
+                router.replace('/(tabs)');
+              });
             },
           },
         ]
@@ -201,14 +213,17 @@ export default function SettingsScreen() {
         {
           text: language === "id" ? "Keluar" : "Sign Out",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await clearLocalUserData(false);
-              await signOut();
-              router.replace('/(auth)/sign-in');
-            } catch (err) {
+          onPress: () => {
+            triggerHaptic();
+            // Optimistic, flap-free sign-out: navigate now, teardown in background.
+            setPendingSignedOut(true);
+            router.replace('/(auth)/sign-in');
+            clearLocalUserData(false).catch(() => {});
+            signOut().catch((err) => {
               console.warn('[Auth] Error signing out:', err);
-            }
+              clearPendingSignedOut();
+              router.replace('/(tabs)');
+            });
           },
         },
       ]
@@ -353,7 +368,7 @@ export default function SettingsScreen() {
   };
 
   const handleTimeChange = async (event: any, selectedDate?: Date) => {
-    setShowTimePicker(Platform.OS === "ios");
+    setShowTimePicker(false);
     if (selectedDate) {
       const hours = selectedDate.getHours().toString().padStart(2, "0");
       const minutes = selectedDate.getMinutes().toString().padStart(2, "0");
@@ -575,21 +590,21 @@ export default function SettingsScreen() {
         {isSignedIn ? (
           <View style={styles.profileCard}>
             <View style={styles.profileAvatar}>
-              {user?.imageUrl ? (
-                <Image source={{ uri: user.imageUrl }} style={styles.avatarImage} />
+              {userImageUrl ? (
+                <Image source={{ uri: userImageUrl }} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.avatarText}>
-                  {(user?.fullName || user?.firstName || displayName || "U").charAt(0).toUpperCase()}
+                  {(userFullName || userFirstName || displayName || "U").charAt(0).toUpperCase()}
                 </Text>
               )}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={styles.profileNameText} numberOfLines={1}>
-                  {user?.fullName || user?.firstName || displayName || "User"}
+                  {userFullName || userFirstName || displayName || "User"}
                 </Text>
                 <View style={styles.proBadge}>
-                  <Sparkles size={9} color="#F59E0B" />
+                  <Sparkles size={9} color={colors.primaryAction} />
                   <Text style={styles.proBadgeText}>MOTIONFIT</Text>
                 </View>
               </View>
@@ -597,7 +612,7 @@ export default function SettingsScreen() {
                 {user?.primaryEmailAddress?.emailAddress || ""}
               </Text>
               <View style={styles.cloudStatusRow}>
-                <View style={[styles.cloudDot, { backgroundColor: isTursoConfigured() ? "#10B981" : "#F59E0B" }]} />
+                <View style={[styles.cloudDot, { backgroundColor: isTursoConfigured() ? colors.successBadge : colors.primaryAction }]} />
                 <Text style={styles.cloudStatusText} numberOfLines={1}>
                   {isTursoConfigured()
                     ? (lastCloudSyncTime
@@ -659,7 +674,7 @@ export default function SettingsScreen() {
                     maxLength={20}
                   />
                   <View style={styles.proBadge}>
-                    <Sparkles size={9} color="#F59E0B" />
+                    <Sparkles size={9} color={colors.primaryAction} />
                     <Text style={styles.proBadgeText}>MOTIONFIT</Text>
                   </View>
                 </View>
@@ -756,7 +771,8 @@ export default function SettingsScreen() {
                     syncSteps();
                   }}
                   disabled={isStepSyncing}
-                >
+                
+                  activeOpacity={0.7}>
                   <RotateCw color={colors.primaryAction} size={12} />
                   <Text style={styles.subActionChipText}>
                     {isStepSyncing ? t("syncing") : t("sync_steps")}
@@ -769,7 +785,8 @@ export default function SettingsScreen() {
                     triggerHaptic();
                     openHealthConnectSettingsSafe();
                   }}
-                >
+                
+                  activeOpacity={0.7}>
                   <ExternalLink color={colors.textSecondary} size={12} />
                   <Text style={styles.subActionChipText}>{t('settings')}</Text>
                 </TouchableOpacity>
@@ -784,7 +801,8 @@ export default function SettingsScreen() {
                     triggerHaptic();
                     openHealthConnectStore();
                   }}
-                >
+                
+                  activeOpacity={0.7}>
                   <ExternalLink color={colors.primaryAction} size={12} />
                   <Text style={[styles.subActionChipText, { color: colors.primaryAction }]}>
                     {t("install_health_connect")}
@@ -854,21 +872,20 @@ export default function SettingsScreen() {
                     <TouchableOpacity
                       onPress={() => {
                         triggerHaptic();
-                        setDefaultRestTimer(Math.max(5, (defaultRestTimer || 90) - 15));
+                        const step = (defaultRestTimer || 90) - 15;
+                        setDefaultRestTimer(step < 0 ? 0 : step);
                       }}
-                      style={styles.inlineStepperBtn}
-                      activeOpacity={0.7}
-                    >
+                      activeOpacity={0.7}>
                       <Minus size={13} color={colors.textPrimary} />
                     </TouchableOpacity>
 
                     <TextInput
                       style={styles.inlineStepperInput}
                       keyboardType="number-pad"
-                      value={String(defaultRestTimer || "")}
+                      value={String(defaultRestTimer ?? "")}
                       placeholder="90"
                       placeholderTextColor={colors.textMuted}
-                      maxLength={3}
+                      maxLength={4}
                       selectTextOnFocus
                       onChangeText={(val) => {
                         const clean = val.replace(/[^0-9]/g, "");
@@ -876,27 +893,24 @@ export default function SettingsScreen() {
                           setDefaultRestTimer(0);
                         } else {
                           const parsed = parseInt(clean, 10);
-                          if (!isNaN(parsed)) {
-                            setDefaultRestTimer(Math.min(600, parsed));
+                          if (!isNaN(parsed) && parsed >= 0) {
+                            setDefaultRestTimer(parsed);
                           }
                         }
                       }}
                       onBlur={() => {
-                        if (!defaultRestTimer || defaultRestTimer < 5) {
-                          setDefaultRestTimer(5);
+                        if (!defaultRestTimer || defaultRestTimer < 0) {
+                          setDefaultRestTimer(0);
                         }
                       }}
                     />
-                    <Text style={styles.inlineUnitText}>{t("seconds_short")}</Text>
 
                     <TouchableOpacity
                       onPress={() => {
                         triggerHaptic();
-                        setDefaultRestTimer(Math.min(600, (defaultRestTimer || 90) + 15));
+                        setDefaultRestTimer((defaultRestTimer || 0) + 15);
                       }}
-                      style={styles.inlineStepperBtn}
-                      activeOpacity={0.7}
-                    >
+                      activeOpacity={0.7}>
                       <Plus size={13} color={colors.textPrimary} />
                     </TouchableOpacity>
                   </View>
@@ -927,7 +941,8 @@ export default function SettingsScreen() {
                     if (remindersEnabled) scheduleDailyReminder(reminderTime, "id");
                     triggerBackgroundUserSync(userId);
                   }}
-                >
+                
+                  activeOpacity={0.7}>
                   <Text style={[styles.compactSegmentText, language === "id" && styles.compactSegmentTextActive]}>ID</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -938,7 +953,8 @@ export default function SettingsScreen() {
                     if (remindersEnabled) scheduleDailyReminder(reminderTime, "en");
                     triggerBackgroundUserSync(userId);
                   }}
-                >
+                
+                  activeOpacity={0.7}>
                   <Text style={[styles.compactSegmentText, language === "en" && styles.compactSegmentTextActive]}>EN</Text>
                 </TouchableOpacity>
               </View>
@@ -962,7 +978,8 @@ export default function SettingsScreen() {
                     setTheme("light");
                     triggerBackgroundUserSync(userId);
                   }}
-                >
+                
+                  activeOpacity={0.7}>
                   <Text style={[styles.compactSegmentText, !isDarkMode && styles.compactSegmentTextActive]}>{t("theme_light")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -972,7 +989,8 @@ export default function SettingsScreen() {
                     setTheme("dark");
                     triggerBackgroundUserSync(userId);
                   }}
-                >
+                
+                  activeOpacity={0.7}>
                   <Text style={[styles.compactSegmentText, isDarkMode && styles.compactSegmentTextActive]}>{t("theme_dark")}</Text>
                 </TouchableOpacity>
               </View>
@@ -1044,7 +1062,8 @@ export default function SettingsScreen() {
                     setAudioNotification("default_notification");
                     playPreview("default_notification");
                   }}
-                >
+                
+                  activeOpacity={0.7}>
                   <Text style={[styles.compactSegmentText, audioNotification === "default_notification" && styles.compactSegmentTextActive]}>
                     {t("default")}
                   </Text>
@@ -1064,7 +1083,8 @@ export default function SettingsScreen() {
                       handlePickAudio();
                     }
                   }}
-                >
+                
+                  activeOpacity={0.7}>
                   <Text style={[styles.compactSegmentText, audioNotification !== "default_notification" && audioNotification !== "none" && styles.compactSegmentTextActive]}>
                     {t("custom")}
                   </Text>
@@ -1076,7 +1096,8 @@ export default function SettingsScreen() {
                     stopTimerSound();
                     setAudioNotification("none");
                   }}
-                >
+                
+                  activeOpacity={0.7}>
                   <Text style={[styles.compactSegmentText, audioNotification === "none" && styles.compactSegmentTextActive]}>
                     {t("silent")}
                   </Text>
@@ -1134,7 +1155,7 @@ export default function SettingsScreen() {
                     </>
                   ) : (
                     <>
-                      <Play size={12} color="#000000" fill="#000000" />
+                      <Play size={12} color={colors.textPrimaryOnVolt} fill={colors.textPrimaryOnVolt} />
                       <Text style={styles.compactPreviewBtnText}>
                         {t("preview_audio")} (5s)
                       </Text>
@@ -1188,6 +1209,7 @@ export default function SettingsScreen() {
                 is24Hour={true}
                 display="default"
                 onValueChange={handleTimeChange}
+                onDismiss={() => setShowTimePicker(false)}
               />
             )}
           </View>
@@ -1306,7 +1328,7 @@ const getStyles = (c: ThemeColors) => {
       flexDirection: "row",
       alignItems: "center",
       gap: 3,
-      backgroundColor: "rgba(245, 158, 11, 0.12)",
+      backgroundColor: c.actionIconBg,
       paddingHorizontal: 5,
       paddingVertical: 1.5,
       borderRadius: 4,
@@ -1315,7 +1337,7 @@ const getStyles = (c: ThemeColors) => {
       fontFamily: AppFonts.bold,
       fontSize: 10,
       fontWeight: "800",
-      color: "#F59E0B",
+      color: c.primaryAction,
       letterSpacing: 0.5,
     },
     profileMeta: {
@@ -1558,7 +1580,7 @@ const getStyles = (c: ThemeColors) => {
       color: c.textSecondary,
     },
     compactSegmentTextActive: {
-      color: "#000000",
+      color: c.textPrimaryOnVolt,
       fontWeight: "800",
     },
 
@@ -1610,7 +1632,7 @@ const getStyles = (c: ThemeColors) => {
       fontFamily: AppFonts.bold,
       fontSize: 12,
       fontWeight: "700",
-      color: "#000000",
+      color: c.textPrimaryOnVolt,
     },
     timePickerCompactBtn: {
       flexDirection: "row",

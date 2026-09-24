@@ -25,8 +25,9 @@ import {
   RotateCw,
   Check,
   User,
+  Cat,
 } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
 import { format, startOfWeek, endOfWeek, addDays, isSameDay, isBefore, startOfDay } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale/id';
 import { useUserStore } from '@/store/useUserStore';
@@ -37,12 +38,17 @@ import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
 import { updateWidget } from '@/utils/widgetBridge';
+import { useRenderProfiler } from '@/hooks/useRenderProfiler';
 
 export default function DashboardScreen() {
+  useRenderProfiler('DashboardScreen', 8);
   const router = useRouter();
   const { user } = useUser();
+  const userFullName = user?.fullName;
+  const userFirstName = user?.firstName;
+  const userImageUrl = user?.imageUrl;
   const name = useUserStore((state) => state.name);
-  const effectiveName = user?.fullName || user?.firstName || (name && name !== 'Athlete' ? name : '');
+  const effectiveName = userFullName || userFirstName || (name && name !== 'Athlete' ? name : '');
   const streak = useUserStore((state) => state.streak);
   const checkStreakExpiry = useUserStore((state) => state.checkStreakExpiry);
   const weeklyGoal = useUserStore((state) => state.weeklyGoal);
@@ -183,21 +189,33 @@ export default function DashboardScreen() {
     ? templates.find((t) => t.id === lastSession.templateId)
     : null;
 
-  const getGreeting = () => {
+  const greeting = useMemo(() => {
     const hour = new Date().getHours();
     if (hour < 12) return t('good_morning');
     if (hour < 18) return t('good_afternoon');
     return t('good_evening');
-  };
+  }, [t]);
 
-  const todayDateStr = format(new Date(), 'yyyy-MM-dd');
+  const todayDateStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+  const formattedSelectedDate = useMemo(() => 
+    format(selectedDate, 'EEEE, d MMMM yyyy', {
+      locale: language === 'id' ? idLocale : undefined,
+    }), [selectedDate, language]);
   const todayScheduledTemplateId = scheduledWorkouts[todayDateStr];
   const todayScheduledTemplate = templates.find((t) => t.id === todayScheduledTemplateId);
 
-  const handleStartWorkout = () => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  // Precompute the set of dates that have a completed session ONCE per sessions change,
+  // instead of running date-fns `format` for every (day x session) pair on every render.
+  const completedSessionDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of sessions) {
+      set.add(format(new Date(s.date), 'yyyy-MM-dd'));
     }
+    return set;
+  }, [sessions]);
+
+  const handleStartWorkout = () => {
+    triggerButtonVibration(hapticsEnabled);
     if (activeSession) {
       router.push('/workout/active');
     } else {
@@ -218,7 +236,7 @@ export default function DashboardScreen() {
         <View style={styles.headerBar}>
           <View style={styles.headerLeft}>
             <Text style={styles.greetingTitle}>
-              {getGreeting()}
+              {greeting}
               {effectiveName ? (
                 <>
                   {', '}
@@ -229,15 +247,13 @@ export default function DashboardScreen() {
               )}
             </Text>
             <Text style={styles.dateSubtitle}>
-              {format(selectedDate, 'EEEE, d MMMM yyyy', {
-                locale: language === 'id' ? idLocale : undefined,
-              })}
+              {formattedSelectedDate}
             </Text>
           </View>
           <View style={styles.headerRight}>
             {streak > 0 && (
               <View style={styles.headerStreakBadge}>
-                <Flame size={13} color="#F59E0B" />
+                <Flame size={13} color={colors.primaryAction} />
                 <Text style={styles.headerStreakText}>
                   {streak} {t('day_streak') || 'Hari'}
                 </Text>
@@ -245,11 +261,12 @@ export default function DashboardScreen() {
             )}
             <Pressable
               onPress={() => router.push('/(tabs)/settings')}
-              style={styles.avatarButton}
+              onPressIn={() => triggerButtonVibration(hapticsEnabled)}
+              style={({ pressed }) => [styles.avatarButton, pressed && { opacity: 0.7 }]}
               accessibilityLabel={t('settings')}
             >
-              {user?.imageUrl ? (
-                <Image source={{ uri: user.imageUrl }} style={styles.avatarImage} />
+              {userImageUrl ? (
+                <Image source={{ uri: userImageUrl }} style={styles.avatarImage} />
               ) : effectiveName ? (
                 <Text style={styles.avatarText}>
                   {effectiveName.charAt(0).toUpperCase()}
@@ -268,9 +285,7 @@ export default function DashboardScreen() {
             const isCurrentToday = isSameDay(date, new Date());
             const dateStr = format(date, 'yyyy-MM-dd');
             const isPastDay = isBefore(startOfDay(date), startOfDay(new Date()));
-            const isSessionCompleted = sessions.some(
-              (s) => format(new Date(s.date), 'yyyy-MM-dd') === dateStr
-            );
+            const isSessionCompleted = completedSessionDates.has(dateStr);
             const hasWorkout = isPastDay
               ? isSessionCompleted
               : (isSessionCompleted || !!scheduledWorkouts[dateStr]);
@@ -278,10 +293,10 @@ export default function DashboardScreen() {
               <Pressable
                 key={idx}
                 onPress={() => {
-                  if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  triggerButtonVibration(hapticsEnabled);
                   setSelectedDate(date);
                 }}
-                style={styles.dayColumn}
+                style={({ pressed }) => [styles.dayColumn, pressed && { opacity: 0.7 }]}
               >
                 <Text style={[styles.dayAbbr, isCurrentToday && styles.dayAbbrToday]}>
                   {format(date, 'EEE', {
@@ -308,7 +323,7 @@ export default function DashboardScreen() {
                 <View
                   style={[
                     styles.dot,
-                    hasWorkout && { backgroundColor: isSelected ? '#000000' : '#10B981' },
+                    hasWorkout && { backgroundColor: isSelected ? colors.textPrimaryOnVolt : colors.successBadge },
                     !hasWorkout && { backgroundColor: 'transparent' },
                   ]}
                 />
@@ -319,6 +334,13 @@ export default function DashboardScreen() {
 
         {/* 3. Hero Card: Weekly Target with Precision Linear Bar */}
         <View style={styles.heroCard}>
+          {/* Cat Mascot Watermark */}
+          <Cat
+            size={64}
+            color={colors.textMuted}
+            style={styles.heroMascotWatermark}
+            strokeWidth={1.5}
+          />
           <View style={styles.heroTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroGoalHeading}>
@@ -335,7 +357,7 @@ export default function DashboardScreen() {
             <View
               style={[
                 styles.heroProgressFill,
-                { width: `${goalPercent}%`, backgroundColor: '#10B981' },
+                { width: `${goalPercent}%`, backgroundColor: colors.successBadge },
               ]}
             />
           </View>
@@ -367,8 +389,8 @@ export default function DashboardScreen() {
                 <>
                   <View style={styles.stepCardHeader}>
                     <View style={styles.stepCardHeaderLeft}>
-                      <View style={[styles.stepIconBadge, { backgroundColor: 'rgba(249, 115, 22, 0.12)' }]}>
-                        <Footprints size={18} color="#F97316" strokeWidth={2.2} />
+                      <View style={[styles.stepIconBadge, { backgroundColor: colors.actionIconBg }]}>
+                        <Footprints size={18} color={colors.warning} strokeWidth={2.2} />
                       </View>
                       <View>
                         <Text style={styles.stepCardTitle}>{t('steps_today')}</Text>
@@ -378,7 +400,7 @@ export default function DashboardScreen() {
                     <View style={styles.stepCardHeaderRight}>
                       <Pressable
                         onPress={() => {
-                          if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          triggerButtonVibration(hapticsEnabled);
                           syncSteps();
                         }}
                         disabled={isSyncing}
@@ -389,7 +411,7 @@ export default function DashboardScreen() {
                       >
                         <RotateCw
                           size={16}
-                          color={isSyncing ? colors.textMuted : '#F97316'}
+                          color={isSyncing ? colors.textMuted : colors.warning}
                           strokeWidth={2.2}
                         />
                       </Pressable>
@@ -414,7 +436,7 @@ export default function DashboardScreen() {
                     <View
                       style={[
                         styles.stepProgressFill,
-                        { width: `${stepPercent}%`, backgroundColor: '#F97316' },
+                        { width: `${stepPercent}%`, backgroundColor: colors.warning },
                       ]}
                     />
                   </View>
@@ -442,8 +464,8 @@ export default function DashboardScreen() {
               ) : (
                 <View style={styles.stepConnectContainer}>
                   <View style={styles.stepConnectLeft}>
-                    <View style={[styles.stepIconBadge, { backgroundColor: 'rgba(249, 115, 22, 0.12)' }]}>
-                      <Footprints size={20} color="#F97316" strokeWidth={2.2} />
+                    <View style={[styles.stepIconBadge, { backgroundColor: colors.actionIconBg }]}>
+                      <Footprints size={20} color={colors.warning} strokeWidth={2.2} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.stepCardTitle}>{t('step_counter')}</Text>
@@ -456,7 +478,7 @@ export default function DashboardScreen() {
                   </View>
                   <Pressable
                     onPress={async () => {
-                      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      triggerButtonVibration(hapticsEnabled);
                       if (availabilityStatus === 'update_required') {
                         openHealthConnectStore();
                       } else {
@@ -492,8 +514,8 @@ export default function DashboardScreen() {
               <Text style={styles.bentoCategory} numberOfLines={1}>
                 {t('workouts_completed') || 'Latihan Selesai'}
               </Text>
-              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(56, 189, 248, 0.12)' }]}>
-                <Dumbbell size={16} color="#38BDF8" strokeWidth={2.2} />
+              <View style={[styles.bentoIconBadge, { backgroundColor: colors.actionIconBg }]}>
+                <Dumbbell size={16} color={colors.accentSecondary} strokeWidth={2.2} />
               </View>
             </View>
             <Text style={styles.bentoValue} numberOfLines={1} adjustsFontSizeToFit>
@@ -508,8 +530,8 @@ export default function DashboardScreen() {
               <Text style={styles.bentoCategory} numberOfLines={1}>
                 {t('active_time')}
               </Text>
-              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                <Clock size={16} color="#F59E0B" strokeWidth={2.2} />
+              <View style={[styles.bentoIconBadge, { backgroundColor: colors.actionIconBg }]}>
+                <Clock size={16} color={colors.primaryAction} strokeWidth={2.2} />
               </View>
             </View>
             <Text style={styles.bentoValue} numberOfLines={1} adjustsFontSizeToFit>
@@ -524,8 +546,8 @@ export default function DashboardScreen() {
               <Text style={styles.bentoCategory} numberOfLines={1}>
                 {t('sets')}
               </Text>
-              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(34, 197, 94, 0.12)' }]}>
-                <CheckCheck size={16} color="#22C55E" strokeWidth={2.2} />
+              <View style={[styles.bentoIconBadge, { backgroundColor: colors.actionIconBg }]}>
+                <CheckCheck size={16} color={colors.successBadge} strokeWidth={2.2} />
               </View>
             </View>
             <Text style={styles.bentoValue}>{thisWeekSetsCount}</Text>
@@ -538,7 +560,7 @@ export default function DashboardScreen() {
               <Text style={styles.bentoCategory} numberOfLines={1}>
                 {t('avg_per_session')}
               </Text>
-              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
+              <View style={[styles.bentoIconBadge, { backgroundColor: colors.actionIconBg }]}>
                 <Timer size={16} color="#6366F1" strokeWidth={2.2} />
               </View>
             </View>
@@ -554,7 +576,7 @@ export default function DashboardScreen() {
           <Text style={styles.sectionTitle}>{t('recent_activity')}</Text>
           {lastSession ? (
             <View style={styles.activityCard}>
-              <View style={[styles.activityIconBox, { backgroundColor: 'rgba(34, 197, 94, 0.12)' }]}>
+              <View style={[styles.activityIconBox, { backgroundColor: colors.actionIconBg }]}>
                 <CheckCircle2 size={22} color={colors.successBadge} strokeWidth={2} />
               </View>
               <View style={{ flex: 1 }}>
@@ -588,9 +610,9 @@ export default function DashboardScreen() {
         >
           <View style={styles.plusIconWrapper}>
             {activeSession ? (
-              <RotateCw size={17} color="#000000" strokeWidth={2.5} />
+              <RotateCw size={17} color="#FFFFFF" strokeWidth={2.5} />
             ) : (
-              <Plus size={18} color="#000000" strokeWidth={2.6} />
+              <Plus size={18} color="#FFFFFF" strokeWidth={2.6} />
             )}
           </View>
           <Text style={styles.startWorkoutButtonText}>
@@ -656,9 +678,9 @@ const getStyles = (c: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      backgroundColor: 'rgba(245, 158, 11, 0.1)',
+      backgroundColor: c.surfaceHighlight,
       borderWidth: 1,
-      borderColor: 'rgba(245, 158, 11, 0.2)',
+      borderColor: c.borderSubtle,
       paddingHorizontal: 9,
       paddingVertical: 5,
       borderRadius: 10,
@@ -667,7 +689,7 @@ const getStyles = (c: ThemeColors) =>
       fontFamily: AppFonts.bold,
       fontSize: 12,
       fontWeight: '800',
-      color: '#F59E0B',
+      color: c.primaryAction,
       fontVariant: ['tabular-nums'],
     },
     avatarButton: {
@@ -744,7 +766,7 @@ const getStyles = (c: ThemeColors) =>
     dayNumberBadgeToday: {
       borderWidth: 1.5,
       borderColor: c.primaryAction,
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
     },
     dayNumberBadgeSelected: {
       backgroundColor: c.primaryAction,
@@ -764,7 +786,7 @@ const getStyles = (c: ThemeColors) =>
     dayNumberTextSelected: {
       fontFamily: AppFonts.extraBold,
       fontWeight: '800',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
     },
     dot: {
       width: 4,
@@ -780,6 +802,13 @@ const getStyles = (c: ThemeColors) =>
       marginBottom: 14,
       borderWidth: 1,
       borderColor: c.borderSubtle,
+      overflow: 'hidden',
+    },
+    heroMascotWatermark: {
+      position: 'absolute',
+      right: -8,
+      bottom: -8,
+      opacity: 0.08,
     },
     heroTopRow: {
       flexDirection: 'row',
@@ -800,7 +829,7 @@ const getStyles = (c: ThemeColors) =>
       fontVariant: ['tabular-nums'],
     },
     heroGoalPercentBadge: {
-      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+      backgroundColor: c.actionIconBg,
       paddingHorizontal: 7,
       paddingVertical: 2.5,
       borderRadius: 6,
@@ -809,12 +838,12 @@ const getStyles = (c: ThemeColors) =>
       fontFamily: AppFonts.bold,
       fontSize: 11,
       fontWeight: '800',
-      color: '#10B981',
+      color: c.successBadge,
       fontVariant: ['tabular-nums'],
     },
     heroProgressTrack: {
       height: 5,
-      backgroundColor: '#1E293B',
+      backgroundColor: c.elevatedSurface,
       borderRadius: 999,
       overflow: 'hidden',
       marginBottom: 6,
@@ -832,7 +861,7 @@ const getStyles = (c: ThemeColors) =>
       fontFamily: AppFonts.semiBold,
       fontSize: 11,
       fontWeight: '600',
-      color: '#10B981',
+      color: c.successBadge,
     },
     heroTargetLabel: {
       fontFamily: AppFonts.medium,
@@ -900,12 +929,12 @@ const getStyles = (c: ThemeColors) =>
       width: 32,
       height: 32,
       borderRadius: 16,
-      backgroundColor: 'rgba(249, 115, 22, 0.1)',
+      backgroundColor: c.surfaceHighlight,
       alignItems: 'center',
       justifyContent: 'center',
     },
     stepPercentBadge: {
-      backgroundColor: 'rgba(249, 115, 22, 0.12)',
+      backgroundColor: c.actionIconBg,
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 12,
@@ -914,7 +943,7 @@ const getStyles = (c: ThemeColors) =>
       fontFamily: AppFonts.bold,
       fontSize: 12,
       fontWeight: '700',
-      color: '#F97316',
+      color: c.warning,
     },
     stepCountRow: {
       marginBottom: 6,
@@ -934,7 +963,7 @@ const getStyles = (c: ThemeColors) =>
     },
     stepProgressTrack: {
       height: 6,
-      backgroundColor: c.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+      backgroundColor: c.borderSubtle,
       borderRadius: 3,
       overflow: 'hidden',
       marginBottom: 10,
@@ -986,7 +1015,7 @@ const getStyles = (c: ThemeColors) =>
       lineHeight: 16,
     },
     stepConnectBtn: {
-      backgroundColor: '#F97316',
+      backgroundColor: c.warning,
       paddingVertical: 8,
       paddingHorizontal: 14,
       borderRadius: 10,
@@ -1168,7 +1197,7 @@ const getStyles = (c: ThemeColors) =>
       marginTop: 4,
       ...Platform.select({
         ios: {
-          shadowColor: '#F59E0B',
+          shadowColor: c.primaryAction,
           shadowOffset: { width: 0, height: 6 },
           shadowOpacity: 0.35,
           shadowRadius: 10,
@@ -1182,7 +1211,7 @@ const getStyles = (c: ThemeColors) =>
       width: 28,
       height: 28,
       borderRadius: 14,
-      backgroundColor: 'rgba(0, 0, 0, 0.15)',
+      backgroundColor: c.overlay,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1190,7 +1219,7 @@ const getStyles = (c: ThemeColors) =>
       fontFamily: AppFonts.bold,
       fontSize: 15,
       fontWeight: '800',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
       letterSpacing: 0.2,
     },
   });

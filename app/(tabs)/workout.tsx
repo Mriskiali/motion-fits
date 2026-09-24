@@ -18,13 +18,17 @@ import { useAlertStore } from '@/store/useAlertStore';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
-import * as Haptics from 'expo-haptics';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
+import { useUserStore } from '@/store/useUserStore';
 import { useAuth } from '@clerk/expo';
 import { deleteWorkoutTemplateFromCloud } from '@/services/syncService';
+import { useRenderProfiler } from '@/hooks/useRenderProfiler';
 
 export default function WorkoutScreen() {
+  useRenderProfiler('WorkoutScreen', 8);
   const router = useRouter();
   const { userId } = useAuth();
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
   const templates = useWorkoutStore((state) => state.templates);
   const sessions = useWorkoutStore((state) => state.sessions);
   const scheduledWorkouts = useWorkoutStore((state) => state.scheduledWorkouts);
@@ -45,10 +49,20 @@ export default function WorkoutScreen() {
   const scheduledTemplateId = scheduledWorkouts[selectedDateStr];
   const scheduledTemplate = templates.find((t) => t.id === scheduledTemplateId);
 
+  // Precompute dates with a completed session once per sessions change, avoiding an
+  // O(days x sessions) date-fns `format` sweep on every render of the weekly strip.
+  const sessionDateSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of sessions) {
+      set.add(format(new Date(s.date), 'yyyy-MM-dd'));
+    }
+    return set;
+  }, [sessions]);
+
   const activeSession = useWorkoutStore((state) => state.activeSession);
 
   const handleStartWorkout = (templateId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerButtonVibration(hapticsEnabled);
 
     // If there's already an active session for this template, just resume it
     if (activeSession && activeSession.templateId === templateId) {
@@ -98,7 +112,7 @@ export default function WorkoutScreen() {
   const openBottomSheet = (template: any) => {
     setActiveTemplate(template);
     setBottomSheetVisible(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerButtonVibration(hapticsEnabled);
   };
 
   const closeBottomSheet = () => {
@@ -146,9 +160,7 @@ export default function WorkoutScreen() {
           const isCurrentDay = isToday(date);
           const dateStr = format(date, 'yyyy-MM-dd');
           const isPastDay = isBefore(startOfDay(date), startOfDay(new Date()));
-          const isSessionCompleted = sessions.some(
-            (s) => format(new Date(s.date), 'yyyy-MM-dd') === dateStr
-          );
+          const isSessionCompleted = sessionDateSet.has(dateStr);
           const hasWorkout = isPastDay
             ? isSessionCompleted
             : (isSessionCompleted || !!scheduledWorkouts[dateStr]);
@@ -159,7 +171,7 @@ export default function WorkoutScreen() {
               style={styles.dayColumn}
               onPress={() => {
                 setSelectedDate(date);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                triggerButtonVibration(hapticsEnabled);
               }}
             >
               <Text style={[styles.dayAbbr, isCurrentDay && styles.dayAbbrToday]}>
@@ -187,7 +199,7 @@ export default function WorkoutScreen() {
               <View
                 style={[
                   styles.dot,
-                  hasWorkout && { backgroundColor: isSelected ? '#000000' : '#10B981' },
+                  hasWorkout && { backgroundColor: isSelected ? colors.textPrimaryOnVolt : colors.successBadge },
                   !hasWorkout && { backgroundColor: 'transparent' },
                 ]}
               />
@@ -212,7 +224,7 @@ export default function WorkoutScreen() {
           <View style={styles.assignedCard}>
             <View style={styles.assignedHeader}>
               <View style={styles.assignedIconBox}>
-                <Dumbbell size={20} color="#F59E0B" />
+                <Dumbbell size={20} color={colors.primaryAction} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.assignedTitle}>{scheduledTemplate.name}</Text>
@@ -222,7 +234,8 @@ export default function WorkoutScreen() {
                     : `${scheduledTemplate.exercises.length} ${t('exercises_count')}`}
                 </Text>
               </View>
-              <TouchableOpacity onPress={handleUnassign} style={styles.unassignButton}>
+              <TouchableOpacity onPress={handleUnassign} style={styles.unassignButton}
+                activeOpacity={0.7}>
                 <X color={colors.textSecondary} size={16} />
               </TouchableOpacity>
             </View>
@@ -232,8 +245,9 @@ export default function WorkoutScreen() {
               onPress={() => {
                 handleStartWorkout(scheduledTemplate.id);
               }}
-            >
-              <Play size={16} color="#000000" fill="#000000" />
+            
+              activeOpacity={0.7}>
+              <Play size={16} color={colors.textPrimaryOnVolt} fill={colors.textPrimaryOnVolt} />
               <Text style={styles.mainStartButtonText}>
                 {activeSession?.templateId === scheduledTemplate.id
                   ? (t('resume_workout') || 'Lanjutkan Latihan')
@@ -250,8 +264,9 @@ export default function WorkoutScreen() {
             <TouchableOpacity
               style={styles.assignButton}
               onPress={() => setIsAssigning(!isAssigning)}
-            >
-              <Plus color="#F59E0B" size={16} strokeWidth={2.4} />
+            
+              activeOpacity={0.7}>
+              <Plus color={colors.primaryAction} size={16} strokeWidth={2.4} />
               <Text style={styles.assignButtonText}>
                 {isAssigning ? t('cancel') : t('assign_workout')}
               </Text>
@@ -268,7 +283,8 @@ export default function WorkoutScreen() {
                       key={tmpl.id}
                       style={styles.inlineTemplateItem}
                       onPress={() => handleAssign(tmpl.id)}
-                    >
+                    
+                      activeOpacity={0.7}>
                       <View>
                         <Text style={styles.inlineTemplateName}>{tmpl.name}</Text>
                         <Text style={styles.inlineTemplateSub}>
@@ -297,8 +313,9 @@ export default function WorkoutScreen() {
           <TouchableOpacity
             onPress={() => router.push('/workout/create')}
             style={styles.addButton}
-          >
-            <Plus color="#F59E0B" size={14} strokeWidth={2.4} />
+          
+            activeOpacity={0.7}>
+            <Plus color={colors.primaryAction} size={14} strokeWidth={2.4} />
             <Text style={styles.addButtonText}>{t('create')}</Text>
           </TouchableOpacity>
         </View>
@@ -319,7 +336,7 @@ export default function WorkoutScreen() {
               onPress={() => router.push('/workout/create')}
               activeOpacity={0.8}
             >
-              <Plus color="#000000" size={16} strokeWidth={2.4} />
+              <Plus color={colors.textPrimaryOnVolt} size={16} strokeWidth={2.4} />
               <Text style={styles.emptyTemplateButtonText}>{t('create_workout') || 'Buat Template'}</Text>
             </TouchableOpacity>
           </View>
@@ -329,9 +346,10 @@ export default function WorkoutScreen() {
               key={template.id}
               style={styles.templateCard}
               onPress={() => router.push(`/workout/preview?id=${template.id}`)}
-            >
+            
+              activeOpacity={0.7}>
               <View style={styles.templateIconWrapper}>
-                <Dumbbell size={18} color="#F59E0B" />
+                <Dumbbell size={18} color={colors.primaryAction} />
               </View>
 
               <View style={styles.templateInfo}>
@@ -347,7 +365,8 @@ export default function WorkoutScreen() {
                   style={styles.menuButton}
                   onPress={() => openBottomSheet(template)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
+                
+                  activeOpacity={0.7}>
                   <MoreVertical color={colors.textSecondary} size={18} />
                 </TouchableOpacity>
               </View>
@@ -384,7 +403,7 @@ export default function WorkoutScreen() {
           <View style={styles.popupCard}>
             <View style={styles.popupHeaderRow}>
               <View style={styles.sheetHeaderIconBox}>
-                <Dumbbell size={18} color="#F59E0B" />
+                <Dumbbell size={18} color={colors.primaryAction} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.sheetTitle} numberOfLines={1}>
@@ -413,10 +432,10 @@ export default function WorkoutScreen() {
                 <View
                   style={[
                     styles.sheetIconBox,
-                    { backgroundColor: 'rgba(245, 158, 11, 0.12)' },
+                    { backgroundColor: colors.actionIconBg },
                   ]}
                 >
-                  <Edit3 color="#F59E0B" size={18} />
+                  <Edit3 color={colors.primaryAction} size={18} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sheetActionText}>{t('edit')}</Text>
@@ -433,7 +452,7 @@ export default function WorkoutScreen() {
                 <View
                   style={[
                     styles.sheetIconBox,
-                    { backgroundColor: 'rgba(239, 68, 68, 0.12)' },
+                    { backgroundColor: colors.actionIconBg },
                   ]}
                 >
                   <Trash2 color={colors.danger} size={18} />
@@ -542,7 +561,7 @@ const getStyles = (c: ThemeColors) =>
     dayNumberBadgeToday: {
       borderWidth: 1.5,
       borderColor: c.primaryAction,
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
     },
     dayNumberBadgeSelected: {
       backgroundColor: c.primaryAction,
@@ -562,7 +581,7 @@ const getStyles = (c: ThemeColors) =>
     dayNumberTextSelected: {
       fontFamily: AppFonts.extraBold,
       fontWeight: '800',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
     },
     dot: {
       width: 4,
@@ -589,7 +608,7 @@ const getStyles = (c: ThemeColors) =>
       borderWidth: 1,
       borderColor: c.borderSubtle,
       borderLeftWidth: 4,
-      borderLeftColor: '#F59E0B',
+      borderLeftColor: c.primaryAction,
       ...Platform.select({
         ios: {
           shadowColor: c.shadowColor,
@@ -630,7 +649,7 @@ const getStyles = (c: ThemeColors) =>
       width: 34,
       height: 34,
       borderRadius: 8,
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -658,9 +677,9 @@ const getStyles = (c: ThemeColors) =>
       fontSize: 12,
     },
     assignButton: {
-      backgroundColor: 'rgba(245, 158, 11, 0.1)',
+      backgroundColor: c.surfaceHighlight,
       borderWidth: 1,
-      borderColor: 'rgba(245, 158, 11, 0.25)',
+      borderColor: c.borderSubtle,
       borderRadius: 8,
       paddingVertical: 7,
       paddingHorizontal: 14,
@@ -670,7 +689,7 @@ const getStyles = (c: ThemeColors) =>
     },
     assignButtonText: {
       fontFamily: AppFonts.bold,
-      color: '#F59E0B',
+      color: c.primaryAction,
       fontSize: 12,
       fontWeight: '800',
     },
@@ -720,7 +739,7 @@ const getStyles = (c: ThemeColors) =>
       justifyContent: 'center',
     },
     mainStartButton: {
-      backgroundColor: '#F59E0B',
+      backgroundColor: c.primaryAction,
       borderRadius: 10,
       paddingVertical: 10,
       flexDirection: 'row',
@@ -729,7 +748,7 @@ const getStyles = (c: ThemeColors) =>
       gap: 6,
       ...Platform.select({
         ios: {
-          shadowColor: '#F59E0B',
+          shadowColor: c.primaryAction,
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.25,
           shadowRadius: 4,
@@ -741,14 +760,14 @@ const getStyles = (c: ThemeColors) =>
     },
     mainStartButtonText: {
       fontFamily: AppFonts.bold,
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
       fontSize: 14,
       fontWeight: '800',
       letterSpacing: 0.2,
     },
     mainStartButtonHighlight: {
       borderWidth: 2,
-      borderColor: '#F59E0B',
+      borderColor: c.primaryAction,
     },
     tourButtonBadge: {
       backgroundColor: '#FEF3C7',
@@ -779,9 +798,9 @@ const getStyles = (c: ThemeColors) =>
     addButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(245, 158, 11, 0.1)',
+      backgroundColor: c.surfaceHighlight,
       borderWidth: 1,
-      borderColor: 'rgba(245, 158, 11, 0.25)',
+      borderColor: c.borderSubtle,
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 6,
@@ -789,7 +808,7 @@ const getStyles = (c: ThemeColors) =>
     },
     addButtonText: {
       fontFamily: AppFonts.bold,
-      color: '#F59E0B',
+      color: c.primaryAction,
       fontSize: 11,
       fontWeight: '800',
     },
@@ -836,7 +855,7 @@ const getStyles = (c: ThemeColors) =>
       width: 32,
       height: 32,
       borderRadius: 8,
-      backgroundColor: '#F59E0B',
+      backgroundColor: c.primaryAction,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -913,7 +932,7 @@ const getStyles = (c: ThemeColors) =>
       width: 42,
       height: 42,
       borderRadius: 12,
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1023,7 +1042,7 @@ const getStyles = (c: ThemeColors) =>
     emptyTemplateButtonText: {
       fontSize: 13,
       fontFamily: AppFonts.bold,
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
     },
   });
 

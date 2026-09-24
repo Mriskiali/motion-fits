@@ -17,6 +17,7 @@ import { useThemeColors } from '../../hooks/useThemeColors';
 import { AppFonts, AppFontSize } from '../../constants/theme';
 import { useAlertStore } from '../../store/useAlertStore';
 import { useUserStore } from '../../store/useUserStore';
+import { triggerButtonVibration } from '../../utils/soundPlayer';
 import { useTranslation } from '../../hooks/useTranslation';
 import { syncUserProfile } from '../../services/syncService';
 import { Mail, Lock, User, Eye, EyeOff, Dumbbell, Sparkles, ArrowRight, KeyRound, ChevronLeft, UserCheck } from 'lucide-react-native';
@@ -27,6 +28,7 @@ export default function SignUpScreen() {
   const { t } = useTranslation();
   const showAlert = useAlertStore((s) => s.showAlert);
   const setNameLocal = useUserStore((s) => s.setName);
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
 
   const { signUp, setActive, isLoaded } = useSignUp();
 
@@ -94,7 +96,9 @@ export default function SignUpScreen() {
 
       if (completeSignUp.status === 'complete') {
         if (setActive) {
-          await setActive({ session: completeSignUp.createdSessionId });
+          setActive({ session: completeSignUp.createdSessionId }).catch((e) =>
+            console.warn('[Auth] setActive error:', e)
+          );
         }
 
         // Save name locally & sync user to cloud
@@ -209,7 +213,9 @@ export default function SignUpScreen() {
                     onPress={() => setShowPassword(!showPassword)}
                     style={styles.eyeBtn}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
+                  
+                    activeOpacity={0.7}
+                    onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                     {showPassword ? (
                       <EyeOff size={18} color={colors.textMuted} />
                     ) : (
@@ -225,13 +231,14 @@ export default function SignUpScreen() {
                 onPress={handleSignUp}
                 disabled={isLoading || !isLoaded}
                 activeOpacity={0.8}
-              >
+              
+                onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                 {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <ActivityIndicator color={colors.textPrimaryOnVolt} size="small" />
                 ) : (
                   <View style={styles.btnRow}>
-                    <Text style={styles.primaryBtnText}>{t('btn_signup_continue')}</Text>
-                    <ArrowRight size={16} color="#FFFFFF" />
+                    <Text style={[styles.primaryBtnText, { color: colors.textPrimaryOnVolt }]}>{t('btn_signup_continue')}</Text>
+                    <ArrowRight size={16} color={colors.textPrimaryOnVolt} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -262,13 +269,14 @@ export default function SignUpScreen() {
                 onPress={handleVerifyCode}
                 disabled={isLoading || !isLoaded}
                 activeOpacity={0.8}
-              >
+              
+                onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                 {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <ActivityIndicator color={colors.textPrimaryOnVolt} size="small" />
                 ) : (
                   <View style={styles.btnRow}>
-                    <Text style={styles.primaryBtnText}>{t('btn_verify_confirm')}</Text>
-                    <ArrowRight size={16} color="#FFFFFF" />
+                    <Text style={[styles.primaryBtnText, { color: colors.textPrimaryOnVolt }]}>{t('btn_verify_confirm')}</Text>
+                    <ArrowRight size={16} color={colors.textPrimaryOnVolt} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -277,7 +285,8 @@ export default function SignUpScreen() {
                 style={styles.backStepBtn}
                 onPress={() => setPendingVerification(false)}
                 activeOpacity={0.7}
-              >
+              
+                onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                 <ChevronLeft size={16} color={colors.textSecondary} />
                 <Text style={[styles.backStepText, { color: colors.textSecondary }]}>{t('change_email_password')}</Text>
               </TouchableOpacity>
@@ -291,7 +300,8 @@ export default function SignUpScreen() {
             style={styles.switchAuthBtn}
             onPress={() => router.push('/(auth)/sign-in')}
             activeOpacity={0.7}
-          >
+          
+            onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
             <Text style={[styles.footerText, { color: colors.textSecondary }]}>
               {t('have_account')}{' '}
               <Text style={[styles.footerLink, { color: colors.primaryAction }]}>{t('signin_here')}</Text>
@@ -411,7 +421,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontFamily: AppFonts.bold,
     fontSize: AppFontSize.body,
-    color: '#FFFFFF',
+    color: '#000000',
   },
   backStepBtn: {
     flexDirection: 'row',

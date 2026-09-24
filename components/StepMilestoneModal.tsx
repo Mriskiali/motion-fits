@@ -7,24 +7,26 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
-import { Flame, Trophy, TrendingUp, Sparkles, X, Footprints } from 'lucide-react-native';
+import { Flame, Cat, TrendingUp, Sparkles, X, Footprints } from 'lucide-react-native';
 import { useStepStore } from '@/store/useStepStore';
+import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { AppFonts } from '@/constants/theme';
-import * as Haptics from 'expo-haptics';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
 
 export default function StepMilestoneModal() {
   const colors = useThemeColors();
   const { t, language } = useTranslation();
   const activeMilestone = useStepStore((state) => state.activeMilestone);
   const dismissMilestone = useStepStore((state) => state.dismissMilestone);
+  const hapticsEnabled = useUserStore((state) => state.hapticsEnabled);
 
   useEffect(() => {
     if (activeMilestone) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      triggerButtonVibration(hapticsEnabled);
     }
-  }, [activeMilestone]);
+  }, [activeMilestone, hapticsEnabled]);
 
   if (!activeMilestone) return null;
 
@@ -55,7 +57,7 @@ export default function StepMilestoneModal() {
     : 'Keep Moving';
 
   const handleDismiss = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    triggerButtonVibration(hapticsEnabled);
     dismissMilestone();
   };
 
@@ -72,9 +74,9 @@ export default function StepMilestoneModal() {
           style={[
             styles.cardContainer,
             {
-              backgroundColor: colors.cardSurface,
-              borderColor: is100 ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)',
-            },
+               backgroundColor: colors.cardSurface,
+               borderColor: is100 ? colors.successBadge : colors.primaryAction,
+             },
           ]}
         >
           {/* Close button */}
@@ -87,19 +89,15 @@ export default function StepMilestoneModal() {
           </TouchableOpacity>
 
           {/* Glowing Badge Header */}
-          <View
-            style={[
-              styles.iconWrapper,
-              {
-                backgroundColor: is100 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-              },
-            ]}
-          >
-            {is100 ? (
-              <Trophy size={36} color="#10B981" strokeWidth={2.2} />
-            ) : (
-              <Flame size={36} color={colors.primaryAction} strokeWidth={2.2} />
-            )}
+            <View
+             style={[
+               styles.iconWrapper,
+               {
+                 backgroundColor: is100 ? colors.actionIconBg : colors.actionIconBg,
+               },
+             ]}
+           >
+            <Cat size={36} color={is100 ? colors.successBadge : colors.primaryAction} strokeWidth={2.2} />
           </View>
 
           {/* Title and message */}
@@ -115,7 +113,7 @@ export default function StepMilestoneModal() {
               <Text
                 style={[
                   styles.progressPercent,
-                  { color: is100 ? '#10B981' : colors.primaryAction },
+                  { color: is100 ? colors.successBadge : colors.primaryAction },
                 ]}
               >
                 {activeMilestone.percent}%
@@ -126,10 +124,10 @@ export default function StepMilestoneModal() {
               <View
                 style={[
                   styles.trackFill,
-                  {
-                    width: `${Math.min(100, activeMilestone.percent)}%`,
-                    backgroundColor: is100 ? '#10B981' : colors.primaryAction,
-                  },
+                    {
+                     width: `${Math.min(100, activeMilestone.percent)}%`,
+                     backgroundColor: is100 ? colors.successBadge : colors.primaryAction,
+                   },
                 ]}
               />
             </View>
@@ -155,7 +153,7 @@ export default function StepMilestoneModal() {
             </View>
 
             <View style={[styles.statCol, { backgroundColor: colors.elevatedSurface, borderColor: colors.borderSubtle }]}>
-              <Flame size={14} color="#EF4444" />
+              <Flame size={14} color={colors.danger} />
               <Text style={[styles.statVal, { color: colors.textPrimary }]}>
                 {activeMilestone.caloriesKcal} kcal
               </Text>
@@ -169,17 +167,13 @@ export default function StepMilestoneModal() {
           <TouchableOpacity
             style={[
               styles.ctaButton,
-              { backgroundColor: is100 ? '#10B981' : colors.primaryAction },
+              { backgroundColor: is100 ? colors.successBadge : colors.primaryAction },
             ]}
             onPress={handleDismiss}
             activeOpacity={0.85}
           >
-            {is100 ? (
-              <Trophy size={17} color="#000000" strokeWidth={2.5} />
-            ) : (
-              <Footprints size={17} color="#000000" strokeWidth={2.5} />
-            )}
-            <Text style={styles.ctaButtonText}>{ctaText}</Text>
+            <Cat size={17} color={is100 ? '#FFFFFF' : colors.textPrimaryOnVolt} strokeWidth={2.5} />
+            <Text style={[styles.ctaButtonText, { color: is100 ? '#FFFFFF' : colors.textPrimaryOnVolt }]}>{ctaText}</Text>
           </TouchableOpacity>
         </View>
       </View>

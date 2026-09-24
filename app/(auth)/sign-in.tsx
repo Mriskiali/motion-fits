@@ -14,11 +14,14 @@ import {
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import { useSSO } from '@clerk/expo';
+import { useSSO, useClerk } from '@clerk/expo';
 import { useSignIn } from '@clerk/expo/legacy';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { AppFonts, AppFontSize } from '../../constants/theme';
 import { useAlertStore } from '../../store/useAlertStore';
+import { useUserStore } from '../../store/useUserStore';
+import { triggerButtonVibration } from '../../utils/soundPlayer';
+import { setPendingSignedIn, clearPendingSignedIn } from '../../services/authIntent';
 import { useTranslation } from '../../hooks/useTranslation';
 import { Mail, Lock, Eye, EyeOff, Dumbbell, Sparkles, ArrowRight, UserCheck } from 'lucide-react-native';
 
@@ -29,9 +32,11 @@ export default function SignInScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const showAlert = useAlertStore((s) => s.showAlert);
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
 
   const { signIn, setActive, isLoaded } = useSignIn();
   const { startSSOFlow } = useSSO();
+  const { setActive: setGlobalActive } = useClerk();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -54,10 +59,19 @@ export default function SignInScreen() {
       });
 
       if (signInAttempt.status === 'complete') {
-        if (setActive) {
-          await setActive({ session: signInAttempt.createdSessionId });
-        }
+        // Optimistic, flap-free redirect: mark intent and navigate immediately.
+        // The guard honors this flag so it won't bounce us back while Clerk's
+        // isSignedIn state is still catching up.
+        setPendingSignedIn(true);
         router.replace('/(tabs)');
+        if (setActive) {
+          setActive({ session: signInAttempt.createdSessionId }).catch((e) => {
+            console.warn('[Auth] setActive error:', e);
+            clearPendingSignedIn();
+            // Roll back the optimistic navigation so the guard can recover.
+            router.replace('/(auth)/sign-in');
+          });
+        }
       } else {
         console.log('Clerk sign in status:', signInAttempt.status);
         showAlert(t('information'), t('auth_signin_further_steps'), [{ text: 'OK' }]);
@@ -82,15 +96,28 @@ export default function SignInScreen() {
     if (isGoogleLoading) return;
     setIsGoogleLoading(true);
     try {
-      const redirectUrl = AuthSession.makeRedirectUri();
-      const { createdSessionId, setActive: setSSOActive } = await startSSOFlow({
+      const redirectUrl = AuthSession.makeRedirectUri({
+        scheme: 'motionfit',
+        path: 'oauth_redirect',
+      });
+      console.log('OAuth redirect URL:', redirectUrl);
+
+      const result = await startSSOFlow({
         strategy: 'oauth_google',
         redirectUrl,
       });
 
+      const { createdSessionId, setActive: setSSOActive } = result;
+      console.log('After SSO - sessionId:', createdSessionId);
+
       if (createdSessionId && setSSOActive) {
-        await setSSOActive({ session: createdSessionId });
+        setPendingSignedIn(true);
         router.replace('/(tabs)');
+        setSSOActive({ session: createdSessionId }).catch((e) => {
+          console.warn('[Auth] SSO setActive error:', e);
+          clearPendingSignedIn();
+          router.replace('/(auth)/sign-in');
+        });
       }
     } catch (err: any) {
       console.error('Google OAuth error:', err);
@@ -161,7 +188,9 @@ export default function SignInScreen() {
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeBtn}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
+              
+                activeOpacity={0.7}
+                onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                 {showPassword ? (
                   <EyeOff size={18} color={colors.textMuted} />
                 ) : (
@@ -177,13 +206,14 @@ export default function SignInScreen() {
             onPress={handleSignIn}
             disabled={isLoading || !isLoaded}
             activeOpacity={0.8}
-          >
+          
+            onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
             {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={colors.textPrimaryOnVolt} size="small" />
             ) : (
               <View style={styles.btnRow}>
-                <Text style={styles.primaryBtnText}>{t('btn_signin')}</Text>
-                <ArrowRight size={16} color="#FFFFFF" />
+                <Text style={[styles.primaryBtnText, { color: colors.textPrimaryOnVolt }]}>{t('btn_signin')}</Text>
+                <ArrowRight size={16} color={colors.textPrimaryOnVolt} />
               </View>
             )}
           </TouchableOpacity>
@@ -201,7 +231,8 @@ export default function SignInScreen() {
             onPress={handleGoogleSignIn}
             disabled={isGoogleLoading}
             activeOpacity={0.8}
-          >
+          
+            onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
             {isGoogleLoading ? (
               <ActivityIndicator color={colors.textPrimary} size="small" />
             ) : (
@@ -218,7 +249,8 @@ export default function SignInScreen() {
             style={styles.switchAuthBtn}
             onPress={() => router.push('/(auth)/sign-up')}
             activeOpacity={0.7}
-          >
+          
+            onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
             <Text style={[styles.footerText, { color: colors.textSecondary }]}>
               {t('no_account')}{' '}
               <Text style={[styles.footerLink, { color: colors.primaryAction }]}>{t('signup_now')}</Text>
@@ -338,7 +370,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontFamily: AppFonts.bold,
     fontSize: AppFontSize.body,
-    color: '#FFFFFF',
+    color: '#000000',
   },
   dividerRow: {
     flexDirection: 'row',

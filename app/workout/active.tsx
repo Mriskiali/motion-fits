@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { ChevronDown, X, Timer, Check, Dumbbell, Flame } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
 import { format } from 'date-fns';
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
@@ -24,6 +24,7 @@ import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useAuth } from '@clerk/expo';
 import { pushWorkoutSession, triggerBackgroundUserSync } from '@/services/syncService';
+import { markPendingSync } from '@/services/syncState';
 import RestTimerOverlay from '@/components/RestTimerOverlay';
 import { useTranslation } from '@/hooks/useTranslation';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -277,9 +278,6 @@ export default function ActiveWorkoutScreen() {
 
     if (isCurrentlyResting) {
       // User tapped the resting set button -> re-open the rest timer overlay popup
-      if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      }
       setRestTimerVisible(true);
       return;
     }
@@ -288,7 +286,6 @@ export default function ActiveWorkoutScreen() {
     if (exerciseSets.includes(setIndex)) {
       // Undo log: remove from completed sets and clear any active timer
       if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         Vibration.vibrate(60);
       }
       newCompletedSets = {
@@ -303,7 +300,6 @@ export default function ActiveWorkoutScreen() {
     } else {
       // User tapped checkmark to complete a set
       if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
         Vibration.vibrate(100);
       }
       if (!autoStartTimer) {
@@ -400,11 +396,25 @@ export default function ActiveWorkoutScreen() {
             // Log to store
             logSession(sessionToLog);
 
-            // Auto-push to Turso cloud in background if authenticated
+            // Auto-push to Turso cloud in background if authenticated (with 1 retry)
             if (userId) {
-              pushWorkoutSession(userId, sessionToLog).catch((err) => {
-                console.warn('[AutoSync] Failed to push completed workout:', err);
-              });
+              const attemptPush = async (retries = 1) => {
+                try {
+                  const ok = await pushWorkoutSession(userId, sessionToLog);
+                  if (!ok && retries > 0) {
+                    await new Promise((r) => setTimeout(r, 1000));
+                    return attemptPush(retries - 1);
+                  }
+                } catch (err) {
+                  if (retries > 0) {
+                    await new Promise((r) => setTimeout(r, 1000));
+                    return attemptPush(retries - 1);
+                  }
+                  console.warn('[AutoSync] Failed to push completed workout:', err);
+                  markPendingSync();
+                }
+              };
+              attemptPush();
             }
 
             // Update user streak for today
@@ -463,9 +473,6 @@ export default function ActiveWorkoutScreen() {
   };
 
   const handleMinimize = useCallback(() => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -495,7 +502,9 @@ export default function ActiveWorkoutScreen() {
             accessibilityLabel={t('minimize')}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={styles.topBarIconBtn}
-          >
+          
+  activeOpacity={0.7}
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
             <ChevronDown color={colors.textPrimary} size={20} strokeWidth={2.5} />
           </TouchableOpacity>
           <TouchableOpacity
@@ -503,8 +512,10 @@ export default function ActiveWorkoutScreen() {
             accessibilityLabel={t('cancel_workout')}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={styles.topBarCancelBtn}
-          >
-            <X color="#EF4444" size={17} strokeWidth={2.4} />
+          
+  activeOpacity={0.7}
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
+            <X color={colors.danger} size={17} strokeWidth={2.4} />
           </TouchableOpacity>
         </View>
 
@@ -522,8 +533,9 @@ export default function ActiveWorkoutScreen() {
           activeOpacity={0.85}
           style={styles.topBarFinishBtn}
           onPress={handleFinishWorkout}
-        >
-          <Check size={14} color="#000000" strokeWidth={3} />
+        
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
+          <Check size={14} color={colors.textPrimaryOnVolt} strokeWidth={3} />
           <Text style={styles.topBarFinishBtnText}>{t('finish')}</Text>
         </TouchableOpacity>
       </View>
@@ -787,12 +799,13 @@ export default function ActiveWorkoutScreen() {
                         ]}
                         onPress={() => toggleLogSet(exercise.id, setIndex)}
                         activeOpacity={0.75}
-                      >
+                      
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                         {isResting ? (
                           <Timer color={colors.primaryAction} size={15} strokeWidth={2.5} />
                         ) : (
                           <Check
-                            color={isCompleted ? "#000000" : colors.textMuted}
+                            color={isCompleted ? colors.textPrimaryOnVolt : colors.textMuted}
                             size={15}
                             strokeWidth={isCompleted ? 3 : 2}
                           />
@@ -903,7 +916,7 @@ const getStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
-      backgroundColor: '#10B981',
+      backgroundColor: colors.accentLime,
       paddingVertical: 7,
       paddingHorizontal: 14,
       borderRadius: 9999,
@@ -921,7 +934,7 @@ const getStyles = (colors: ThemeColors) =>
     },
     topBarFinishBtnText: {
       fontFamily: AppFonts.bold,
-      color: '#000000',
+      color: colors.textPrimaryOnVolt,
       fontSize: 13,
       fontWeight: '800',
     },
@@ -1207,8 +1220,8 @@ const getStyles = (colors: ThemeColors) =>
       borderColor: colors.borderSubtle,
     },
     statusCheckBtnCompleted: {
-      backgroundColor: '#10B981',
-      borderColor: '#10B981',
+      backgroundColor: colors.accentLime,
+      borderColor: colors.accentLime,
     },
     statusCheckBtnResting: {
       backgroundColor: 'rgba(245, 158, 11, 0.2)',

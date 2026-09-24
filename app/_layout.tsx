@@ -1,8 +1,11 @@
 import { ClerkProvider, useAuth, useUser } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
-import { performFullSync, checkAndRunPendingSync, getHasPendingSync } from '@/services/syncService';
+import { performFullSync, checkAndRunPendingSync, clearLocalUserData } from '@/services/syncService';
+import { getHasPendingSync, resetSyncStateOnLogout } from '@/services/syncState';
+import { isPendingSignedIn, clearPendingSignedIn, isPendingSignedOut, clearPendingSignedOut } from '@/services/authIntent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState, useEffect, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 import {
   useFonts,
   Barlow_400Regular,
@@ -20,10 +23,16 @@ import { useColorScheme } from '@/components/useColorScheme';
 import CustomAlert from '@/components/CustomAlert';
 import StepMilestoneModal from '@/components/StepMilestoneModal';
 import SplashScreenOverlay from '@/components/SplashScreenOverlay';
-import { useUserStore, loadUserPartition, unloadUserPartition } from '@/store/useUserStore';
-import { useWorkoutStore, defaultTemplates, loadWorkoutPartition, unloadWorkoutPartition } from '@/store/useWorkoutStore';
-import { useStepStore, loadStepPartition, unloadStepPartition } from '@/store/useStepStore';
+import { useUserStore, loadUserPartition } from '@/store/useUserStore';
+import { useWorkoutStore, defaultTemplates, loadWorkoutPartition } from '@/store/useWorkoutStore';
+import { useStepStore, loadStepPartition } from '@/store/useStepStore';
 import { useColorScheme as useNativeColorScheme, AppState, AppStateStatus } from 'react-native';
+import { enableFreeze } from 'react-native-screens';
+
+// Activate react-native-screens' freeze mechanism. Required for `freezeOnBlur` to
+// actually take effect (offscreen tabs won't re-render), which keeps tab switching
+// and theme/language changes responsive.
+enableFreeze(true);
 
 import { useWorkoutBackgroundTracker } from '@/hooks/useWorkoutBackgroundTracker';
 import { setupNotificationChannels, requestPermissionsAsync } from '@/utils/notifications';
@@ -114,17 +123,50 @@ function RootLayoutNav() {
   const { user } = useUser();
   const segments = useSegments();
 
-  // Mandatory Authentication Guard: user must sign in before accessing the app
+  // Keep a ref to the latest user so the auth-transition effect can run purely on
+  // sign-in/out changes without re-firing every time Clerk hands us a new user object.
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  // Mandatory Authentication Guard: user must sign in before accessing the app.
+  // This is the SINGLE source of truth for auth navigation.
+  const lastRedirectRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isLoaded) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (!isSignedIn && !inAuthGroup) {
-      router.replace('/(auth)/sign-in');
-    } else if (isSignedIn && inAuthGroup) {
-      router.replace('/(tabs)');
+    // If Clerk hasn't reported signed-in yet but the sign-in flow has just completed
+    // and already navigated optimistically, do NOT bounce the user back to /(auth) —
+    // that flap was what made login/logout feel like a multi-second stall.
+    if (!isSignedIn && !inAuthGroup && isPendingSignedIn()) {
+      return;
     }
+
+    // Symmetric case for sign-out: we've already navigated to /(auth) but Clerk still
+    // reports signed-in. Don't bounce the user back to /(tabs) mid sign-out.
+    if (isSignedIn && inAuthGroup && isPendingSignedOut()) {
+      return;
+    }
+
+    const target = !isSignedIn && !inAuthGroup
+      ? '/(auth)/sign-in'
+      : isSignedIn && inAuthGroup
+      ? '/(tabs)'
+      : null;
+
+    if (!target) {
+      // We've settled into the correct group — clear the pending intent.
+      clearPendingSignedIn();
+      clearPendingSignedOut();
+      lastRedirectRef.current = null;
+      return;
+    }
+
+    // Avoid issuing redundant redirects (extra router work / animation churn).
+    if (lastRedirectRef.current === target) return;
+    lastRedirectRef.current = target;
+    router.replace(target as any);
   }, [isLoaded, isSignedIn, segments]);
 
   // Background cloud backup on login & app resume
@@ -133,33 +175,40 @@ function RootLayoutNav() {
 
     const handleAuthTransition = async () => {
       try {
+        const currentUser = userRef.current;
         if (isSignedIn && userId) {
-          // Load isolated user partitions for this specific user
-          await loadWorkoutPartition(userId);
-          await loadStepPartition(userId);
-          await loadUserPartition(userId);
-          await AsyncStorage.setItem('lastActiveUserId', userId);
+          // Load isolated user partitions for this specific user (parallelized)
+           await Promise.all([
+             loadWorkoutPartition(userId),
+             loadStepPartition(userId),
+             loadUserPartition(userId),
+           ]);
+           await AsyncStorage.setItem('lastActiveUserId', userId);
 
-          if (user?.fullName || user?.firstName) {
-            const clerkName = user.fullName || user.firstName || '';
-            if (clerkName && useUserStore.getState().name !== clerkName) {
-              useUserStore.getState().setName(clerkName);
-            }
-          }
+           if (currentUser?.fullName || currentUser?.firstName) {
+             const clerkName = currentUser.fullName || currentUser.firstName || '';
+             if (clerkName && useUserStore.getState().name !== clerkName) {
+               useUserStore.getState().setName(clerkName);
+             }
+           }
 
-          if (!isCancelled) {
-            performFullSync(userId, {
-              email: user?.primaryEmailAddress?.emailAddress,
-              name: user?.fullName || undefined,
-            }).catch((err) => {
-              console.warn('[Sync] Auto-sync notice:', err);
-            });
-          }
+           if (!isCancelled) {
+             // Defer sync to run after interactions (screen render complete)
+             InteractionManager.runAfterInteractions(() => {
+               if (isCancelled) return;
+               performFullSync(userId, {
+                 email: currentUser?.primaryEmailAddress?.emailAddress,
+                 name: currentUser?.fullName || undefined,
+               }).catch((err) => {
+                 console.warn('[Sync] Auto-sync notice:', err);
+               });
+             });
+           }
         } else if (!isSignedIn) {
-          // Unload partitions when signed out so auth screen is clean
-          await unloadWorkoutPartition();
-          await unloadStepPartition();
-          await unloadUserPartition();
+          // Pusatkan logout cleanup di clearLocalUserData; hindari unload* langsung
+          // untuk mencegah race condition dengan user-initiated signOut di settings.tsx.
+          // Fire-and-forget so it never blocks the auth-transition / redirect.
+          clearLocalUserData(true).catch(() => {});
         }
       } catch (e) {
         console.warn('[Auth] Error in auth transition:', e);
@@ -171,7 +220,7 @@ function RootLayoutNav() {
     return () => {
       isCancelled = true;
     };
-  }, [isSignedIn, userId, user]);
+  }, [isSignedIn, userId]);
 
   // Automatic sync on app resume or internet recovery (Offline -> Online)
   useEffect(() => {

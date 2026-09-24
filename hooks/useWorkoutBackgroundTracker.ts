@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { useWorkoutStore } from '@/store/useWorkoutStore';
+import { useWorkoutStore, flushWorkoutPartition } from '@/store/useWorkoutStore';
+import { flushStepPartition } from '@/store/useStepStore';
+import { flushUserPartition } from '@/store/useUserStore';
 import {
   showActiveWorkoutNotification,
   dismissActiveWorkoutNotification,
@@ -11,17 +13,26 @@ import {
  * and maintain persistent active workout notification while minimized.
  */
 export function useWorkoutBackgroundTracker() {
-  const activeSession = useWorkoutStore((state) => state.activeSession);
-  const templates = useWorkoutStore((state) => state.templates);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
+  // NOTE: This hook lives in the app root (RootLayoutNav). It must NOT subscribe
+  // reactively to activeSession/templates — an active workout updates activeSession
+  // every second, which would re-render the entire app tree on each tick. Instead we
+  // read the latest state imperatively from the store inside the handler.
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       const prevAppState = appStateRef.current;
       appStateRef.current = nextAppState;
 
       if (prevAppState === 'active' && (nextAppState === 'background' || nextAppState === 'inactive')) {
+        // Flush any pending debounced partition writes so nothing is lost if the OS
+        // kills the app while backgrounded.
+        flushWorkoutPartition();
+        flushStepPartition();
+        flushUserPartition();
+
         // App went to background: show sticky persistent notification if workout is active
+        const { activeSession, templates } = useWorkoutStore.getState();
         if (activeSession) {
           const currentTemplate = templates.find((t) => t.id === activeSession.templateId);
           const workoutName = currentTemplate?.name || 'Workout';
@@ -35,13 +46,13 @@ export function useWorkoutBackgroundTracker() {
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
-    // If active workout ends / is cancelled, dismiss notification immediately
-    if (!activeSession) {
+    // If there is no active workout at mount, make sure no stale notification lingers.
+    if (!useWorkoutStore.getState().activeSession) {
       dismissActiveWorkoutNotification().catch(() => {});
     }
 
     return () => {
       subscription.remove();
     };
-  }, [activeSession, templates]);
+  }, []);
 }

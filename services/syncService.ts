@@ -1,7 +1,8 @@
-import { getTursoClient, initTursoTables, isTursoConfigured } from './turso';
+import { getTursoClient, initTursoTables, isTursoConfigured, resetTursoClient } from './turso';
 import { useWorkoutStore, WorkoutSession, WorkoutTemplate, unloadWorkoutPartition } from '../store/useWorkoutStore';
 import { useStepStore, unloadStepPartition } from '../store/useStepStore';
 import { useUserStore, unloadUserPartition } from '../store/useUserStore';
+import { markPendingSync, clearPendingSync, getHasPendingSync, resetSyncStateOnLogout } from './syncState';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface SyncStatusResult {
@@ -11,14 +12,7 @@ export interface SyncStatusResult {
 }
 
 let isSyncInProgress = false;
-let hasPendingSync = false;
 let userSyncDebounceTimer: any = null;
-
-export const markPendingSync = () => {
-  hasPendingSync = true;
-};
-
-export const getHasPendingSync = () => hasPendingSync;
 
 /**
  * Triggers a non-blocking background user profile sync to Turso (debounced 500ms).
@@ -26,6 +20,7 @@ export const getHasPendingSync = () => hasPendingSync;
  */
 export const triggerBackgroundUserSync = (userId: string | null | undefined) => {
   if (!userId || !isTursoConfigured()) return;
+  if (isSignOutInProgress) return;
   if (userSyncDebounceTimer) clearTimeout(userSyncDebounceTimer);
   userSyncDebounceTimer = setTimeout(() => {
     userSyncDebounceTimer = null;
@@ -38,6 +33,7 @@ export const triggerBackgroundUserSync = (userId: string | null | undefined) => 
 const handleSyncError = (action: string, err: any) => {
   if (err?.message?.includes('401') || err?.status === 401) {
     console.warn(`[Sync] 401 Unauthorized (${action}). Token Turso di .env.local kedaluwarsa.`);
+    resetTursoClient();
   } else {
     const errStr = String(err?.message || '').toLowerCase();
     const isNetwork =
@@ -47,7 +43,7 @@ const handleSyncError = (action: string, err: any) => {
       errStr.includes('connection') ||
       errStr.includes('offline');
     if (isNetwork) {
-      hasPendingSync = true;
+      markPendingSync();
       console.warn(`[Sync] Offline/Network error (${action}). Data tersimpan lokal, akan disinkron otomatis saat online.`);
     } else {
       console.error(`[Sync] Error ${action}:`, err);
@@ -63,7 +59,7 @@ export const checkAndRunPendingSync = async (userId: string | null | undefined):
   try {
     const res = await performFullSync(userId);
     if (res.success) {
-      hasPendingSync = false;
+      clearPendingSync();
       return true;
     }
     return false;
@@ -221,6 +217,29 @@ export const deleteWorkoutTemplateFromCloud = async (
   }
 };
 
+export const deleteWorkoutSessionFromCloud = async (
+  userId: string,
+  sessionId: string
+): Promise<boolean> => {
+  const client = getTursoClient();
+  if (!client) return false;
+
+  try {
+    await client.execute({
+      sql: `
+        UPDATE workouts 
+        SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ? AND user_id = ?;
+      `,
+      args: [sessionId, userId],
+    });
+    return true;
+  } catch (err) {
+    handleSyncError('deleting workout session from cloud', err);
+    return false;
+  }
+};
+
 /**
  * Pushes all local workout sessions and templates to Turso
  */
@@ -324,18 +343,32 @@ export const pushStepHistory = async (userId: string): Promise<boolean> => {
  * Safely saves the current user's local partition before signing out,
  * then cleanly switches active scope to 'guest' so no private data leaks on screen.
  */
+let isSignOutInProgress = false;
+
 export const clearLocalUserData = async (discardActiveSession: boolean = false): Promise<void> => {
+  if (isSignOutInProgress) return;
+  isSignOutInProgress = true;
   try {
-    // Unload and securely persist all active user partitions
-    await unloadWorkoutPartition(discardActiveSession);
-    await unloadStepPartition();
-    await unloadUserPartition();
+    // Unload and securely persist all active user partitions.
+    // Run the three independent partition teardowns in parallel so logout is not
+    // gated on a serial chain of large JSON serializations + AsyncStorage writes.
+    await Promise.all([
+      unloadWorkoutPartition(discardActiveSession),
+      unloadStepPartition(),
+      unloadUserPartition(),
+    ]);
     // Clear session-level sync keys
     await AsyncStorage.multiRemove(['lastActiveUserId', 'lastCloudSyncTime']);
     console.log('[Sync] Unloaded user partitions and cleared active session on sign-out.');
   } catch (err) {
     console.warn('[Sync] Error clearing local sync metadata:', err);
+  } finally {
+    isSignOutInProgress = false;
   }
+};
+
+export const resetSignOutFlag = (): void => {
+  isSignOutInProgress = false;
 };
 
 /**
@@ -509,12 +542,20 @@ export const performFullSync = async (
       await deleteWorkoutTemplateFromCloud(userId, delId);
     }
 
-    await pushAllLocalWorkouts(userId);
-    await pushStepHistory(userId);
+    const pushOk = await pushAllLocalWorkouts(userId);
+    const stepOk = await pushStepHistory(userId);
+
+    if (!pushOk || !stepOk) {
+      return {
+        success: false,
+        message: 'Gagal mendorong data lokal ke cloud. Pull dibatalkan untuk mencegah overwrite data yang belum tersinkron.',
+      };
+    }
+
     await pullRemoteData(userId);
 
     const now = Date.now();
-    hasPendingSync = false;
+    clearPendingSync();
     return {
       success: true,
       message: 'Data berhasil disinkronkan ke cloud Turso.',
@@ -526,7 +567,7 @@ export const performFullSync = async (
       success: false,
       message: err?.message?.includes('401')
         ? 'Token autentikasi Turso kedaluwarsa. Silakan perbarui token di .env.local.'
-        : err?.message || 'Gagal menyinkronkan data.',
+        : err?.msg || 'Gagal menyinkronkan data.',
     };
   } finally {
     isSyncInProgress = false;

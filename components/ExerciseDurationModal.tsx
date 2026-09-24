@@ -11,7 +11,8 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { Timer, Plus, Minus, Check, X } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { useUserStore } from '@/store/useUserStore';
+import { triggerButtonVibration } from '@/utils/soundPlayer';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -40,6 +41,7 @@ export default function ExerciseDurationModal({
   const colors = useThemeColors();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { t, language } = useTranslation();
+  const hapticsEnabled = useUserStore((s) => s.hapticsEnabled);
 
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
@@ -57,12 +59,12 @@ export default function ExerciseDurationModal({
   const totalCalculatedSeconds = composeSeconds(hours, minutes, seconds);
 
   const handleStepHours = (delta: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerButtonVibration(hapticsEnabled);
     setHours((prev) => Math.max(0, Math.min(23, prev + delta)));
   };
 
   const handleStepMinutes = (delta: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerButtonVibration(hapticsEnabled);
     setMinutes((prev) => {
       const next = prev + delta;
       if (next < 0) return 0;
@@ -72,7 +74,7 @@ export default function ExerciseDurationModal({
   };
 
   const handleStepSeconds = (delta: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerButtonVibration(hapticsEnabled);
     setSeconds((prev) => {
       const next = prev + delta;
       if (next < 0) return 0;
@@ -82,7 +84,7 @@ export default function ExerciseDurationModal({
   };
 
   const handleSelectPreset = (presetSeconds: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerButtonVibration(hapticsEnabled);
     const decomposed = decomposeSeconds(presetSeconds);
     setHours(decomposed.hours);
     setMinutes(decomposed.minutes);
@@ -90,7 +92,7 @@ export default function ExerciseDurationModal({
   };
 
   const handleSave = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    triggerButtonVibration(hapticsEnabled);
     onSave(Math.max(1, totalCalculatedSeconds));
     onClose();
   };

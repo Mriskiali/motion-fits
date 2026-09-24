@@ -19,7 +19,7 @@ import {
   Repeat,
   Hourglass,
 } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { triggerButtonVibration } from "@/utils/soundPlayer";
 import { useWorkoutStore } from '@/store/useWorkoutStore';
 import { useUserStore } from '@/store/useUserStore';
 import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
@@ -52,7 +52,8 @@ export default function PreviewWorkoutScreen() {
             style={styles.backButtonPrompt}
             onPress={() => router.back()}
             activeOpacity={0.8}
-          >
+          
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
             <ArrowLeft size={16} color={colors.textPrimary} strokeWidth={2.2} />
             <Text style={styles.backButtonPromptText}>{t('cancel')}</Text>
           </TouchableOpacity>
@@ -100,9 +101,6 @@ export default function PreviewWorkoutScreen() {
   const muscleTags = inferMuscleGroups();
 
   const handleEdit = () => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
     router.push(`/workout/create?id=${template.id}`);
   };
 
@@ -117,7 +115,8 @@ export default function PreviewWorkoutScreen() {
           onPress={() => router.back()}
           style={styles.headerIconBtn}
           activeOpacity={0.7}
-        >
+        
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
           <ArrowLeft color={colors.textPrimary} size={20} strokeWidth={2.2} />
         </TouchableOpacity>
 
@@ -127,7 +126,8 @@ export default function PreviewWorkoutScreen() {
           onPress={handleEdit}
           style={styles.headerIconBtn}
           activeOpacity={0.7}
-        >
+        
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
           <Edit3 color={colors.primaryAction} size={18} strokeWidth={2.2} />
         </TouchableOpacity>
       </View>
@@ -152,7 +152,7 @@ export default function PreviewWorkoutScreen() {
           <View style={styles.muscleTagsRow}>
             {muscleTags.map((tag, idx) => (
               <View key={idx} style={styles.muscleTagPill}>
-                <Flame size={12} color="#F59E0B" strokeWidth={2.2} />
+                <Flame size={12} color={colors.primaryAction} strokeWidth={2.2} />
                 <Text style={styles.muscleTagText}>{tag}</Text>
               </View>
             ))}
@@ -175,7 +175,7 @@ export default function PreviewWorkoutScreen() {
           {/* 2. Total Sets */}
           <View style={styles.statCard}>
             <View style={[styles.statIconBadge, { backgroundColor: 'rgba(34, 197, 94, 0.12)' }]}>
-              <Layers size={18} color="#22C55E" strokeWidth={2.2} />
+              <Layers size={18} color={colors.accentLime} strokeWidth={2.2} />
             </View>
             <Text style={styles.statValue}>{totalSets}</Text>
             <Text style={styles.statCaption} numberOfLines={1}>{t('total_sets')}</Text>
@@ -184,7 +184,7 @@ export default function PreviewWorkoutScreen() {
           {/* 3. Estimated Duration */}
           <View style={styles.statCard}>
             <View style={[styles.statIconBadge, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-              <Clock size={18} color="#F59E0B" strokeWidth={2.2} />
+              <Clock size={18} color={colors.primaryAction} strokeWidth={2.2} />
             </View>
             <Text style={styles.statValue}>{estimatedDurationMinutes} {t('min_short')}</Text>
             <Text style={styles.statCaption} numberOfLines={1}>
@@ -271,7 +271,7 @@ export default function PreviewWorkoutScreen() {
                       {/* Weight Mode Badges */}
                       {exercise.weightMode === 'weighted' && (
                         <View style={[styles.typePill, styles.typePillWeighted]}>
-                          <Dumbbell size={12} color="#F59E0B" strokeWidth={2.2} />
+                          <Dumbbell size={12} color={colors.primaryAction} strokeWidth={2.2} />
                           <Text style={[styles.typePillText, { color: '#F59E0B' }]}>
                             {exercise.weight ? `${exercise.weight} ${t('weight_unit')}` : t('weighted')}
                           </Text>
@@ -346,7 +346,7 @@ export default function PreviewWorkoutScreen() {
                       <View style={styles.metricSeparator} />
                       <View style={styles.metricItem}>
                         <View style={styles.metricIconWrap}>
-                          <Dumbbell size={13} color="#F59E0B" strokeWidth={2} />
+                          <Dumbbell size={13} color={colors.primaryAction} strokeWidth={2} />
                         </View>
                         <View style={styles.metricTextBox}>
                           <Text style={styles.metricLabel}>{t('weight_metric_label').toUpperCase()}</Text>

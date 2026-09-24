@@ -26,7 +26,7 @@ import {
   Sparkles,
   Flame,
 } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { triggerButtonVibration } from "@/utils/soundPlayer";
 import { useWorkoutStore, WorkoutTemplate, Exercise } from '@/store/useWorkoutStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useUserStore } from '@/store/useUserStore';
@@ -34,6 +34,7 @@ import { useThemeColors, ThemeColors } from '@/hooks/useThemeColors';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useAuth } from '@clerk/expo';
 import { pushWorkoutTemplate } from '@/services/syncService';
+import { markPendingSync } from '@/services/syncState';
 import { AppFonts } from '@/constants/theme';
 
 export const TARGET_MUSCLE_GROUPS = [
@@ -66,7 +67,6 @@ export default function CreateWorkoutScreen() {
   const isIdLanguage = language === 'id';
 
   const handleToggleMuscle = (muscleId: string) => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     let nextIds: string[];
     if (selectedMuscleIds.includes(muscleId)) {
       nextIds = selectedMuscleIds.filter((m) => m !== muscleId);
@@ -144,7 +144,6 @@ export default function CreateWorkoutScreen() {
   }, [language, isIdLanguage, selectedMuscleIds]);
 
   const handleAddExercise = () => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newExercise: Exercise = {
       id: `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: '',
@@ -165,14 +164,12 @@ export default function CreateWorkoutScreen() {
   };
 
   const handleSetWeightMode = (index: number, mode: 'weighted' | 'bodyweight' | 'none') => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const updated = [...exercises];
     updated[index] = { ...updated[index], weightMode: mode };
     setExercises(updated);
   };
 
   const handleSetTrackingMode = (index: number, mode: 'weighted' | 'bodyweight' | 'time') => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const updated = [...exercises];
     if (mode === 'time') {
       updated[index] = {
@@ -198,14 +195,12 @@ export default function CreateWorkoutScreen() {
   };
 
   const handleRemoveExercise = (index: number) => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const updated = [...exercises];
     updated.splice(index, 1);
     setExercises(updated);
   };
 
   const handleDuplicateExercise = (index: number) => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const source = exercises[index];
     const cloned: Exercise = {
       ...source,
@@ -218,7 +213,6 @@ export default function CreateWorkoutScreen() {
 
   const handleMoveUp = (index: number) => {
     if (index <= 0) return;
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const updated = [...exercises];
     const temp = updated[index - 1];
     updated[index - 1] = updated[index];
@@ -228,7 +222,6 @@ export default function CreateWorkoutScreen() {
 
   const handleMoveDown = (index: number) => {
     if (index >= exercises.length - 1) return;
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const updated = [...exercises];
     const temp = updated[index + 1];
     updated[index + 1] = updated[index];
@@ -237,14 +230,12 @@ export default function CreateWorkoutScreen() {
   };
 
   const handleStepSets = (index: number, delta: number) => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const current = typeof exercises[index].sets === 'number' ? exercises[index].sets : parseInt(exercises[index].sets as any, 10) || 1;
     const nextVal = Math.max(1, current + delta);
     handleUpdateExercise(index, 'sets', nextVal);
   };
 
   const toggleExerciseType = (index: number, targetType: 'reps' | 'time') => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const updated = [...exercises];
     const current = updated[index];
     if (targetType === 'time') {
@@ -295,7 +286,6 @@ export default function CreateWorkoutScreen() {
   };
 
   const handleCycleDurationUnit = (index: number) => {
-    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const ex = exercises[index];
     const currentUnit = getDurationUnit(ex);
     const dur = typeof ex.duration === 'number' ? ex.duration : parseInt(ex.duration as any, 10) || 0;
@@ -389,9 +379,6 @@ export default function CreateWorkoutScreen() {
       defaultRestTime: 90,
     };
 
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
 
     if (id) {
       updateTemplate(id, template);
@@ -399,10 +386,25 @@ export default function CreateWorkoutScreen() {
       addTemplate(template);
     }
 
+    // Auto-push to Turso cloud in background if authenticated (with 1 retry)
     if (userId) {
-      pushWorkoutTemplate(userId, template).catch((err) => {
-        console.warn('[AutoSync] Failed to push template to cloud:', err);
-      });
+      const attemptPush = async (retries = 1) => {
+        try {
+          const ok = await pushWorkoutTemplate(userId, template);
+          if (!ok && retries > 0) {
+            await new Promise((r) => setTimeout(r, 1000));
+            return attemptPush(retries - 1);
+          }
+        } catch (err) {
+          if (retries > 0) {
+            await new Promise((r) => setTimeout(r, 1000));
+            return attemptPush(retries - 1);
+          }
+          console.warn('[AutoSync] Failed to push template to cloud:', err);
+          markPendingSync();
+        }
+      };
+      attemptPush();
     }
 
     router.back();
@@ -418,7 +420,8 @@ export default function CreateWorkoutScreen() {
           onPress={() => router.back()}
           style={styles.headerBackBtn}
           activeOpacity={0.7}
-        >
+        
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
           <ChevronLeft color={colors.textPrimary} size={22} />
         </TouchableOpacity>
 
@@ -430,8 +433,9 @@ export default function CreateWorkoutScreen() {
           onPress={handleSave}
           style={styles.saveHeaderBtn}
           activeOpacity={0.8}
-        >
-          <Check color="#000000" size={16} strokeWidth={2.5} />
+        
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
+          <Check color={colors.textPrimaryOnVolt} size={16} strokeWidth={2.5} />
           <Text style={styles.saveHeaderBtnText}>{t('save')}</Text>
         </TouchableOpacity>
       </View>
@@ -462,7 +466,7 @@ export default function CreateWorkoutScreen() {
 
           <View style={[styles.formFieldGroup, { marginTop: 14 }]}>
             <View style={styles.fieldLabelRow}>
-              <Flame size={13} color="#F59E0B" />
+              <Flame size={13} color={colors.primaryAction} />
               <Text style={styles.fieldLabel}>{t('target_muscles') || 'FOKUS OTOT'}</Text>
             </View>
 
@@ -481,7 +485,8 @@ export default function CreateWorkoutScreen() {
                       ]}
                       onPress={() => handleToggleMuscle(group.id)}
                       activeOpacity={0.7}
-                    >
+                    
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                       <Text
                         style={[
                           styles.muscleTagText,
@@ -511,7 +516,9 @@ export default function CreateWorkoutScreen() {
                     }}
                     style={styles.clearSubtitleBtn}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  >
+                  
+  activeOpacity={0.7}
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                     <Text style={styles.clearSubtitleText}>
                       {isIdLanguage ? 'Hapus' : 'Clear'}
                     </Text>
@@ -572,7 +579,8 @@ export default function CreateWorkoutScreen() {
                     onPress={() => handleMoveUp(index)}
                     disabled={index === 0}
                     activeOpacity={0.7}
-                  >
+                  
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                     <ChevronUp
                       size={15}
                       color={index === 0 ? colors.textMuted : colors.textSecondary}
@@ -587,7 +595,8 @@ export default function CreateWorkoutScreen() {
                     onPress={() => handleMoveDown(index)}
                     disabled={index === exercises.length - 1}
                     activeOpacity={0.7}
-                  >
+                  
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                     <ChevronDown
                       size={15}
                       color={
@@ -602,7 +611,8 @@ export default function CreateWorkoutScreen() {
                     style={styles.actionIconBtn}
                     onPress={() => handleDuplicateExercise(index)}
                     activeOpacity={0.7}
-                  >
+                  
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                     <Copy size={14} color={colors.textSecondary} />
                   </TouchableOpacity>
 
@@ -610,8 +620,9 @@ export default function CreateWorkoutScreen() {
                     style={[styles.actionIconBtn, styles.deleteBtn]}
                     onPress={() => handleRemoveExercise(index)}
                     activeOpacity={0.7}
-                  >
-                    <Trash2 size={14} color="#EF4444" />
+                  
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
+                    <Trash2 size={14} color={colors.danger} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -625,7 +636,8 @@ export default function CreateWorkoutScreen() {
                   ]}
                   onPress={() => handleSetTrackingMode(index, 'weighted')}
                   activeOpacity={0.75}
-                >
+                
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                   <Dumbbell
                     size={13}
                     color={trackingMode === 'weighted' ? colors.primaryAction : colors.textMuted}
@@ -647,7 +659,8 @@ export default function CreateWorkoutScreen() {
                   ]}
                   onPress={() => handleSetTrackingMode(index, 'bodyweight')}
                   activeOpacity={0.75}
-                >
+                
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                   <User
                     size={13}
                     color={trackingMode === 'bodyweight' ? colors.primaryAction : colors.textMuted}
@@ -669,7 +682,8 @@ export default function CreateWorkoutScreen() {
                   ]}
                   onPress={() => handleSetTrackingMode(index, 'time')}
                   activeOpacity={0.75}
-                >
+                
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                   <Timer
                     size={13}
                     color={trackingMode === 'time' ? colors.primaryAction : colors.textMuted}
@@ -696,7 +710,8 @@ export default function CreateWorkoutScreen() {
                       onPress={() => handleStepSets(index, -1)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    >
+                    
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                       <Minus size={13} color={colors.textPrimary} />
                     </TouchableOpacity>
 
@@ -715,7 +730,8 @@ export default function CreateWorkoutScreen() {
                       onPress={() => handleStepSets(index, 1)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    >
+                    
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                       <Plus size={13} color={colors.textPrimary} />
                     </TouchableOpacity>
                   </View>
@@ -789,7 +805,8 @@ export default function CreateWorkoutScreen() {
                         style={styles.durationUnitToggle}
                         onPress={() => handleCycleDurationUnit(index)}
                         activeOpacity={0.7}
-                      >
+                      
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
                         <Text style={styles.durationUnitText}>
                           {getDurationUnit(exercise) === 'hour'
                             ? t('hours_short')
@@ -817,7 +834,8 @@ export default function CreateWorkoutScreen() {
               style={styles.addExerciseDashedBtn}
               onPress={handleAddExercise}
               activeOpacity={0.8}
-            >
+            
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
               <Plus size={16} color={colors.primaryAction} />
               <Text style={styles.addExerciseDashedText}>{t('add_exercise')}</Text>
             </TouchableOpacity>
@@ -827,7 +845,8 @@ export default function CreateWorkoutScreen() {
             style={styles.addExerciseDashedBtn}
             onPress={handleAddExercise}
             activeOpacity={0.8}
-          >
+          
+  onPressIn={() => triggerButtonVibration(hapticsEnabled)}>
             <Plus size={16} color={colors.primaryAction} />
             <Text style={styles.addExerciseDashedText}>{t('add_exercise')}</Text>
           </TouchableOpacity>
@@ -886,7 +905,7 @@ const getStyles = (c: ThemeColors) => {
       fontFamily: AppFonts.bold,
       fontSize: 13,
       fontWeight: '800',
-      color: '#000000',
+      color: c.textPrimaryOnVolt,
     },
     scrollContent: {
       padding: 16,
@@ -943,7 +962,7 @@ const getStyles = (c: ThemeColors) => {
       borderColor: c.borderSubtle,
     },
     presetChipActive: {
-      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+      backgroundColor: c.actionIconBg,
       borderColor: c.primaryAction,
     },
     presetChipText: {
@@ -1155,7 +1174,7 @@ const getStyles = (c: ThemeColors) => {
       borderRadius: 8,
     },
     segmentTabActive: {
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
       borderWidth: 1,
       borderColor: 'rgba(245, 158, 11, 0.3)',
     },
@@ -1259,7 +1278,7 @@ const getStyles = (c: ThemeColors) => {
       gap: 2,
       paddingHorizontal: 6,
       paddingVertical: 3,
-      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: c.actionIconBg,
       borderRadius: 6,
     },
     durationUnitText: {
@@ -1302,7 +1321,7 @@ const getStyles = (c: ThemeColors) => {
       borderWidth: 1.5,
       borderStyle: 'dashed',
       borderColor: 'rgba(245, 158, 11, 0.35)',
-      backgroundColor: 'rgba(245, 158, 11, 0.05)',
+      backgroundColor: c.actionIconBg,
       borderRadius: 14,
       paddingVertical: 14,
       marginTop: 4,
