@@ -325,6 +325,8 @@ export default function HistoryScreen() {
   }, []);
 
   const stepYearlyData = useMemo(() => {
+    if (activeTab !== 'steps') return [];
+    
     const goal = Math.max(1000, dailyStepGoal);
     return stepYearlyBase.map((base) => {
       const steps = base.isToday ? Math.max(stepHistory[base.dateKey] || 0, todaySteps) : (stepHistory[base.dateKey] || 0);
@@ -345,7 +347,7 @@ export default function HistoryScreen() {
         category,
       };
     });
-  }, [stepYearlyBase, stepHistory, todaySteps, dailyStepGoal]);
+  }, [stepYearlyBase, stepHistory, todaySteps, dailyStepGoal, activeTab]);
 
   // Bar chart data: group steps by weeks based on selected period
   const { barChartWeeks, barChartMonths } = useMemo(() => {
