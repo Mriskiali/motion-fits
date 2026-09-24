@@ -790,6 +790,8 @@ export default function HistoryScreen() {
   }, [selectedStepDay, colors, styles, language, t]);
 
   const stepActivityComponent = useMemo(() => {
+    if (activeTab !== 'steps') return null;
+    
     return (
       <View style={styles.cardWrapper}>
         <View style={styles.cardHeader}>
@@ -958,6 +960,7 @@ export default function HistoryScreen() {
     language,
     t,
     dailyStepGoal,
+    activeTab,
   ]);
 
   const renderSessionCard = useCallback((session: any) => {

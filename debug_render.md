@@ -99,6 +99,8 @@ Ketika re-render, React harus evaluasi ulang **semua** `React.createElement` (ra
 
 **Update 2026-09-24 16:56:** Lazy-load `stepYearlyData` itself: return `[]` jika `activeTab !== 'steps'`. 365-item `.map()` sekarang skip di Overview/Logs tab. Target: HistoryScreen mount pada Overview/Logs < 300ms.
 
+**Update 2026-09-24 17:00:** Lazy-render `stepActivityComponent`: return `null` jika `activeTab !== 'steps'`, skip entire JSX tree build. Target: Overview/Logs render tanpa Steps UI overhead.
+
 ### FASE 2 — Pisahkan memo dari dependency `colors` yang tidak perlu (LOW–MEDIUM RISK) ✅ SELESAI
 
 - [x] **2.1** `stepYearlyData`: keluarkan `colors.*` dari dependency. Simpan data murni (steps, percent, isGoalMet). Pilih warna (`bgColor`) di langkah render berdasarkan `colors` — atau simpan "kategori" (met/target/miss) dan map ke warna saat render.
