@@ -840,25 +840,17 @@ export default function SettingsScreen() {
 
             <View style={styles.rowDivider} />
 
-            {/* Timer Istirahat Otomatis */}
-            <View style={styles.compactRow}>
-              <View style={styles.rowIconBox}>
-                <Timer size={15} color={colors.primaryAction} />
-              </View>
-              <View style={styles.rowLabelWrap}>
-                <Text style={styles.rowLabel}>{t("default_rest_timer")}</Text>
-                <Text style={styles.rowSubLabel}>{t("default_rest_timer_desc")}</Text>
-              </View>
-              <Switch
-                value={autoStartTimer}
-                onValueChange={(val) => {
-                  triggerHaptic();
-                  setAutoStartTimer(val);
-                }}
-                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
-                thumbColor="#fff"
-              />
-            </View>
+            <SettingRow
+              icon={<Timer size={15} color={colors.primaryAction} />}
+              label={t("default_rest_timer")}
+              subLabel={t("default_rest_timer_desc")}
+              value={autoStartTimer}
+              onToggle={(val) => {
+                triggerHaptic();
+                setAutoStartTimer(val);
+              }}
+              colors={colors}
+            />
 
             {/* Durasi Detik Istirahat (Muncul hanya jika Timer Otomatis Aktif) */}
             {autoStartTimer && (
