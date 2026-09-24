@@ -95,6 +95,8 @@ Ketika re-render, React harus evaluasi ulang **semua** `React.createElement` (ra
 
 **Update 2026-09-24 16:38:** Split `stepYearlyData` → `stepYearlyBase` (365 iter once, deps `[]`) + `stepYearlyData` (map overlay, deps `[stepYearlyBase, stepHistory, todaySteps, dailyStepGoal]`). Target: step update tidak rebuild 365 Date objects.
 
+**Update 2026-09-24 16:48:** Lazy-load Steps tab: `barChartWeeks`, `barChartMonths`, `stepPeriodStats` hanya compute saat `activeTab === 'steps'`. Early return empty jika tab lain. Target: Overview/Logs mount tidak bayar cost Steps computation.
+
 ### FASE 2 — Pisahkan memo dari dependency `colors` yang tidak perlu (LOW–MEDIUM RISK) ✅ SELESAI
 
 - [x] **2.1** `stepYearlyData`: keluarkan `colors.*` dari dependency. Simpan data murni (steps, percent, isGoalMet). Pilih warna (`bgColor`) di langkah render berdasarkan `colors` — atau simpan "kategori" (met/target/miss) dan map ke warna saat render.
