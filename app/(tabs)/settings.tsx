@@ -1152,24 +1152,14 @@ export default function SettingsScreen() {
 
             <View style={styles.rowDivider} />
 
-            {/* Pengingat Harian */}
-            <View style={styles.compactRow}>
-              <View style={styles.rowIconBox}>
-                <Bell size={15} color={colors.primaryAction} />
-              </View>
-              <View style={styles.rowLabelWrap}>
-                <Text style={styles.rowLabel}>{t("workout_reminders")}</Text>
-                <Text style={styles.rowSubLabel}>
-                  {remindersEnabled ? `${t("reminder_time")}: ${reminderTime}` : (language === "id" ? "Pengingat latihan harian" : "Daily workout reminders")}
-                </Text>
-              </View>
-              <Switch
-                value={remindersEnabled}
-                onValueChange={toggleReminders}
-                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
-                thumbColor="#fff"
-              />
-            </View>
+            <SettingRow
+              icon={<Bell size={15} color={colors.primaryAction} />}
+              label={t("workout_reminders")}
+              subLabel={remindersEnabled ? `${t("reminder_time")}: ${reminderTime}` : (language === "id" ? "Pengingat latihan harian" : "Daily workout reminders")}
+              value={remindersEnabled}
+              onToggle={toggleReminders}
+              colors={colors}
+            />
 
             {remindersEnabled && (
               <View style={styles.subActionContainer}>
