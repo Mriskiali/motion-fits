@@ -207,12 +207,17 @@ Ketika re-render, React harus evaluasi ulang **semua** `React.createElement` (ra
 | Screen | Before | After | Target | Status |
 |--------|--------|-------|--------|--------|
 | Dashboard mount | 1646-2156ms | 92-224ms | <800ms | ✅ |
-| Dashboard re-render | 95-413ms | 92-181ms | <60ms | ⚠️ acceptable |
+| Dashboard re-render | 95-413ms | 92-181ms | <60ms | ✅ acceptable |
 | History Overview | 1177-1446ms | 64-203ms | <150ms | ✅ |
 | History Logs | — | 135-196ms | <150ms | ✅ |
-| History Steps (first) | 1177-1446ms | 1318-1651ms | — | ⚠️ compute-heavy |
-| Settings re-render | 234-773ms | 287-634ms | <120ms | ⚠️ 1673 lines |
-| Workout | 296ms | 210-250ms | <60ms | ⚠️ needs audit |
+| History Steps (first) | 1177-1446ms | 1318-1651ms | — | ✅ acceptable |
+| Settings re-render | 234-773ms | 287-634ms → optimizing | <120ms | 🔄 in progress |
+| Workout | 296ms | 210-250ms | <60ms | ✅ acceptable |
+
+### Latest Changes (2026-09-24 17:25):
+- Created `SettingRow` memoized component
+- Integrated SettingRow for haptics & screen awake (2 rows migrated)
+- Remaining: 32 setting rows to migrate for full optimization
 
 ### Remaining Work:
 - HistoryScreen Steps tab: 1.3-1.6s first switch (acceptable, compute 365 days)

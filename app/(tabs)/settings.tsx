@@ -45,6 +45,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import AudioTrimmerCard from "@/components/AudioTrimmerCard";
 import { useRenderProfiler } from "@/hooks/useRenderProfiler";
+import SettingRow from "@/components/SettingRow";
 import {
   Activity,
   Bell,
@@ -998,24 +999,16 @@ export default function SettingsScreen() {
 
             <View style={styles.rowDivider} />
 
-            {/* Haptik */}
-            <View style={styles.compactRow}>
-              <View style={styles.rowIconBox}>
-                <Activity size={15} color={colors.primaryAction} />
-              </View>
-              <View style={styles.rowLabelWrap}>
-                <Text style={styles.rowLabel}>{t("haptics")}</Text>
-              </View>
-              <Switch
-                value={hapticsEnabled}
-                onValueChange={(val) => {
-                  if (val) triggerButtonVibration(true, 120);
-                  setHapticsEnabled(val);
-                }}
-                trackColor={{ false: colors.borderSubtle, true: colors.primaryAction }}
-                thumbColor="#fff"
-              />
-            </View>
+            <SettingRow
+              icon={<Activity size={15} color={colors.primaryAction} />}
+              label={t("haptics")}
+              value={hapticsEnabled}
+              onToggle={(val) => {
+                if (val) triggerButtonVibration(true, 120);
+                setHapticsEnabled(val);
+              }}
+              colors={colors}
+            />
 
             <View style={styles.rowDivider} />
 
