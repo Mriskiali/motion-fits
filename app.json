@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MotionFit v2",
+    "name": "MotionFit",
     "slug": "workout-apps",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.workoutapps.v2",
+      "bundleIdentifier": "com.anonymous.workoutapps",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -38,7 +38,7 @@
         "android.permission.health.READ_STEPS"
       ],
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.workoutapps.v2"
+      "package": "com.anonymous.workoutapps"
     },
     "web": {
       "bundler": "metro",
@@ -89,15 +89,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "38e4e579-789e-4753-8024-4cf2c344be15"
+        "projectId": "94cd26bd-d716-487e-9bb8-de93b3621d8d"
       }
     },
-    "owner": "ourworlds",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
       "url": "https://u.expo.dev/38e4e579-789e-4753-8024-4cf2c344be15"
-    }
+    },
+    "owner": "watermelone"
   }
 }
